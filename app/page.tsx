@@ -47,10 +47,18 @@ const faqs = [
   ['Como funciona o suporte durante o curso?', 'Você conta com acompanhamento, comunidade e aulas ao vivo para tirar dúvidas e evoluir com mais segurança.']
 ]
 
+function WhatsAppIcon() {
+  return (
+    <svg viewBox="0 0 32 32" aria-hidden="true">
+      <path d="M16.04 3.2c-7.1 0-12.87 5.74-12.87 12.8 0 2.25.6 4.45 1.72 6.38L3.1 28.8l6.6-1.73a12.95 12.95 0 0 0 6.34 1.62c7.1 0 12.87-5.74 12.87-12.8S23.14 3.2 16.04 3.2Zm0 23.5c-2.08 0-4.1-.6-5.84-1.74l-.42-.27-3.92 1.03 1.05-3.8-.28-.43a10.53 10.53 0 0 1-1.62-5.6c0-5.96 4.88-10.8 10.88-10.8s10.88 4.84 10.88 10.8-4.88 10.8-10.88 10.8Zm5.96-8.06c-.33-.16-1.96-.96-2.26-1.07-.3-.11-.52-.16-.74.16-.22.33-.85 1.07-1.04 1.29-.19.22-.38.24-.7.08-.33-.16-1.38-.5-2.63-1.6-.97-.86-1.63-1.93-1.82-2.26-.19-.33-.02-.5.14-.66.15-.15.33-.38.49-.57.16-.19.22-.33.33-.55.11-.22.05-.41-.03-.57-.08-.16-.74-1.78-1.01-2.43-.27-.64-.54-.55-.74-.56h-.63c-.22 0-.57.08-.87.41-.3.33-1.14 1.11-1.14 2.7 0 1.6 1.17 3.14 1.33 3.36.16.22 2.3 3.5 5.57 4.9.78.33 1.38.53 1.86.68.78.25 1.49.21 2.05.13.63-.09 1.96-.8 2.24-1.56.27-.77.27-1.43.19-1.56-.08-.14-.3-.22-.63-.38Z" />
+    </svg>
+  )
+}
+
 export default function Home() {
   return (
     <main>
-      <a className="whatsapp" href={whatsappUrl} target="_blank" rel="noreferrer" aria-label="WhatsApp">☎</a>
+      <a className="whatsapp" href={whatsappUrl} target="_blank" rel="noreferrer" aria-label="WhatsApp"><WhatsAppIcon /></a>
 
       <section className="hero-section">
         <div className="container hero-grid">
@@ -216,8 +224,8 @@ export default function Home() {
       </section>
 
       <section className="mentor-section">
-        <div className="container split">
-          <div>
+        <div className="container split mentor-grid">
+          <div className="mentor-copy">
             <h2>Seu mentor vocal nessa jornada será Marcos Perrella Cruz</h2>
             <p>Marcos Cruz é músico profissional e professor de canto, técnica vocal e piano com mais de 15 anos de experiência. Já ajudou centenas de alunos a destravarem suas vozes e atua como instrutor de técnica vocal em grupos de louvor.</p>
             <p>Com os horários de aulas individuais lotados, desenvolveu a mentoria Foco em Canto para atender mais alunos com uma abordagem única.</p>
