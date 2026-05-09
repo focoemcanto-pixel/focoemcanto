@@ -28,6 +28,17 @@ const phases = [
   }
 ]
 
+const testimonialImages = [
+  '/images/depoimentos/depoimento-print-01.webp',
+  '/images/depoimentos/depoimento-print-02.webp',
+  '/images/depoimentos/depoimento-print-03.webp',
+  '/images/depoimentos/depoimento-print-04.webp',
+  '/images/depoimentos/depoimento-print-05.webp',
+  '/images/depoimentos/depoimento-print-06.webp',
+  '/images/depoimentos/depoimento-print-07.webp',
+  '/images/depoimentos/depoimento-print-08.webp'
+]
+
 const benefits = [
   'Afinação precisa e controle sobre sua voz.',
   'Técnicas de respiração para emissão estável e segura.',
@@ -140,11 +151,54 @@ export default function Home() {
             <iframe src="https://www.youtube.com/embed/kenwsDb_0XM" title="Depoimento 2" allowFullScreen />
             <iframe src="https://www.youtube.com/embed/8LbwCcpvEdw" title="Depoimento 3" allowFullScreen />
           </div>
-          <div className="print-grid">
-            <img src="/images/depoimentos/depoimento-print-01.webp" alt="Depoimento" />
-            <img src="/images/depoimentos/depoimento-print-02.webp" alt="Depoimento" />
-            <img src="/images/depoimentos/depoimento-print-03.webp" alt="Depoimento" />
-            <img src="/images/depoimentos/depoimento-print-04.webp" alt="Depoimento" />
+
+          <div
+            style={{
+              marginTop: '3rem',
+              padding: '1.25rem',
+              borderRadius: '28px',
+              background: 'linear-gradient(145deg, rgba(0,0,0,.08), rgba(255,255,255,.18))',
+              border: '1px solid rgba(0,0,0,.08)',
+              boxShadow: '0 24px 70px rgba(0,0,0,.12)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', alignItems: 'end', marginBottom: '1rem', flexWrap: 'wrap' }}>
+              <h3 style={{ color: '#111', fontSize: 'clamp(1.3rem, 2.4vw, 2rem)', margin: 0 }}>Mais depoimentos dos alunos</h3>
+              <span style={{ color: '#555', fontWeight: 700, fontSize: '.95rem' }}>Arraste para ver todos →</span>
+            </div>
+            <div
+              aria-label="Carrossel de depoimentos em imagem"
+              style={{
+                display: 'flex',
+                gap: '1.25rem',
+                overflowX: 'auto',
+                scrollSnapType: 'x mandatory',
+                WebkitOverflowScrolling: 'touch',
+                padding: '.5rem .25rem 1.2rem',
+                scrollbarWidth: 'thin'
+              }}
+            >
+              {testimonialImages.map((src, index) => (
+                <figure
+                  key={src}
+                  style={{
+                    flex: '0 0 min(82vw, 360px)',
+                    scrollSnapAlign: 'center',
+                    borderRadius: '22px',
+                    overflow: 'hidden',
+                    background: '#fff',
+                    boxShadow: '0 16px 42px rgba(0,0,0,.18)',
+                    border: '1px solid rgba(0,0,0,.08)'
+                  }}
+                >
+                  <img
+                    src={src}
+                    alt={`Depoimento de aluno ${index + 1}`}
+                    style={{ width: '100%', height: 'auto', display: 'block' }}
+                  />
+                </figure>
+              ))}
+            </div>
           </div>
         </div>
       </section>
