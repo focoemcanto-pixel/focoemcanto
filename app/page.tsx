@@ -1,5 +1,6 @@
 const checkoutUrl = 'https://pay.kiwify.com.br/VIGVnxC'
 const whatsappUrl = 'https://wa.me/5571997178807'
+const valueComparisonImage = 'https://focoemcanto.com/wp-content/uploads/2026/03/Captura-de-Tela-2026-03-20-as-07.27.03.png'
 
 const phases = [
   {
@@ -240,39 +241,41 @@ export default function Home() {
       </section>
 
       <section className="offer-section premium-offer-section">
-        <div className="container offer-premium-grid">
-          <div className="offer-price-block">
-            <p className="old-price">De: <s>R$2397,00</s></p>
-            <div className="price-drop-arrow">Por apenas:</div>
-            <div className="price-installment">
-              <span className="price-times">12x</span>
-              <span className="price-value">R$&nbsp;72,09</span>
-            </div>
-            <p className="cash-price">ou <strong>R$ 697,00</strong> à vista</p>
-            <a href={checkoutUrl} className="btn offer-btn">ENTRAR AGORA</a>
+        <div className="container">
+          <div style={{ maxWidth: '920px', margin: '0 auto 5rem', padding: '1.25rem', borderRadius: '30px', background: '#050505', boxShadow: '0 26px 80px rgba(0,0,0,.48)' }}>
+            <img src={valueComparisonImage} alt="Olha o valor disso na prática" style={{ width: '100%', height: 'auto', borderRadius: '22px', display: 'block' }} />
           </div>
 
-          <div className="offer-content-card">
-            <img className="offer-img" src="/images/oferta/oferta-foco-em-canto.webp" alt="Foco em Canto" />
-            <h2>Entre para a Mentoria Foco em Canto hoje e desbloqueie o potencial da sua voz!</h2>
-            <ul className="offer-list">
-              <li>✓ Aulas Gravadas</li>
-              <li>✓ Diagnóstico Vocal</li>
-              <li>✓ Suporte Especial</li>
-              <li>✓ Aulas ao Vivo</li>
-              <li>✓ Sala Virtual</li>
-              <li>✓ 15 dias de garantia</li>
-            </ul>
+          <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '.65rem', padding: '.85rem 1.35rem', borderRadius: '999px', background: 'rgba(212,175,119,.14)', color: '#f4c84b', fontWeight: 900, fontSize: '.9rem', marginBottom: '1.6rem' }}>
+              <span>🔥</span> OFERTA DE ABERTURA
+            </div>
+            <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 'clamp(2.3rem, 5vw, 4rem)', lineHeight: '1', marginBottom: '2rem', letterSpacing: '-.035em' }}>Comece hoje por apenas</h2>
+            <div style={{ background: '#18181b', border: '1.5px solid var(--accent)', borderRadius: '28px', padding: 'clamp(2rem, 5vw, 3.3rem)', boxShadow: '0 18px 60px rgba(0,0,0,.35)' }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--accent)', fontSize: 'clamp(2rem, 5vw, 3.2rem)', fontWeight: 800 }}>12x</span>
+                <span style={{ color: '#fff', fontSize: 'clamp(4.5rem, 10vw, 6.5rem)', fontWeight: 900, lineHeight: '.85', letterSpacing: '-.06em' }}>72,09</span>
+              </div>
+              <p style={{ color: 'rgba(255,255,255,.55)', fontSize: '1.25rem', marginTop: '.65rem', marginBottom: '0' }}>ou R$697 à vista</p>
+              <a href={checkoutUrl} className="btn" style={{ display: 'flex', width: '100%', marginTop: '2.6rem', padding: '1.45rem 1.2rem', fontSize: '1.15rem', borderRadius: '14px' }}>ENTRAR NA MENTORIA AGORA</a>
+            </div>
+            <p style={{ color: 'rgba(255,255,255,.38)', fontSize: '.82rem', marginTop: '1.5rem' }}>Assinatura anual com renovação automática no mesmo valor promocional</p>
           </div>
         </div>
       </section>
 
       <section className="dark-soft guarantee-section">
-        <div className="container split">
-          <img className="guarantee-img" src="/images/garantia/garantia-15-dias.webp" alt="Garantia de 15 dias" />
-          <div>
-            <h2>15 dias de garantia incondicional — ou seu dinheiro de volta!</h2>
-            <p>Você tem 15 dias para experimentar o treinamento. Se por qualquer motivo entender que não está evoluindo ou que o método não é para você, devolvemos 100% do seu dinheiro.</p>
+        <div className="container">
+          <div style={{ maxWidth: '900px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(180px, 300px) 1fr', gap: 'clamp(1.8rem, 5vw, 4rem)', alignItems: 'center', padding: 'clamp(2rem, 5vw, 3rem)', borderRadius: '28px', border: '1.5px solid #f4c84b', background: 'linear-gradient(135deg, #18181b, #050505)', boxShadow: '0 22px 70px rgba(0,0,0,.42)' }}>
+            <img className="guarantee-img" src="/images/garantia/garantia-15-dias.webp" alt="Garantia de 15 dias" style={{ maxWidth: '280px', width: '100%', margin: '0 auto' }} />
+            <div>
+              <h2 style={{ fontSize: 'clamp(1.9rem, 4vw, 2.7rem)', marginBottom: '1.2rem' }}>Você entra sem medo</h2>
+              <p style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.75rem)', color: 'rgba(255,255,255,.78)', lineHeight: '1.18', marginBottom: '1.6rem' }}>15 dias de garantia incondicional.<br />Se não fizer sentido, reembolso total e sem burocracia.</p>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '1rem', color: '#f4c84b', fontWeight: 900, fontSize: '1.15rem' }}>
+                <span style={{ display: 'inline-grid', placeItems: 'center', width: '34px', height: '34px', borderRadius: '999px', background: '#f4c84b', color: '#111' }}>✓</span>
+                RISCO ZERO
+              </div>
+            </div>
           </div>
         </div>
       </section>
