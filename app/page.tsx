@@ -92,7 +92,9 @@ export default function Home() {
 
       <section className="dark-section transform-section">
         <div className="container split">
-          <img className="section-img tall" src="/images/transformacao/transformacao-marcos.webp" alt="Marcos cantando" />
+          <div className="transform-visual">
+            <img className="section-img tall" src="/images/metodo/fase-03.webp" alt="Marcos cantando" />
+          </div>
           <div>
             <h2>Sua voz pode ser a chave para <strong>transformar sua vida!</strong></h2>
             <p>Seja para cantar como hobby ou seguir uma carreira profissional, o método Foco em Canto pode fazer da sua voz a verdadeira ferramenta de transformação.</p>
@@ -175,16 +177,20 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="offer-section">
-        <div className="container split">
-          <div className="offer-price">
-            <p>De: <s>R$2397,00</s> Por:</p>
-            <small>12x</small>
-            <strong>72,09</strong>
-            <span>ou R$ 697 à vista</span>
-            <a href={checkoutUrl} className="btn">ENTRAR AGORA</a>
+      <section className="offer-section premium-offer-section">
+        <div className="container offer-premium-grid">
+          <div className="offer-price-block">
+            <p className="old-price">De: <s>R$2397,00</s></p>
+            <div className="price-drop-arrow">Por apenas:</div>
+            <div className="price-installment">
+              <span className="price-times">12x</span>
+              <span className="price-value">R$&nbsp;72,09</span>
+            </div>
+            <p className="cash-price">ou <strong>R$ 697,00</strong> à vista</p>
+            <a href={checkoutUrl} className="btn offer-btn">ENTRAR AGORA</a>
           </div>
-          <div>
+
+          <div className="offer-content-card">
             <img className="offer-img" src="/images/oferta/oferta-foco-em-canto.webp" alt="Foco em Canto" />
             <h2>Entre para a Mentoria Foco em Canto hoje e desbloqueie o potencial da sua voz!</h2>
             <ul className="offer-list">
