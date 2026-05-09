@@ -12,20 +12,52 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR">
       <body>
         {children}
+
         <Script id="meta-pixel" strategy="afterInteractive">
+          {`fbq && fbq('track', 'PageView');`}
+        </Script>
+
+        <Script id="kiwify-utm" strategy="afterInteractive">
           {`
-            !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-            n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-            n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);
-            t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}
-            (window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-            fbq('init','392375800147182');
-            fbq('track','PageView');
+            (() => {
+              const prefix = ['https://pay.kiwify.com.br']
+
+              const getParams = () => {
+                let t = ''
+                const e = window.top.location.href
+                const r = new URL(e)
+
+                const a = r.searchParams.get('utm_source')
+                const n = r.searchParams.get('utm_medium')
+                const o = r.searchParams.get('utm_campaign')
+                const m = r.searchParams.get('utm_term')
+                const c = r.searchParams.get('utm_content')
+
+                if (e.includes('?')) {
+                  t = '&sck=' + [a, n, o, m, c].join('|')
+                }
+
+                return t
+              }
+
+              const params = new URLSearchParams(window.location.search)
+
+              if (!params.toString()) return
+
+              document.querySelectorAll('a').forEach((link) => {
+                prefix.forEach((item) => {
+                  if (link.href.includes(item)) {
+                    if (!link.href.includes('?')) {
+                      link.href += '?' + params.toString() + getParams()
+                    } else {
+                      link.href += '&' + params.toString() + getParams()
+                    }
+                  }
+                })
+              })
+            })()
           `}
         </Script>
-        <noscript>
-          <img height="1" width="1" style={{ display: 'none' }} src="https://www.facebook.com/tr?id=392375800147182&ev=PageView&noscript=1" alt="" />
-        </noscript>
       </body>
     </html>
   )
