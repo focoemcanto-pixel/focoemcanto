@@ -68,10 +68,10 @@ export default function Home() {
           </div>
         </div>
         <div className="container trust-box">
-          <span>▣ Acesso Imediato</span>
-          <span>☆ 15 Dias de Garantia</span>
-          <span>▶ Aulas ao vivo</span>
-          <span>✓ Pagamento Seguro</span>
+          <span><i>▣</i> Acesso Imediato</span>
+          <span><i>☆</i> 15 Dias de Garantia</span>
+          <span><i>▶</i> Aulas ao vivo</span>
+          <span><i>✓</i> Pagamento Seguro</span>
         </div>
       </section>
 
@@ -170,9 +170,9 @@ export default function Home() {
           <img className="notebook" src="/images/bonus/bonus-aulas-ao-vivo.webp" alt="Aulas ao vivo" />
           <h2><strong>Aulas ao vivo toda semana!</strong> Na Mentoria você tem um acompanhamento de perto, garantindo o seu desenvolvimento.</h2>
           <div className="trust-box compact">
-            <span>✅ Grupo Exclusivo</span>
-            <span>✅ Sala Virtual</span>
-            <span>✅ Aulas ao vivo</span>
+            <span><i>✓</i> Grupo Exclusivo</span>
+            <span><i>✓</i> Sala Virtual</span>
+            <span><i>✓</i> Aulas ao vivo</span>
           </div>
         </div>
       </section>
