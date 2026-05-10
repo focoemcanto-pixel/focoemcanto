@@ -93,7 +93,7 @@ export default function Home() {
       <section className="dark-section ideal-section">
         <div className="container split">
           <div><h2>O Foco em Canto é a <strong>mentoria ideal</strong> para:</h2><ul className="check-list"><li><b>Aspirantes a cantores:</b> para quem sempre sonhou em cantar, mas não sabe por onde começar.</li><li><b>Cantores iniciantes:</b> para quem já começou a explorar o canto, mas quer aperfeiçoar suas habilidades.</li><li><b>Músicos de igreja:</b> para quem deseja aprimorar sua técnica vocal para louvores e apresentações.</li><li><b>Profissionais da música:</b> para quem quer ampliar possibilidades e alcançar um novo nível de performance.</li></ul></div>
-          <img className="section-img" src="/images/ideal-para/ideal-para.webp" alt="Mentoria ideal para" width="900" height="700" loading="lazy" decoding="async" />
+          <img className="section-img ideal-img" src="/images/ideal-para/ideal-para.webp" alt="Mentoria ideal para" width="900" height="700" loading="lazy" decoding="async" />
         </div>
       </section>
 
