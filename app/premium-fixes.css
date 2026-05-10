@@ -63,9 +63,10 @@
 }
 
 .carousel-track figure{
-  flex:0 0 calc((100% - 3.3rem) / 4) !important;
+  flex:0 0 calc((100% - 2.2rem) / 3) !important;
   width:auto !important;
   min-width:0 !important;
+  max-width:calc((100% - 2.2rem) / 3) !important;
   margin:0 !important;
   border-radius:18px;
   overflow:hidden;
@@ -186,6 +187,7 @@ section{
   .carousel-track figure{
     flex:0 0 100% !important;
     width:100% !important;
+    max-width:100% !important;
     scroll-snap-align:center;
     border-radius:16px;
     box-shadow:none;
