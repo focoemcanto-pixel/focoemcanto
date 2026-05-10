@@ -78,12 +78,14 @@ export default function Home() {
             <img src="/images/hero/hero-foco-em-canto.webp" alt="Foco em Canto" />
           </div>
           <div className="hero-copy">
-            <h1>Libere o verdadeiro potencial da sua voz e <span>aprenda a cantar com confiança e potência</span> mesmo do zero</h1>
-            <p>Domine sua voz com o método Foco em Canto: você terá afinação precisa, controle vocal e confiança, mesmo começando do zero.</p>
-            <a href={checkoutUrl} className="btn">INSCRIÇÕES ABERTAS</a>
-            <div className="price-pills">
-              <span>De <s>R$2397,00</s></span>
-              <strong>12x R$72,09</strong>
+            <div className="hero-copy-inner">
+              <h1>Libere o verdadeiro potencial da sua voz e <span>aprenda a cantar com confiança e potência</span> mesmo do zero</h1>
+              <p>Domine sua voz com o método Foco em Canto: você terá afinação precisa, controle vocal e confiança, mesmo começando do zero.</p>
+              <a href={checkoutUrl} className="btn">INSCRIÇÕES ABERTAS</a>
+              <div className="price-pills">
+                <span>De <s>R$2397,00</s></span>
+                <strong>12x R$72,09</strong>
+              </div>
             </div>
           </div>
         </div>
