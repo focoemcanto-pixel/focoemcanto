@@ -97,31 +97,50 @@ section{
   padding-bottom:2rem !important;
 }
 
-.microphone-section{
+/* HERO MICROFONE */
+.microphone-section,
+.hero-microphone,
+.transform-hero,
+.second-hero-image{
   padding-top:0 !important;
   padding-bottom:0 !important;
-  margin-top:0 !important;
-  margin-bottom:0 !important;
+  margin-top:-.5rem !important;
+  margin-bottom:-1.2rem !important;
   min-height:auto !important;
 }
 
 .microphone-section .section-img,
 .microphone-section .hero-media,
 .microphone-section picture,
-.microphone-section figure{
+.microphone-section figure,
+.hero-microphone figure,
+.hero-microphone picture,
+.second-hero-image figure{
   margin:0 !important;
   padding:0 !important;
   line-height:0 !important;
 }
 
-.microphone-section img{
+.microphone-section img,
+.hero-microphone img,
+.transform-hero img,
+.second-hero-image img{
   display:block;
   width:100%;
   height:auto !important;
-  max-height:420px !important;
+  max-height:360px !important;
   object-fit:contain !important;
   object-position:center center !important;
   margin:0 auto !important;
+}
+
+/* aproxima brutalmente o texto abaixo */
+.microphone-section + section,
+.hero-microphone + section,
+.transform-hero + section,
+.second-hero-image + section{
+  margin-top:-2.4rem !important;
+  padding-top:0 !important;
 }
 
 .hero-media img,
@@ -138,7 +157,6 @@ section{
   margin:.2rem auto .6rem;
 }
 
-/* Bônus: remove os vazios grandes acima/abaixo das imagens no mobile */
 .bonus-section{
   padding-top:2rem !important;
   padding-bottom:2rem !important;
@@ -225,28 +243,38 @@ section{
   }
 
   .microphone-section,
+  .hero-microphone,
+  .transform-hero,
+  .second-hero-image,
   .hero-media,
   .bonus-image-wrap,
   .notebook-wrap,
   .transform-section .section-img.tall{
-    margin-top:0 !important;
-    margin-bottom:0 !important;
+    margin-top:-.4rem !important;
+    margin-bottom:-1rem !important;
     padding-top:0 !important;
     padding-bottom:0 !important;
   }
 
-  .microphone-section img{
-    max-height:250px !important;
+  .microphone-section img,
+  .hero-microphone img,
+  .transform-hero img,
+  .second-hero-image img{
+    max-height:205px !important;
     width:100% !important;
+  }
+
+  .microphone-section + section,
+  .hero-microphone + section,
+  .transform-hero + section,
+  .second-hero-image + section{
+    margin-top:-3rem !important;
+    padding-top:0 !important;
   }
 
   .bonus-section{
     padding-top:1rem !important;
     padding-bottom:1rem !important;
-  }
-
-  .bonus-section h2{
-    margin-bottom:1rem !important;
   }
 
   .bonus-card{
@@ -260,19 +288,6 @@ section{
     max-width:92% !important;
     max-height:240px !important;
     margin:0 auto !important;
-  }
-
-  .bonus-card h3{
-    margin-top:.25rem !important;
-    margin-bottom:.55rem !important;
-  }
-
-  .bonus-card p{
-    margin-bottom:.75rem !important;
-  }
-
-  .bonus-price{
-    margin-top:.7rem !important;
   }
 
   .dark-soft.center-section{
@@ -290,11 +305,6 @@ section{
     max-height:220px !important;
     margin:0 auto !important;
   }
-
-  .dark-soft.center-section h2{
-    line-height:1.14 !important;
-    margin:0 auto !important;
-  }
 }
 
 @media (max-width:480px){
@@ -303,13 +313,28 @@ section{
     object-position:center 14% !important;
   }
 
-  .microphone-section{
+  .microphone-section,
+  .hero-microphone,
+  .transform-hero,
+  .second-hero-image{
     padding-top:0 !important;
     padding-bottom:0 !important;
+    margin-top:-.6rem !important;
+    margin-bottom:-1.5rem !important;
   }
 
-  .microphone-section img{
-    max-height:220px !important;
+  .microphone-section img,
+  .hero-microphone img,
+  .transform-hero img,
+  .second-hero-image img{
+    max-height:185px !important;
+  }
+
+  .microphone-section + section,
+  .hero-microphone + section,
+  .transform-hero + section,
+  .second-hero-image + section{
+    margin-top:-3.5rem !important;
   }
 
   section,
