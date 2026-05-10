@@ -1,441 +1,219 @@
-/* Correções premium para mobile/desktop — preserva a LP atual sem reestruturar o app. */
+/* Correções premium refinadas */
 
-/* Depoimentos em vídeo: abre dentro da página, com thumbs proporcionais e modal premium. */
 .video-grid{
   display:grid;
-  grid-template-columns:repeat(3,minmax(0,1fr));
-  gap:1.15rem;
-  margin-top:2.5rem;
-}
-.video-thumb{
-  position:relative;
-  width:100%;
-  aspect-ratio:16/9;
-  border:0;
-  border-radius:18px;
-  overflow:hidden;
-  cursor:pointer;
-  background:#050505;
-  box-shadow:0 14px 36px rgba(0,0,0,.18);
-  padding:0;
-  display:block;
-}
-.video-thumb img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  object-position:center;
-  transform:scale(1.02);
-  transition:transform .22s ease, filter .22s ease;
-}
-.video-thumb::after{
-  content:'';
-  position:absolute;
-  inset:0;
-  background:linear-gradient(180deg,rgba(0,0,0,.05),rgba(0,0,0,.35));
-}
-.video-thumb:hover img{transform:scale(1.06);filter:saturate(1.06)}
-.video-play{
-  position:absolute;
-  inset:0;
-  margin:auto;
-  z-index:2;
-  width:58px;
-  height:58px;
-  border-radius:999px;
-  display:grid;
-  place-items:center;
-  padding-left:4px;
-  background:rgba(40,215,191,.94);
-  color:#06110f;
-  font-size:1.35rem;
-  box-shadow:0 12px 30px rgba(40,215,191,.28);
-}
-.video-modal{
-  position:fixed;
-  inset:0;
-  z-index:10000;
-  background:rgba(0,0,0,.86);
-  backdrop-filter:blur(10px);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding:1.25rem;
-}
-.video-modal-card{
-  width:min(980px,100%);
-  aspect-ratio:16/9;
-  position:relative;
-  border-radius:22px;
-  overflow:hidden;
-  background:#000;
-  box-shadow:0 24px 70px rgba(0,0,0,.65);
-  border:1px solid rgba(255,255,255,.14);
-}
-.video-modal-card iframe{
-  width:100%;
-  height:100%;
-  border:0;
-  display:block;
-}
-.video-close{
-  position:absolute;
-  top:.65rem;
-  right:.65rem;
-  z-index:3;
-  width:42px;
-  height:42px;
-  border:0;
-  border-radius:999px;
-  background:rgba(0,0,0,.72);
-  color:#fff;
-  font-size:2rem;
-  line-height:1;
-  cursor:pointer;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:1rem;
+  margin-top:1.5rem;
 }
 
-/* Depoimentos em imagem: volta para carrossel premium horizontal. */
+.video-embed{
+  position:relative;
+  overflow:hidden;
+  border-radius:18px;
+  background:#000;
+  aspect-ratio:9/16;
+  box-shadow:0 14px 36px rgba(0,0,0,.22);
+}
+
+.video-embed iframe{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  border:0;
+}
+
 .testimonials-carousel{
-  margin-top:2.75rem;
-  padding:1.25rem;
-  border-radius:26px;
-  background:linear-gradient(145deg,#f7f7f7,#e7e7e7);
-  border:1px solid rgba(0,0,0,.08);
-  box-shadow:0 16px 42px rgba(0,0,0,.08);
+  margin-top:1.5rem;
+  padding:.8rem;
+  border-radius:24px;
+  background:linear-gradient(145deg,#f7f7f7,#ececec);
 }
-.carousel-head{
-  display:flex;
-  align-items:flex-end;
-  justify-content:space-between;
-  gap:1rem;
-  margin-bottom:1rem;
-}
-.carousel-head h3{
-  color:#111;
-  font-size:1.35rem;
-  margin:0;
-}
-.carousel-head span{
-  color:#666;
-  font-weight:800;
-  font-size:.92rem;
-}
+
 .carousel-track{
   display:grid;
   grid-auto-flow:column;
-  grid-auto-columns:minmax(240px,300px);
-  gap:1rem;
+  grid-auto-columns:100%;
   overflow-x:auto;
-  overscroll-behavior-inline:contain;
   scroll-snap-type:x mandatory;
-  padding:.25rem .25rem 1rem;
-  -webkit-overflow-scrolling:touch;
+  gap:0;
+  padding:0;
 }
+
 .carousel-track figure{
-  scroll-snap-align:start;
+  width:100%;
+  scroll-snap-align:center;
+  margin:0;
   border-radius:18px;
   overflow:hidden;
-  background:#fff;
-  box-shadow:0 12px 28px rgba(0,0,0,.12);
-  border:1px solid rgba(0,0,0,.08);
 }
+
 .carousel-track img{
   width:100%;
-  height:390px;
-  object-fit:cover;
-  object-position:top center;
-}
-
-/* Blocos das fases: corta de forma elegante, pegando a parte superior/meio da foto e reduzindo rolagem. */
-.phase-card{
-  border-radius:22px;
-  box-shadow:0 18px 42px rgba(0,0,0,.14);
-}
-.phase-card img{
-  height:190px !important;
-  object-fit:cover !important;
-  object-position:50% 18% !important;
-}
-.phase-body{min-height:245px;}
-
-/* Seções com imagens: evita imagens esticadas, laterais cortadas e espaços vazios gigantes. */
-.section-img,
-.mentor-img,
-.notebook,
-.bonus-card img,
-.guarantee-img,
-.hero-media img{
+  aspect-ratio:9/16;
   object-fit:contain;
+  background:#fff;
 }
+
+.phase-grid{
+  gap:1.1rem !important;
+}
+
+.phase-card{
+  overflow:hidden;
+  border-radius:24px;
+  box-shadow:0 14px 34px rgba(0,0,0,.14);
+}
+
+.phase-card img{
+  width:100%;
+  height:250px !important;
+  object-fit:cover !important;
+  object-position:center 16% !important;
+}
+
+.phase-body{
+  min-height:auto;
+  padding:1.35rem 1.3rem 1.45rem;
+}
+
+.phase-body h3{
+  line-height:1.12;
+  margin-bottom:1rem;
+}
+
+.phase-body p{
+  line-height:1.55;
+}
+
+.center-section,
+.dark-soft,
+.transform-section,
+.bonus-section,
+section{
+  padding-top:2.4rem !important;
+  padding-bottom:2.4rem !important;
+}
+
+.hero-media,
+.microphone-section,
+.bonus-image-wrap,
+.notebook-wrap,
 .transform-section .section-img.tall{
+  margin-top:.35rem !important;
+  margin-bottom:.35rem !important;
+}
+
+.microphone-section img,
+.hero-media img,
+.transform-section .section-img.tall{
+  display:block;
   width:100%;
-  max-height:520px;
-  object-fit:cover;
-  object-position:50% 18%;
+  max-height:560px;
+  object-fit:contain;
+  object-position:center;
 }
-.center-section{
-  padding-top:4rem;
-  padding-bottom:4rem;
-}
+
 .notebook{
-  max-width:680px;
-  margin-bottom:1.35rem;
-}
-
-/* Card de valor/preço: corrige corte lateral no mobile e mantém visual premium. */
-.value-card{
-  border:1px solid rgba(255,201,64,.55);
-  border-radius:28px;
-  padding:2.6rem;
-  background:radial-gradient(circle at 80% 20%,rgba(255,201,64,.16),transparent 36%),linear-gradient(145deg,#111,#171717);
-  box-shadow:0 24px 56px rgba(0,0,0,.38);
-  overflow:hidden;
-  margin-bottom:3rem;
-}
-.value-card h2{
-  text-align:center;
-  font-family:Georgia,serif;
-  font-size:clamp(2rem,4.5vw,3.8rem);
-  line-height:.98;
-  margin-bottom:2rem;
-}
-.value-card-grid{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
-  gap:1.5rem;
-  align-items:center;
-}
-.value-left{display:flex;flex-direction:column;gap:1rem;min-width:0;}
-.value-note{
-  display:block;
-  width:max-content;
-  max-width:100%;
-  padding:.9rem 1.3rem;
-  border-radius:14px;
-  background:rgba(255,255,255,.13);
-  color:rgba(255,255,255,.78);
-  font-weight:700;
-  text-align:center;
-}
-.value-old{
-  position:relative;
-  display:block;
-  border-radius:18px;
-  background:#080808;
-  padding:1.35rem;
-  font-family:Georgia,serif;
-  font-size:clamp(2rem,4vw,3.5rem);
-  line-height:.82;
-  color:#fff;
-  overflow:hidden;
-}
-.value-old span{
-  position:absolute;
-  left:8%;
-  right:8%;
-  top:52%;
-  height:10px;
-  border-radius:999px;
-  background:#ff4e55;
-  transform:rotate(-10deg);
-}
-.value-arrow{color:#ffd347;font-size:3rem;font-weight:900;}
-.value-result{
-  min-height:160px;
-  border:1px solid rgba(255,211,71,.7);
-  border-radius:22px;
-  display:grid;
-  place-items:center;
-  padding:1.5rem;
-  background:rgba(255,211,71,.08);
-}
-.value-result strong{
-  font-family:Georgia,serif;
-  font-size:clamp(1.7rem,3vw,3rem);
-  line-height:1;
-  color:#fff;
-  text-align:center;
-}
-
-/* Bloco de preço/oferta: restaura o modelo premium antigo. */
-.price-offer{
-  text-align:center;
-  max-width:820px;
-  margin:0 auto;
-  padding-top:1.8rem;
-}
-.offer-badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  gap:.45rem;
-  min-width:260px;
-  padding:.9rem 1.8rem;
-  margin-bottom:2.2rem;
-  border-radius:999px;
-  background:rgba(255,211,71,.14);
-  color:#ffd347;
-  font-weight:900;
-  font-size:.98rem;
-  letter-spacing:.01em;
-}
-.price-offer h2{
-  font-family:Georgia,'Times New Roman',serif;
-  font-size:clamp(3.1rem,6vw,5.3rem);
-  line-height:.92;
-  letter-spacing:-.045em;
-  color:#fff;
-  max-width:680px;
-  margin:0 auto 2.2rem;
-}
-.price-card{
-  width:min(100%,560px);
-  margin:0 auto 1.6rem;
-  padding:3.2rem 3.4rem 2.8rem;
-  border:1.5px solid rgba(40,215,191,.95);
-  border-radius:22px;
-  background:linear-gradient(145deg,#17181c,#15161a);
-  box-shadow:0 18px 54px rgba(0,0,0,.38), inset 0 1px 0 rgba(255,255,255,.04);
-}
-.price-line{
-  display:flex;
-  align-items:baseline;
-  justify-content:center;
-  gap:1.05rem;
-  margin-bottom:.8rem;
-}
-.price-line span{
-  color:var(--accent);
-  font-size:clamp(2.2rem,4.3vw,3.3rem);
-  font-weight:500;
-  line-height:1;
-}
-.price-line strong{
-  color:#fff;
-  font-size:clamp(5.4rem,9vw,7.4rem);
-  line-height:.78;
-  font-weight:900;
-  letter-spacing:-.06em;
-  font-family:Arial,Helvetica,sans-serif;
-}
-.price-card p{
-  color:rgba(255,255,255,.64);
-  font-size:1.42rem;
-  font-weight:700;
-  line-height:1.2;
-  margin:0 0 2.6rem;
-}
-.price-card .btn{
-  width:100%;
-  min-height:76px;
-  border-radius:13px;
-  font-size:1.35rem;
-  letter-spacing:-.01em;
-  background:linear-gradient(135deg,#168577,#25c8b7);
-  box-shadow:0 16px 32px rgba(40,215,191,.18);
-}
-.renew-note{
-  color:rgba(255,255,255,.45);
-  font-size:.98rem;
-  line-height:1.45;
   max-width:620px;
-  margin:0 auto;
+  margin:.2rem auto .6rem;
 }
 
-/* Garantia: impede o selo de 15 dias de esticar no iPhone. */
 .guarantee-card{
-  border:1px solid #f7c948;
-  border-radius:34px;
-  padding:2.75rem;
-  display:grid;
-  grid-template-columns:330px 1fr;
-  gap:2rem;
-  align-items:center;
-  background:linear-gradient(145deg,#0b0b0b,#111);
-  box-shadow:0 20px 50px rgba(0,0,0,.4);
-}
-.guarantee-img{
-  width:100%;
-  max-width:300px;
-  height:auto !important;
-  aspect-ratio:1/1;
-  object-fit:contain !important;
-}
-.risk-zero{
-  display:inline-flex;
-  align-items:center;
-  gap:.85rem;
-  margin-top:1rem;
-  color:#ffd347;
-  font-weight:900;
-  font-size:1.25rem;
-}
-.risk-zero span{
-  width:46px;
-  height:46px;
-  border-radius:999px;
-  display:grid;
-  place-items:center;
-  background:#ffd347;
-  color:#050505;
+  padding:2rem;
 }
 
 @media (max-width:980px){
-  .video-grid{grid-template-columns:1fr;gap:1rem;margin-top:1.8rem;}
-  .video-thumb{border-radius:18px;}
-  .video-modal{padding:.85rem;align-items:center;}
-  .video-modal-card{border-radius:16px;}
+  .video-grid{
+    grid-template-columns:1fr;
+    gap:1rem;
+    margin-top:1.2rem;
+  }
 
-  .testimonials-carousel{margin-top:2rem;padding:1rem;border-radius:22px;}
-  .carousel-head{align-items:flex-start;flex-direction:column;gap:.35rem;}
-  .carousel-track{grid-auto-columns:78%;gap:.85rem;}
-  .carousel-track img{height:430px;object-position:top center;}
+  .video-embed{
+    width:100%;
+    max-width:340px;
+    margin:0 auto;
+  }
 
-  .phase-grid{gap:1rem !important;}
-  .phase-card{border-radius:18px;}
-  .phase-card img{height:155px !important;object-position:50% 14% !important;}
-  .phase-body{min-height:auto;padding:1.15rem 1.2rem 1.35rem;}
-  .phase-body span{padding:.65rem 1rem;margin-bottom:.9rem;}
-  .phase-body h3{font-size:1.05rem;line-height:1.18;}
-  .phase-body p{font-size:.95rem;line-height:1.55;}
+  .carousel-track{
+    grid-auto-columns:100%;
+  }
 
-  .transform-section .section-img.tall{max-height:360px;object-fit:cover;object-position:50% 12%;}
-  .notebook{max-width:92%;margin-bottom:1rem;}
-  .center-section{padding-top:3rem;padding-bottom:3rem;}
-  .dark-soft.center-section .container.narrow{max-width:100%;}
+  .carousel-track figure{
+    width:100%;
+  }
 
-  .value-card{padding:1.45rem 1rem;border-radius:24px;margin-bottom:2rem;}
-  .value-card h2{font-size:clamp(2.15rem,9vw,3rem);margin-bottom:1.4rem;}
-  .value-card-grid{grid-template-columns:1fr;gap:1rem;}
-  .value-note{width:100%;font-size:1rem;}
-  .value-old{font-size:clamp(2.25rem,12vw,3.25rem);text-align:left;}
-  .value-arrow{transform:rotate(90deg);font-size:2.25rem;line-height:1;text-align:center;}
-  .value-result{min-height:auto;padding:1.25rem;}
-  .value-result strong{font-size:clamp(1.9rem,9vw,2.7rem);}
+  .phase-grid{
+    gap:.9rem !important;
+  }
 
-  .price-offer{padding-top:.6rem;}
-  .offer-badge{min-width:0;padding:.8rem 1.45rem;margin-bottom:1.8rem;font-size:.9rem;}
-  .price-offer h2{font-size:clamp(3rem,12vw,4.6rem);max-width:92%;margin-bottom:1.8rem;}
-  .price-card{width:min(100%,92vw);padding:2.6rem 1.85rem 2.1rem;border-radius:21px;}
-  .price-line{gap:.65rem;margin-bottom:.75rem;}
-  .price-line span{font-size:clamp(2.1rem,11vw,3rem);}
-  .price-line strong{font-size:clamp(5rem,22vw,7rem);}
-  .price-card p{font-size:1.25rem;margin-bottom:2.1rem;}
-  .price-card .btn{min-height:66px;font-size:1.08rem;padding:1rem 1.2rem;}
-  .renew-note{max-width:88%;font-size:.88rem;}
+  .phase-card img{
+    height:235px !important;
+    object-position:center 15% !important;
+  }
 
-  .guarantee-card{grid-template-columns:1fr;gap:1rem;text-align:center;padding:1.75rem 1.15rem;border-radius:28px;}
-  .guarantee-img{max-width:210px;margin:0 auto;}
-  .risk-zero{justify-content:center;font-size:1.15rem;}
+  .phase-body{
+    padding:1.2rem 1.15rem 1.3rem;
+  }
+
+  .center-section,
+  .dark-soft,
+  .transform-section,
+  .bonus-section,
+  section{
+    padding-top:1.35rem !important;
+    padding-bottom:1.35rem !important;
+  }
+
+  .microphone-section,
+  .hero-media,
+  .bonus-image-wrap,
+  .notebook-wrap,
+  .transform-section .section-img.tall{
+    margin-top:0 !important;
+    margin-bottom:0 !important;
+  }
+
+  .microphone-section img,
+  .hero-media img,
+  .transform-section .section-img.tall{
+    max-height:360px;
+  }
+
+  .notebook{
+    max-width:92%;
+    margin:0 auto .25rem;
+  }
+
+  .price-offer{
+    padding-top:.3rem;
+  }
+
+  .price-card{
+    margin-bottom:.8rem;
+  }
 }
 
-@media (max-width:420px){
-  .carousel-track{grid-auto-columns:86%;}
-  .carousel-track img{height:390px;}
-  .phase-card img{height:145px !important;}
-  .transform-section .section-img.tall{max-height:320px;}
-  .guarantee-img{max-width:185px;}
-  .video-play{width:52px;height:52px;}
-  .price-card{padding:2.35rem 1.25rem 1.9rem;}
-  .price-card .btn{font-size:1rem;}
+@media (max-width:480px){
+  .phase-card img{
+    height:225px !important;
+    object-position:center 14% !important;
+  }
+
+  .microphone-section img,
+  .hero-media img,
+  .transform-section .section-img.tall{
+    max-height:320px;
+  }
+
+  .center-section,
+  .dark-soft,
+  .transform-section,
+  .bonus-section,
+  section{
+    padding-top:1rem !important;
+    padding-bottom:1rem !important;
+  }
 }
