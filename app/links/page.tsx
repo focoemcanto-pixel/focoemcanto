@@ -2,7 +2,7 @@ const links = [
   {
     title: 'Curso de Divisão Vocal',
     subtitle: 'Aprenda a dividir vozes no ministério de louvor',
-    href: 'https://harmonia.focoemcanto.com',
+    href: 'https://harmonia.focoemcanto.com/ig',
     icon: '♪',
     featured: true,
   },
