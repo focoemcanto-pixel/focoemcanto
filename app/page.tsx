@@ -1,12 +1,17 @@
 const checkoutUrl = 'https://pay.kiwify.com.br/VIGVnxC'
 const whatsappUrl = 'https://wa.me/5571997178807'
-const valueComparisonImage = 'https://focoemcanto.com/wp-content/uploads/2026/03/Captura-de-Tela-2026-03-20-as-07.27.03.png'
 
 const phases = [
   { img: '/images/metodo/fase-01.webp', tag: 'FASE 01', title: 'Boas-vindas e diagnóstico vocal', text: 'Comece entendendo sua voz, suas necessidades e o caminho certo para evoluir com segurança.' },
   { img: '/images/metodo/fase-02.webp', tag: 'FASE 02', title: 'Mentalidade e fisiologia da voz', text: 'Prepare sua mente e compreenda como sua voz funciona para cantar com mais controle.' },
   { img: '/images/metodo/fase-03.webp', tag: 'FASE 03', title: 'Respiração, controle e afinação', text: 'Desenvolva estabilidade, potência e emissão vocal sem forçar.' },
   { img: '/images/metodo/fase-04.webp', tag: 'FASE 04', title: 'Extensão, registros e prática aplicada', text: 'Expanda sua voz e aplique tudo em músicas, apresentações e rotina real.' }
+]
+
+const videoTestimonials = [
+  { id: 'rDzhJn2SYbI', title: 'Depoimento 1' },
+  { id: 'kenwsDb_0XM', title: 'Depoimento 2' },
+  { id: '8LbwCcpvEdw', title: 'Depoimento 3' }
 ]
 
 const testimonialImages = [
@@ -47,6 +52,68 @@ function WhatsAppIcon() {
   )
 }
 
+function VideoCard({ id, title }: { id: string; title: string }) {
+  return (
+    <a
+      href={`https://www.youtube.com/watch?v=${id}`}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={`Abrir ${title} no YouTube`}
+      style={{
+        display: 'block',
+        position: 'relative',
+        aspectRatio: '16/9',
+        overflow: 'hidden',
+        background: '#111',
+        boxShadow: '0 8px 26px rgba(0,0,0,.15)'
+      }}
+    >
+      <img
+        src={`https://i.ytimg.com/vi/${id}/hqdefault.jpg`}
+        alt={title}
+        width="480"
+        height="360"
+        loading="lazy"
+        decoding="async"
+        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: .82 }}
+      />
+      <span
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'grid',
+          placeItems: 'center',
+          background: 'linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.38))'
+        }}
+      >
+        <span style={{ width: 74, height: 52, borderRadius: 14, background: '#ff0000', display: 'grid', placeItems: 'center', color: '#fff', fontSize: '1.5rem', boxShadow: '0 12px 34px rgba(0,0,0,.35)' }}>▶</span>
+      </span>
+    </a>
+  )
+}
+
+function ValueComparisonCard() {
+  return (
+    <div style={{ maxWidth: '920px', margin: '0 auto 5rem', padding: 'clamp(1.5rem, 4vw, 3rem)', borderRadius: '30px', background: 'radial-gradient(circle at top right, rgba(244,200,75,.24), transparent 36%), linear-gradient(135deg, #222b31, #111315 60%, #080808)', boxShadow: '0 26px 80px rgba(0,0,0,.48)', border: '1px solid rgba(244,200,75,.22)', textAlign: 'center' }}>
+      <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 'clamp(2rem, 4vw, 3rem)', lineHeight: 1.06, marginBottom: '2.2rem' }}>Olha o valor disso na prática</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1fr', gap: 'clamp(1rem, 4vw, 2rem)', alignItems: 'center' }}>
+        <div style={{ display: 'grid', gap: '1rem', justifyItems: 'center' }}>
+          <span style={{ display: 'inline-block', padding: '.9rem 1.3rem', borderRadius: '10px', background: 'rgba(255,255,255,.12)', color: 'rgba(255,255,255,.82)', boxShadow: '0 10px 26px rgba(0,0,0,.24)' }}>Aula individual: R$600/mês</span>
+          <strong style={{ display: 'block', position: 'relative', padding: '1rem 1.6rem', borderRadius: '12px', background: 'rgba(0,0,0,.22)', fontFamily: 'Georgia, serif', fontSize: 'clamp(2rem, 5vw, 4rem)', lineHeight: .9 }}>
+            Mais de<br />R$7.000<br />ao ano
+            <span style={{ position: 'absolute', left: '8%', right: '8%', top: '50%', height: 7, borderRadius: 99, background: '#ef4444', transform: 'rotate(-14deg)' }} />
+          </strong>
+        </div>
+        <span style={{ color: '#f4c84b', fontSize: '2.8rem', fontWeight: 900 }}>→</span>
+        <div style={{ padding: '1.6rem', borderRadius: '18px', border: '1px solid rgba(244,200,75,.65)', background: 'rgba(244,200,75,.14)', boxShadow: '0 0 32px rgba(244,200,75,.18)' }}>
+          <strong style={{ display: 'block', fontFamily: 'Georgia, serif', fontSize: 'clamp(1.55rem, 3vw, 2.25rem)', lineHeight: 1.1 }}>Isso facilmente passaria de R$2.000</strong>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   return (
     <main>
@@ -55,7 +122,7 @@ export default function Home() {
       <section className="hero-section">
         <div className="container hero-grid">
           <div className="hero-media">
-            <img src="/images/hero/hero-foco-em-canto.webp" alt="Foco em Canto" fetchPriority="high" />
+            <img src="/images/hero/hero-foco-em-canto.webp" alt="Foco em Canto" width="900" height="700" fetchPriority="high" />
           </div>
           <div className="hero-copy">
             <div className="hero-copy-inner" style={{ textAlign: 'center', marginLeft: 'auto', marginRight: 'auto' }}>
@@ -88,14 +155,14 @@ export default function Home() {
               <li><b>Profissionais da música:</b> para quem quer ampliar possibilidades e alcançar um novo nível de performance.</li>
             </ul>
           </div>
-          <img className="section-img" src="/images/ideal-para/ideal-para.webp" alt="Mentoria ideal para" loading="lazy" decoding="async" />
+          <img className="section-img" src="/images/ideal-para/ideal-para.webp" alt="Mentoria ideal para" width="900" height="700" loading="lazy" decoding="async" />
         </div>
       </section>
 
       <section className="dark-section transform-section">
         <div className="container split">
           <div className="transform-visual">
-            <img className="section-img tall" src="/images/metodo/fase-03.webp" alt="Marcos cantando" loading="lazy" decoding="async" />
+            <img className="section-img tall" src="/images/metodo/fase-03.webp" alt="Marcos cantando" width="600" height="800" loading="lazy" decoding="async" />
           </div>
           <div>
             <h2>Sua voz pode ser a chave para <strong>transformar sua vida!</strong></h2>
@@ -113,7 +180,7 @@ export default function Home() {
           <div className="phase-grid">
             {phases.map((phase) => (
               <article className="phase-card" key={phase.tag}>
-                <img src={phase.img} alt={phase.title} loading="lazy" decoding="async" />
+                <img src={phase.img} alt={phase.title} width="420" height="360" loading="lazy" decoding="async" />
                 <div className="phase-body"><span>{phase.tag}</span><h3>{phase.title}</h3><hr /><p>{phase.text}</p></div>
               </article>
             ))}
@@ -125,9 +192,7 @@ export default function Home() {
         <div className="container">
           <h2>Veja os resultados que alguns dos nossos alunos já alcançaram, mudando sua forma de cantar definitivamente!</h2>
           <div className="video-grid">
-            <iframe src="https://www.youtube.com/embed/rDzhJn2SYbI" title="Depoimento 1" loading="lazy" allowFullScreen />
-            <iframe src="https://www.youtube.com/embed/kenwsDb_0XM" title="Depoimento 2" loading="lazy" allowFullScreen />
-            <iframe src="https://www.youtube.com/embed/8LbwCcpvEdw" title="Depoimento 3" loading="lazy" allowFullScreen />
+            {videoTestimonials.map((video) => <VideoCard key={video.id} {...video} />)}
           </div>
 
           <div style={{ marginTop: '3rem', padding: '1.25rem', borderRadius: '28px', background: 'linear-gradient(145deg, rgba(0,0,0,.08), rgba(255,255,255,.18))', border: '1px solid rgba(0,0,0,.08)', boxShadow: '0 24px 70px rgba(0,0,0,.12)' }}>
@@ -138,7 +203,7 @@ export default function Home() {
             <div aria-label="Carrossel de depoimentos em imagem" style={{ display: 'flex', gap: '1.25rem', overflowX: 'auto', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch', padding: '.5rem .25rem 1.2rem', scrollbarWidth: 'thin' }}>
               {testimonialImages.map((src, index) => (
                 <figure key={src} style={{ flex: '0 0 min(82vw, 360px)', scrollSnapAlign: 'center', borderRadius: '22px', overflow: 'hidden', background: '#fff', boxShadow: '0 16px 42px rgba(0,0,0,.18)', border: '1px solid rgba(0,0,0,.08)' }}>
-                  <img src={src} alt={`Depoimento de aluno ${index + 1}`} loading="lazy" decoding="async" style={{ width: '100%', height: 'auto', display: 'block' }} />
+                  <img src={src} alt={`Depoimento de aluno ${index + 1}`} width="720" height="900" loading="lazy" decoding="async" style={{ width: '100%', height: 'auto', display: 'block' }} />
                 </figure>
               ))}
             </div>
@@ -158,7 +223,7 @@ export default function Home() {
         <div className="container">
           <h2>E ainda não acabou...<br />Além de todo conteúdo, você vai ter acesso a bônus exclusivos:</h2>
           <div className="bonus-card">
-            <img src="/images/bonus/bonus-apps.webp" alt="Bônus apps" loading="lazy" decoding="async" />
+            <img src="/images/bonus/bonus-apps.webp" alt="Bônus apps" width="800" height="560" loading="lazy" decoding="async" />
             <div><h3>Acesso a apps de treino vocal</h3><p>Ferramentas digitais para praticar e evoluir com mais agilidade.</p><div className="bonus-price"><s>De R$197,00</s><strong>Por: Bônus</strong></div></div>
           </div>
         </div>
@@ -166,7 +231,7 @@ export default function Home() {
 
       <section className="dark-soft center-section">
         <div className="container narrow">
-          <img className="notebook" src="/images/bonus/bonus-aulas-ao-vivo.webp" alt="Aulas ao vivo" loading="lazy" decoding="async" />
+          <img className="notebook" src="/images/bonus/bonus-aulas-ao-vivo.webp" alt="Aulas ao vivo" width="900" height="600" loading="lazy" decoding="async" />
           <h2><strong>Aulas ao vivo toda semana!</strong> Na Mentoria você tem um acompanhamento de perto, garantindo o seu desenvolvimento.</h2>
           <div className="trust-box compact"><span><i>✓</i> Grupo Exclusivo</span><span><i>✓</i> Sala Virtual</span><span><i>✓</i> Aulas ao vivo</span></div>
         </div>
@@ -174,9 +239,7 @@ export default function Home() {
 
       <section className="offer-section premium-offer-section">
         <div className="container">
-          <div style={{ maxWidth: '920px', margin: '0 auto 5rem', padding: '1.25rem', borderRadius: '30px', background: '#050505', boxShadow: '0 26px 80px rgba(0,0,0,.48)' }}>
-            <img src={valueComparisonImage} alt="Olha o valor disso na prática" loading="lazy" decoding="async" style={{ width: '100%', height: 'auto', borderRadius: '22px', display: 'block' }} />
-          </div>
+          <ValueComparisonCard />
           <div style={{ textAlign: 'center', maxWidth: '640px', margin: '0 auto' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '.65rem', padding: '.85rem 1.35rem', borderRadius: '999px', background: 'rgba(212,175,119,.14)', color: '#f4c84b', fontWeight: 900, fontSize: '.9rem', marginBottom: '1.6rem' }}><span>🔥</span> OFERTA DE ABERTURA</div>
             <h2 style={{ fontFamily: 'Georgia, serif', fontSize: 'clamp(2.3rem, 5vw, 4rem)', lineHeight: '1', marginBottom: '2rem', letterSpacing: '-.035em' }}>Comece hoje por apenas</h2>
@@ -193,7 +256,7 @@ export default function Home() {
       <section className="dark-soft guarantee-section">
         <div className="container">
           <div style={{ maxWidth: '900px', margin: '0 auto', display: 'grid', gridTemplateColumns: 'minmax(180px, 300px) 1fr', gap: 'clamp(1.8rem, 5vw, 4rem)', alignItems: 'center', padding: 'clamp(2rem, 5vw, 3rem)', borderRadius: '28px', border: '1.5px solid #f4c84b', background: 'linear-gradient(135deg, #18181b, #050505)', boxShadow: '0 22px 70px rgba(0,0,0,.42)' }}>
-            <img className="guarantee-img" src="/images/garantia/garantia-15-dias.webp" alt="Garantia de 15 dias" loading="lazy" decoding="async" style={{ maxWidth: '280px', width: '100%', margin: '0 auto' }} />
+            <img className="guarantee-img" src="/images/garantia/garantia-15-dias.webp" alt="Garantia de 15 dias" width="420" height="420" loading="lazy" decoding="async" style={{ maxWidth: '280px', width: '100%', margin: '0 auto' }} />
             <div><h2 style={{ fontSize: 'clamp(1.9rem, 4vw, 2.7rem)', marginBottom: '1.2rem' }}>Você entra sem medo</h2><p style={{ fontSize: 'clamp(1.25rem, 2.5vw, 1.75rem)', color: 'rgba(255,255,255,.78)', lineHeight: '1.18', marginBottom: '1.6rem' }}>15 dias de garantia incondicional.<br />Se não fizer sentido, reembolso total e sem burocracia.</p><div style={{ display: 'inline-flex', alignItems: 'center', gap: '1rem', color: '#f4c84b', fontWeight: 900, fontSize: '1.15rem' }}><span style={{ display: 'inline-grid', placeItems: 'center', width: '34px', height: '34px', borderRadius: '999px', background: '#f4c84b', color: '#111' }}>✓</span>RISCO ZERO</div></div>
           </div>
         </div>
@@ -202,7 +265,7 @@ export default function Home() {
       <section className="mentor-section">
         <div className="container split mentor-grid">
           <div className="mentor-copy"><h2>Seu mentor vocal nessa jornada será Marcos Perrella Cruz</h2><p>Marcos Cruz é músico profissional e professor de canto, técnica vocal e piano com mais de 15 anos de experiência. Já ajudou centenas de alunos a destravarem suas vozes e atua como instrutor de técnica vocal em grupos de louvor.</p><p>Com os horários de aulas individuais lotados, desenvolveu a mentoria Foco em Canto para atender mais alunos com uma abordagem única.</p><a href={checkoutUrl} className="btn">QUERO APRENDER A CANTAR</a></div>
-          <img className="mentor-img" src="/images/mentor/mentor-marcos.webp" alt="Marcos Perrella Cruz" loading="lazy" decoding="async" />
+          <img className="mentor-img" src="/images/mentor/mentor-marcos.webp" alt="Marcos Perrella Cruz" width="640" height="760" loading="lazy" decoding="async" />
         </div>
       </section>
 
