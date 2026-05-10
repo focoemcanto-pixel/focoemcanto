@@ -41,16 +41,6 @@
   margin-bottom:1rem;
 }
 
-.carousel-head h3{
-  margin:0;
-  color:#111;
-}
-
-.carousel-head span{
-  color:#666;
-  font-weight:800;
-}
-
 .carousel-track{
   display:flex !important;
   flex-wrap:nowrap !important;
@@ -64,8 +54,6 @@
 
 .carousel-track figure{
   flex:0 0 calc((100% - 2.2rem) / 3) !important;
-  width:auto !important;
-  min-width:0 !important;
   max-width:calc((100% - 2.2rem) / 3) !important;
   margin:0 !important;
   border-radius:18px;
@@ -79,15 +67,8 @@
   display:block !important;
   width:100% !important;
   height:auto !important;
-  max-width:100% !important;
-  aspect-ratio:auto !important;
   object-fit:contain !important;
-  object-position:center !important;
   background:#fff;
-}
-
-.phase-grid{
-  gap:1.1rem !important;
 }
 
 .phase-card{
@@ -104,17 +85,7 @@
 }
 
 .phase-body{
-  min-height:auto;
   padding:1.35rem 1.3rem 1.45rem;
-}
-
-.phase-body h3{
-  line-height:1.12;
-  margin-bottom:1rem;
-}
-
-.phase-body p{
-  line-height:1.55;
 }
 
 .center-section,
@@ -122,20 +93,37 @@
 .transform-section,
 .bonus-section,
 section{
-  padding-top:2.4rem !important;
-  padding-bottom:2.4rem !important;
+  padding-top:2rem !important;
+  padding-bottom:2rem !important;
 }
 
-.hero-media,
-.microphone-section,
-.bonus-image-wrap,
-.notebook-wrap,
-.transform-section .section-img.tall{
-  margin-top:.35rem !important;
-  margin-bottom:.35rem !important;
+.microphone-section{
+  padding-top:0 !important;
+  padding-bottom:0 !important;
+  margin-top:0 !important;
+  margin-bottom:0 !important;
+  min-height:auto !important;
 }
 
-.microphone-section img,
+.microphone-section .section-img,
+.microphone-section .hero-media,
+.microphone-section picture,
+.microphone-section figure{
+  margin:0 !important;
+  padding:0 !important;
+  line-height:0 !important;
+}
+
+.microphone-section img{
+  display:block;
+  width:100%;
+  height:auto !important;
+  max-height:420px !important;
+  object-fit:contain !important;
+  object-position:center center !important;
+  margin:0 auto !important;
+}
+
 .hero-media img,
 .transform-section .section-img.tall{
   display:block;
@@ -150,33 +138,13 @@ section{
   margin:.2rem auto .6rem;
 }
 
-.guarantee-card{
-  padding:2rem;
-}
-
 @media (max-width:980px){
   .video-grid{
     grid-template-columns:1fr;
-    gap:1rem;
-    margin-top:1.2rem;
-  }
-
-  .video-embed{
-    width:100%;
-    max-width:340px;
-    margin:0 auto;
   }
 
   .testimonials-carousel{
     padding:.85rem !important;
-    border-radius:22px;
-  }
-
-  .carousel-head{
-    align-items:flex-start;
-    flex-direction:column;
-    gap:.25rem;
-    margin-bottom:.85rem;
   }
 
   .carousel-track{
@@ -186,22 +154,9 @@ section{
 
   .carousel-track figure{
     flex:0 0 100% !important;
-    width:100% !important;
     max-width:100% !important;
-    scroll-snap-align:center;
     border-radius:16px;
     box-shadow:none;
-  }
-
-  .carousel-track img{
-    width:100% !important;
-    height:auto !important;
-    max-height:none !important;
-    object-fit:contain !important;
-  }
-
-  .phase-grid{
-    gap:.9rem !important;
   }
 
   .phase-card img{
@@ -209,17 +164,13 @@ section{
     object-position:center 15% !important;
   }
 
-  .phase-body{
-    padding:1.2rem 1.15rem 1.3rem;
-  }
-
+  section,
   .center-section,
   .dark-soft,
   .transform-section,
-  .bonus-section,
-  section{
-    padding-top:1.35rem !important;
-    padding-bottom:1.35rem !important;
+  .bonus-section{
+    padding-top:1rem !important;
+    padding-bottom:1rem !important;
   }
 
   .microphone-section,
@@ -229,25 +180,13 @@ section{
   .transform-section .section-img.tall{
     margin-top:0 !important;
     margin-bottom:0 !important;
+    padding-top:0 !important;
+    padding-bottom:0 !important;
   }
 
-  .microphone-section img,
-  .hero-media img,
-  .transform-section .section-img.tall{
-    max-height:360px;
-  }
-
-  .notebook{
-    max-width:92%;
-    margin:0 auto .25rem;
-  }
-
-  .price-offer{
-    padding-top:.3rem;
-  }
-
-  .price-card{
-    margin-bottom:.8rem;
+  .microphone-section img{
+    max-height:250px !important;
+    width:100% !important;
   }
 }
 
@@ -257,18 +196,21 @@ section{
     object-position:center 14% !important;
   }
 
-  .microphone-section img,
-  .hero-media img,
-  .transform-section .section-img.tall{
-    max-height:320px;
+  .microphone-section{
+    padding-top:0 !important;
+    padding-bottom:0 !important;
   }
 
+  .microphone-section img{
+    max-height:220px !important;
+  }
+
+  section,
   .center-section,
   .dark-soft,
   .transform-section,
-  .bonus-section,
-  section{
-    padding-top:1rem !important;
-    padding-bottom:1rem !important;
+  .bonus-section{
+    padding-top:.75rem !important;
+    padding-bottom:.75rem !important;
   }
 }
