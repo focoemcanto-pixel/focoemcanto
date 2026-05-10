@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Script from 'next/script'
 import './globals.css'
 import './premium-fixes.css'
+import './final-mobile-fixes.css'
 
 export const metadata: Metadata = {
   title: 'Foco em Canto | Mentoria Vocal',
