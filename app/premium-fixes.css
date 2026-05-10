@@ -305,6 +305,45 @@ section{
     max-height:220px !important;
     margin:0 auto !important;
   }
+
+  /* corte real da imagem acima de "ideal para" no mobile */
+  .ideal-section{
+    padding-top:0 !important;
+    padding-bottom:.75rem !important;
+    margin-top:0 !important;
+    overflow:hidden !important;
+  }
+
+  .ideal-section .container,
+  .ideal-section .split{
+    gap:.5rem !important;
+    padding-top:0 !important;
+    padding-bottom:0 !important;
+  }
+
+  .ideal-section .ideal-img{
+    order:1 !important;
+    display:block !important;
+    width:100% !important;
+    height:420px !important;
+    max-height:420px !important;
+    object-fit:cover !important;
+    object-position:center center !important;
+    margin:-115px auto -105px !important;
+    padding:0 !important;
+    border-radius:0 !important;
+    box-shadow:none !important;
+  }
+
+  .ideal-section .split > div{
+    order:2 !important;
+    margin-top:0 !important;
+    padding-top:0 !important;
+  }
+
+  .ideal-section h2{
+    margin-top:0 !important;
+  }
 }
 
 @media (max-width:480px){
@@ -352,5 +391,11 @@ section{
 
   .dark-soft.center-section .notebook{
     max-height:190px !important;
+  }
+
+  .ideal-section .ideal-img{
+    height:390px !important;
+    max-height:390px !important;
+    margin:-105px auto -95px !important;
   }
 }
