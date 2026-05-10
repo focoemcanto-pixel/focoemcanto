@@ -1,0 +1,60 @@
+/* Ajustes finais de espaçamento mobile — carregado depois dos demais CSS. */
+
+@media (max-width: 980px) {
+  .ideal-section {
+    padding-top: 1rem !important;
+    padding-bottom: 1.4rem !important;
+    margin-top: 0 !important;
+    overflow: visible !important;
+  }
+
+  .ideal-section .container,
+  .ideal-section .split {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: .85rem !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+  }
+
+  .ideal-section .ideal-img {
+    order: 1 !important;
+    display: block !important;
+    width: 100% !important;
+    height: 340px !important;
+    max-height: 340px !important;
+    object-fit: cover !important;
+    object-position: center 52% !important;
+    margin: 0 auto .85rem !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .ideal-section .split > div {
+    order: 2 !important;
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  .ideal-section h2 {
+    margin-top: 0 !important;
+    margin-bottom: 1rem !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .ideal-section {
+    padding-top: .75rem !important;
+    padding-bottom: 1.2rem !important;
+  }
+
+  .ideal-section .ideal-img {
+    height: 315px !important;
+    max-height: 315px !important;
+    object-position: center 52% !important;
+    margin: 0 auto .75rem !important;
+  }
+}
