@@ -12,9 +12,16 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="pt-BR">
+      <head>
+        <link rel="preload" as="image" href="/images/hero/hero-foco-em-canto.webp" type="image/webp" fetchPriority="high" />
+        <link rel="preload" as="image" href="/images/ideal-para/ideal-para.webp" type="image/webp" media="(max-width: 980px)" />
+        <link rel="preconnect" href="https://connect.facebook.net" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://connect.facebook.net" />
+        <link rel="dns-prefetch" href="https://pay.kiwify.com.br" />
+      </head>
       <body>
         {children}
-        <Script id="meta-pixel" strategy="afterInteractive">
+        <Script id="meta-pixel" strategy="lazyOnload">
           {`
             !function(f,b,e,v,n,t,s)
             {if(f.fbq)return;n=f.fbq=function(){n.callMethod?
@@ -37,7 +44,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             alt=""
           />
         </noscript>
-        <Script id="kiwify-utm-preserver" strategy="afterInteractive">
+        <Script id="kiwify-utm-preserver" strategy="lazyOnload">
           {`
             (function() {
               var prefixes = ['https://pay.kiwify.com.br'];
