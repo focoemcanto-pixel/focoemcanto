@@ -25,12 +25,16 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
-  function togglePlay() {
+  async function togglePlay() {
     const video = videoRef.current
     if (!video) return
 
     if (video.paused) {
-      video.play()
+      try {
+        await video.play()
+      } catch {
+        video.controls = true
+      }
       return
     }
 
@@ -57,21 +61,28 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
         <video
           ref={videoRef}
           className="vsl-video"
-          src={src}
           poster={poster}
           playsInline
           preload="metadata"
+          controls
+          controlsList="nodownload noplaybackrate"
+          disablePictureInPicture
+          onClick={togglePlay}
           onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
           onPlay={() => setIsPlaying(true)}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
           aria-label={title}
-        />
+        >
+          <source src={src} type="video/mp4" />
+        </video>
 
-        <button className={`vsl-play-overlay ${isPlaying ? 'is-playing' : ''}`} type="button" onClick={togglePlay} aria-label={isPlaying ? 'Pausar vídeo' : 'Reproduzir vídeo'}>
-          <span>{isPlaying ? '❚❚' : '▶'}</span>
-        </button>
+        {!isPlaying && (
+          <button className="vsl-play-overlay" type="button" onClick={togglePlay} aria-label="Reproduzir vídeo">
+            <span>▶</span>
+          </button>
+        )}
       </div>
 
       <div className="vsl-controls">
