@@ -1,6 +1,8 @@
 import VideoTestimonials from './components/VideoTestimonials'
 
-const checkoutUrl = 'https://pay.kiwify.com.br/VIGVnxC'
+const offerAnchor = '#oferta'
+const essentialCheckoutUrl = 'https://pay.kiwify.com.br/v6K4oD5'
+const premiumCheckoutUrl = 'https://pay.kiwify.com.br/VIGVnxC'
 const whatsappUrl = 'https://wa.me/5571997178807'
 
 const phases = [
@@ -43,7 +45,7 @@ const faqs = [
   ['Preciso de algum equipamento específico?', 'Não. Você pode começar com celular, internet e disposição para praticar.'],
   ['Posso parcelar o valor do treinamento?', 'Sim. O checkout mostra todas as opções de parcelamento disponíveis.'],
   ['Como funciona a garantia?', 'Você tem 15 dias para experimentar. Se não fizer sentido para você, pode solicitar reembolso dentro do prazo.'],
-  ['Como funciona o suporte durante o curso?', 'Você conta com acompanhamento, comunidade e aulas ao vivo para tirar dúvidas e evoluir com mais segurança.']
+  ['Como funciona o suporte durante o curso?', 'O plano Essential inclui aulas ao vivo e acesso ao método. O plano Premium inclui também grupo exclusivo, sala virtual e acompanhamento mais próximo.']
 ]
 
 function WhatsAppIcon() {
@@ -70,6 +72,15 @@ function ValueComparisonCard() {
   )
 }
 
+function PlanCheck({ children }: { children: React.ReactNode }) {
+  return (
+    <li style={{ display: 'flex', gap: '.75rem', alignItems: 'flex-start', color: 'rgba(255,255,255,.86)', fontWeight: 700, lineHeight: 1.45 }}>
+      <span style={{ color: 'var(--accent)', fontWeight: 900, flex: '0 0 auto' }}>✓</span>
+      <span>{children}</span>
+    </li>
+  )
+}
+
 export default function Home() {
   return (
     <main>
@@ -82,8 +93,8 @@ export default function Home() {
             <div className="hero-copy-inner">
               <h1>Libere o verdadeiro potencial da sua voz e <span>aprenda a cantar com confiança e potência</span> mesmo do zero</h1>
               <p>Domine sua voz com o método Foco em Canto: você terá afinação precisa, controle vocal e confiança, mesmo começando do zero.</p>
-              <a href={checkoutUrl} className="btn">INSCRIÇÕES ABERTAS</a>
-              <div className="price-pills"><span>De <s>R$2397,00</s></span><strong>12x R$72,09</strong></div>
+              <a href={offerAnchor} className="btn">VER PLANOS DA MENTORIA</a>
+              <div className="price-pills"><span>Planos a partir de</span><strong>R$297</strong></div>
             </div>
           </div>
         </div>
@@ -100,7 +111,7 @@ export default function Home() {
       <section className="dark-section transform-section">
         <div className="container split">
           <div className="transform-visual"><img className="section-img tall" src="/images/metodo/fase-03.webp" alt="Marcos cantando" width="600" height="800" loading="lazy" decoding="async" /></div>
-          <div><h2>Sua voz pode ser a chave para <strong>transformar sua vida!</strong></h2><p>Seja para cantar como hobby ou seguir uma carreira profissional, o método Foco em Canto pode fazer da sua voz a verdadeira ferramenta de transformação.</p><p>Com quatro pilares essenciais e uma abordagem prática e personalizada, a mentoria começa com um diagnóstico vocal para mapear suas necessidades específicas.</p><div className="outline-card">Você verá sua voz evoluir semana a semana, tornando-se mais preparada para abrir portas e te levar mais longe.</div><a href={checkoutUrl} className="btn">GARANTIR MINHA VAGA</a></div>
+          <div><h2>Sua voz pode ser a chave para <strong>transformar sua vida!</strong></h2><p>Seja para cantar como hobby ou seguir uma carreira profissional, o método Foco em Canto pode fazer da sua voz a verdadeira ferramenta de transformação.</p><p>Com quatro pilares essenciais e uma abordagem prática e personalizada, a mentoria começa com um diagnóstico vocal para mapear suas necessidades específicas.</p><div className="outline-card">Você verá sua voz evoluir semana a semana, tornando-se mais preparada para abrir portas e te levar mais longe.</div><a href={offerAnchor} className="btn">VER PLANOS DA MENTORIA</a></div>
         </div>
       </section>
 
@@ -119,17 +130,86 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="light-section recap-section"><div className="container"><h2>Recapitulando... Você sairá desse treinamento, sabendo:</h2><div className="benefit-grid">{benefits.map((benefit) => <div className="benefit" key={benefit}>✅ <span>{benefit}</span></div>)}</div><a href={checkoutUrl} className="btn centered">INSCREVA-SE AGORA</a></div></section>
+      <section className="light-section recap-section"><div className="container"><h2>Recapitulando... Você sairá desse treinamento, sabendo:</h2><div className="benefit-grid">{benefits.map((benefit) => <div className="benefit" key={benefit}>✅ <span>{benefit}</span></div>)}</div><a href={offerAnchor} className="btn centered">VER PLANOS DA MENTORIA</a></div></section>
 
       <section className="dark-section bonus-section"><div className="container"><h2>E ainda não acabou...<br />Além de todo conteúdo, você vai ter acesso a bônus exclusivos:</h2><div className="bonus-card"><img src="/images/bonus/bonus-apps.webp" alt="Bônus apps" width="800" height="560" loading="lazy" decoding="async" /><div><h3>Acesso a apps de treino vocal</h3><p>Ferramentas digitais para praticar e evoluir com mais agilidade.</p><div className="bonus-price"><s>De R$197,00</s><strong>Por: Bônus</strong></div></div></div></div></section>
 
       <section className="dark-soft center-section"><div className="container narrow"><img className="notebook" src="/images/bonus/bonus-aulas-ao-vivo.webp" alt="Aulas ao vivo" width="900" height="600" loading="lazy" decoding="async" /><h2><strong>Aulas ao vivo toda semana!</strong> Na Mentoria você tem um acompanhamento de perto, garantindo o seu desenvolvimento.</h2><div className="trust-box compact"><span><i>✓</i> Grupo Exclusivo</span><span><i>✓</i> Sala Virtual</span><span><i>✓</i> Aulas ao vivo</span></div></div></section>
 
-      <section className="offer-section premium-offer-section"><div className="container"><ValueComparisonCard /><div className="price-offer"><div className="offer-badge">🔥 OFERTA DE ABERTURA</div><h2>Comece hoje por apenas</h2><div className="price-card"><div className="price-line"><span>12x</span><strong>72,09</strong></div><p>ou R$697 à vista</p><a href={checkoutUrl} className="btn">ENTRAR NA MENTORIA AGORA</a></div><p className="renew-note">Assinatura anual com renovação automática no mesmo valor promocional</p></div></div></section>
+      <section id="oferta" className="offer-section premium-offer-section">
+        <div className="container">
+          <ValueComparisonCard />
+
+          <div className="price-offer" style={{ maxWidth: '840px', marginBottom: '3rem' }}>
+            <div className="offer-badge">🔥 INSCRIÇÕES ABERTAS</div>
+            <h2>Escolha sua experiência no Foco em Canto</h2>
+            <p style={{ maxWidth: '720px', margin: '0 auto', color: 'rgba(255,255,255,.72)', fontSize: '1.08rem' }}>
+              Entre para o método que vai te ajudar a desenvolver sua voz com técnica, segurança e confiança — escolhendo o plano que mais combina com o seu momento.
+            </p>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'stretch' }}>
+            <article style={{ background: 'linear-gradient(145deg,#18181b,#0b0b0c)', border: '1px solid rgba(255,255,255,.14)', borderRadius: '28px', padding: 'clamp(1.6rem,4vw,2.2rem)', boxShadow: '0 18px 60px rgba(0,0,0,.32)', display: 'flex', flexDirection: 'column' }}>
+              <span style={{ color: 'var(--accent)', fontWeight: 900, fontSize: '.78rem', letterSpacing: '.12em', marginBottom: '.8rem' }}>ESSENTIAL</span>
+              <h3 style={{ fontSize: 'clamp(1.55rem,2.4vw,2rem)' }}>Foco em Canto Essential</h3>
+              <p style={{ color: 'rgba(255,255,255,.68)' }}>Ideal para quem quer começar sua evolução vocal com acesso ao método completo e aulas ao vivo.</p>
+
+              <ul style={{ listStyle: 'none', display: 'grid', gap: '.9rem', margin: '1rem 0 2rem' }}>
+                <PlanCheck>Curso completo na plataforma</PlanCheck>
+                <PlanCheck>Aulas ao vivo semanais</PlanCheck>
+                <PlanCheck>Exercícios práticos</PlanCheck>
+                <PlanCheck>Acesso imediato</PlanCheck>
+                <PlanCheck>15 dias de garantia</PlanCheck>
+              </ul>
+
+              <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,.12)' }}>
+                <span style={{ display: 'block', color: 'rgba(255,255,255,.55)', fontWeight: 700 }}>por apenas</span>
+                <strong style={{ display: 'block', fontSize: 'clamp(2.4rem,5vw,3.4rem)', lineHeight: 1, margin: '.5rem 0', letterSpacing: '-.05em' }}>R$297</strong>
+                <small style={{ display: 'block', color: 'rgba(255,255,255,.55)', fontWeight: 700 }}>ou parcelado no checkout</small>
+              </div>
+
+              <a href={essentialCheckoutUrl} className="btn" style={{ width: '100%', marginTop: '1.6rem', padding: '1.25rem 1rem', borderRadius: '14px' }}>
+                COMEÇAR PELO ESSENTIAL
+              </a>
+            </article>
+
+            <article style={{ position: 'relative', background: 'radial-gradient(circle at top right,rgba(40,215,191,.22),transparent 34%),linear-gradient(145deg,#1d1d20,#090909)', border: '1.5px solid var(--accent)', borderRadius: '28px', padding: 'clamp(1.6rem,4vw,2.2rem)', boxShadow: '0 18px 70px rgba(40,215,191,.14)', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'inline-flex', width: 'fit-content', marginBottom: '1.4rem', background: 'linear-gradient(135deg,var(--accent),#2c8e5a)', color: '#fff', padding: '.7rem 1.2rem', borderRadius: '999px', fontWeight: 900, fontSize: '.82rem', boxShadow: '0 14px 34px rgba(40,215,191,.22)' }}>⭐ EXPERIÊNCIA COMPLETA</div>
+
+              <span style={{ color: 'var(--accent)', fontWeight: 900, fontSize: '.78rem', letterSpacing: '.12em', marginBottom: '.8rem' }}>PREMIUM</span>
+              <h3 style={{ fontSize: 'clamp(1.55rem,2.4vw,2rem)' }}>Foco em Canto Premium</h3>
+              <p style={{ color: 'rgba(255,255,255,.68)' }}>Ideal para quem deseja acompanhamento mais próximo, ambiente exclusivo e uma jornada mais direcionada.</p>
+
+              <ul style={{ listStyle: 'none', display: 'grid', gap: '.9rem', margin: '1rem 0 2rem' }}>
+                <PlanCheck>Tudo do Essential</PlanCheck>
+                <PlanCheck>Grupo exclusivo de alunos</PlanCheck>
+                <PlanCheck>Sala virtual da mentoria</PlanCheck>
+                <PlanCheck>Prioridade nas dúvidas</PlanCheck>
+                <PlanCheck>Acompanhamento premium</PlanCheck>
+                <PlanCheck>15 dias de garantia</PlanCheck>
+              </ul>
+
+              <div style={{ marginTop: 'auto', paddingTop: '1.5rem', borderTop: '1px solid rgba(255,255,255,.12)' }}>
+                <span style={{ display: 'block', color: 'rgba(255,255,255,.55)', fontWeight: 700 }}>experiência completa por</span>
+                <strong style={{ display: 'block', color: 'var(--accent)', fontSize: 'clamp(2.2rem,4vw,3.2rem)', lineHeight: 1, margin: '.5rem 0', letterSpacing: '-.05em' }}>12x R$72,09</strong>
+                <small style={{ display: 'block', color: 'rgba(255,255,255,.55)', fontWeight: 700 }}>ou R$697 à vista</small>
+              </div>
+
+              <a href={premiumCheckoutUrl} className="btn" style={{ width: '100%', marginTop: '1.6rem', padding: '1.25rem 1rem', borderRadius: '14px' }}>
+                QUERO A EXPERIÊNCIA COMPLETA
+              </a>
+            </article>
+          </div>
+
+          <p className="renew-note" style={{ textAlign: 'center' }}>
+            A assinatura é anual, com renovação automática no mesmo valor contratado.
+          </p>
+        </div>
+      </section>
 
       <section className="dark-soft guarantee-section"><div className="container"><div className="guarantee-card"><img className="guarantee-img" src="/images/garantia/garantia-15-dias.webp" alt="Garantia de 15 dias" width="420" height="420" loading="lazy" decoding="async" /><div><h2>Você entra sem medo</h2><p>15 dias de garantia incondicional.<br />Se não fizer sentido, reembolso total e sem burocracia.</p><div className="risk-zero"><span>✓</span>RISCO ZERO</div></div></div></div></section>
 
-      <section className="mentor-section"><div className="container split mentor-grid"><div className="mentor-copy"><h2>Seu mentor vocal nessa jornada será Marcos Perrella Cruz</h2><p>Marcos Cruz é músico profissional e professor de canto, técnica vocal e piano com mais de 15 anos de experiência. Já ajudou centenas de alunos a destravarem suas vozes e atua como instrutor de técnica vocal em grupos de louvor.</p><p>Com os horários de aulas individuais lotados, desenvolveu a mentoria Foco em Canto para atender mais alunos com uma abordagem única.</p><a href={checkoutUrl} className="btn">QUERO APRENDER A CANTAR</a></div><img className="mentor-img" src="/images/mentor/mentor-marcos.webp" alt="Marcos Perrella Cruz" width="640" height="760" loading="lazy" decoding="async" /></div></section>
+      <section className="mentor-section"><div className="container split mentor-grid"><div className="mentor-copy"><h2>Seu mentor vocal nessa jornada será Marcos Perrella Cruz</h2><p>Marcos Cruz é músico profissional e professor de canto, técnica vocal e piano com mais de 15 anos de experiência. Já ajudou centenas de alunos a destravarem suas vozes e atua como instrutor de técnica vocal em grupos de louvor.</p><p>Com os horários de aulas individuais lotados, desenvolveu a mentoria Foco em Canto para atender mais alunos com uma abordagem única.</p><a href={offerAnchor} className="btn">VER PLANOS DA MENTORIA</a></div><img className="mentor-img" src="/images/mentor/mentor-marcos.webp" alt="Marcos Perrella Cruz" width="640" height="760" loading="lazy" decoding="async" /></div></section>
 
       <section className="faq-section"><div className="container"><h2>Perguntas Frequentes</h2><div className="faq-list">{faqs.map(([question, answer]) => <details key={question}><summary>{question}</summary><p>{answer}</p></details>)}</div></div></section>
     </main>
