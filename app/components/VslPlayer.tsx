@@ -71,8 +71,8 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
   return (
     <div className="vsl-player-shell">
       <div className="vsl-player-topline">
-        <span>▶ Assista antes de escolher seu plano</span>
-        <strong>Mentoria por dentro</strong>
+        <span>▶ Esse vídeo vai guiar sua decisão</span>
+        <strong>a partir de agora.</strong>
       </div>
 
       <div className="vsl-video-frame" ref={frameRef}>
