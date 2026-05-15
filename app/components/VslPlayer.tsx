@@ -70,9 +70,20 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
 
   return (
     <div className="vsl-player-shell">
-      <div className="vsl-player-topline">
-        <span>▶ Esse vídeo vai guiar sua decisão</span>
-        <strong>a partir de agora.</strong>
+      <div
+        className="vsl-player-topline"
+        style={{
+          textTransform: 'uppercase',
+          letterSpacing: '.06em',
+          fontWeight: 900,
+          textAlign: 'center',
+          gap: '.55rem'
+        }}
+      >
+        <span style={{ color: '#fff' }}>▶ Esse vídeo vai guiar</span>
+        <strong style={{ color: 'var(--gold)', textShadow: '0 0 18px rgba(244,200,75,.35)' }}>
+          sua decisão a partir de agora.
+        </strong>
       </div>
 
       <div className="vsl-video-frame" ref={frameRef}>
