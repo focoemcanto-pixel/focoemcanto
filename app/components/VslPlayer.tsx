@@ -8,6 +8,11 @@ type VslPlayerProps = {
   title?: string
 }
 
+type IOSVideoElement = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void
+  webkitEnterFullScreen?: () => void
+}
+
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0:00'
   const minutes = Math.floor(value / 60)
@@ -47,14 +52,30 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
   }
 
   async function handleFullscreen() {
-    const video = videoRef.current
+    const video = videoRef.current as IOSVideoElement | null
     const frame = frameRef.current
-    if (!video || !frame) return
+    if (!video) return
+
     video.controls = true
-    if (!hasStarted) setHasStarted(true)
+    setHasStarted(true)
+
     try {
-      if (frame.requestFullscreen) await frame.requestFullscreen()
-      else await video.play()
+      if (video.webkitEnterFullscreen) {
+        video.webkitEnterFullscreen()
+        return
+      }
+
+      if (video.webkitEnterFullScreen) {
+        video.webkitEnterFullScreen()
+        return
+      }
+
+      if (frame?.requestFullscreen) {
+        await frame.requestFullscreen()
+        return
+      }
+
+      await video.play()
     } catch {
       await video.play().catch(() => undefined)
     }
