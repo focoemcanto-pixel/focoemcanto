@@ -19,6 +19,7 @@ function formatTime(value: number) {
 
 export default function VslPlayer({ src, poster, title = 'Vídeo de apresentação da Mentoria Foco em Canto' }: VslPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
+  const frameRef = useRef<HTMLDivElement | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
@@ -33,12 +34,23 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
       try {
         await video.play()
       } catch {
-        video.controls = true
+        video.setAttribute('controls', 'true')
       }
       return
     }
 
     video.pause()
+  }
+
+  async function handleFullscreen() {
+    const frame = frameRef.current
+    if (!frame) return
+
+    try {
+      if (frame.requestFullscreen) await frame.requestFullscreen()
+    } catch {
+      videoRef.current?.setAttribute('controls', 'true')
+    }
   }
 
   function handleProgressChange(value: string) {
@@ -57,17 +69,14 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
         <strong>Mentoria por dentro</strong>
       </div>
 
-      <div className="vsl-video-frame">
+      <div className="vsl-video-frame" ref={frameRef}>
         <video
           ref={videoRef}
           className="vsl-video"
           poster={poster}
           playsInline
           preload="metadata"
-          controls
           controlsList="nodownload noplaybackrate"
-          disablePictureInPicture
-          onClick={togglePlay}
           onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
           onPlay={() => setIsPlaying(true)}
@@ -107,6 +116,8 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
             <span>{formatTime(duration)}</span>
           </div>
         </div>
+
+        <button className="vsl-fullscreen" type="button" onClick={handleFullscreen} aria-label="Abrir vídeo em tela cheia">Tela cheia</button>
       </div>
     </div>
   )
