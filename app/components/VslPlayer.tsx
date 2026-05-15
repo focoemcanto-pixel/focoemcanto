@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 type VslPlayerProps = {
   src: string
@@ -13,6 +13,11 @@ type IOSVideoElement = HTMLVideoElement & {
   webkitEnterFullScreen?: () => void
 }
 
+type WindowWithIdleCallback = Window & {
+  requestIdleCallback?: (callback: () => void, options?: { timeout?: number }) => number
+  cancelIdleCallback?: (handle: number) => void
+}
+
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0:00'
   const minutes = Math.floor(value / 60)
@@ -23,6 +28,7 @@ function formatTime(value: number) {
 export default function VslPlayer({ src, poster, title = 'Vídeo de apresentação da Mentoria Foco em Canto' }: VslPlayerProps) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const frameRef = useRef<HTMLDivElement | null>(null)
+  const preloadStartedRef = useRef(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [hasStarted, setHasStarted] = useState(false)
   const [duration, setDuration] = useState(0)
@@ -30,11 +36,38 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
+  function warmVideoBuffer() {
+    const video = videoRef.current
+    if (!video || preloadStartedRef.current) return
+
+    preloadStartedRef.current = true
+    video.preload = 'auto'
+    video.load()
+  }
+
+  useEffect(() => {
+    const browserWindow = window as WindowWithIdleCallback
+    let timeoutId: number | undefined
+    let idleId: number | undefined
+
+    if (browserWindow.requestIdleCallback) {
+      idleId = browserWindow.requestIdleCallback(warmVideoBuffer, { timeout: 1200 })
+    } else {
+      timeoutId = window.setTimeout(warmVideoBuffer, 900)
+    }
+
+    return () => {
+      if (typeof idleId === 'number' && browserWindow.cancelIdleCallback) browserWindow.cancelIdleCallback(idleId)
+      if (typeof timeoutId === 'number') window.clearTimeout(timeoutId)
+    }
+  }, [])
+
   async function playVideo() {
     const video = videoRef.current
     if (!video) return
     try {
       setHasStarted(true)
+      warmVideoBuffer()
       await video.play()
     } catch {
       video.controls = true
@@ -58,6 +91,7 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
 
     video.controls = true
     setHasStarted(true)
+    warmVideoBuffer()
 
     try {
       if (video.webkitEnterFullscreen) {
@@ -113,10 +147,11 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
           className="vsl-video"
           poster={poster}
           playsInline
-          preload="metadata"
+          preload="auto"
           controls={hasStarted}
           controlsList="nodownload noplaybackrate"
           onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
+          onCanPlay={warmVideoBuffer}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
           onPlay={() => { setHasStarted(true); setIsPlaying(true) }}
           onPause={() => setIsPlaying(false)}
