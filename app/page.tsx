@@ -1,7 +1,7 @@
 import VideoTestimonials from './components/VideoTestimonials'
 import VslPlayer from './components/VslPlayer'
 
-const offerAnchor = '#oferta'
+const offerAnchor = '#planos'
 const essentialCheckoutUrl = 'https://pay.kiwify.com.br/v6K4oD5'
 const premiumCheckoutUrl = 'https://pay.kiwify.com.br/VIGVnxC'
 const whatsappUrl = 'https://wa.me/5571997178807'
@@ -144,7 +144,7 @@ export default function Home() {
             <h2>Escolha sua experiência no Foco em Canto</h2>
             <p style={{ maxWidth: '720px', margin: '0 auto', color: 'rgba(255,255,255,.72)', fontSize: '1.08rem' }}>Entre para o método que vai te ajudar a desenvolver sua voz com técnica, segurança e confiança — escolhendo o plano que mais combina com o seu momento.</p>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'stretch' }}>
+          <div id="planos" style={{ scrollMarginTop: '32px', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.5rem', alignItems: 'stretch' }}>
             <article style={{ background: 'linear-gradient(145deg,#18181b,#0b0b0c)', border: '1px solid rgba(255,255,255,.14)', borderRadius: '28px', padding: 'clamp(1.6rem,4vw,2.2rem)', boxShadow: '0 18px 60px rgba(0,0,0,.32)', display: 'flex', flexDirection: 'column' }}>
               <span style={{ color: 'var(--accent)', fontWeight: 900, fontSize: '.78rem', letterSpacing: '.12em', marginBottom: '.8rem' }}>ESSENTIAL</span><h3 style={{ fontSize: 'clamp(1.55rem,2.4vw,2rem)' }}>Foco em Canto Essential</h3><p style={{ color: 'rgba(255,255,255,.68)' }}>Ideal para quem quer começar sua evolução vocal com acesso ao método completo e aulas ao vivo.</p>
               <ul style={{ listStyle: 'none', display: 'grid', gap: '.9rem', margin: '1rem 0 2rem' }}><PlanCheck>Curso completo na plataforma</PlanCheck><PlanCheck>Aulas ao vivo semanais</PlanCheck><PlanCheck>Exercícios práticos</PlanCheck><PlanCheck>Acesso imediato</PlanCheck><PlanCheck>15 dias de garantia</PlanCheck></ul>
