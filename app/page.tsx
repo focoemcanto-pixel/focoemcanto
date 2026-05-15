@@ -6,6 +6,7 @@ const essentialCheckoutUrl = 'https://pay.kiwify.com.br/v6K4oD5'
 const premiumCheckoutUrl = 'https://pay.kiwify.com.br/VIGVnxC'
 const whatsappUrl = 'https://wa.me/5571997178807'
 const vslVideoUrl = 'https://pub-fc66e9e933424d3492375431357d3967.r2.dev/lagepage%20-%20FC.mp4'
+const vslPosterUrl = '/images/vsl/thumb-vsl-raul.webp'
 
 const phases = [
   { img: '/images/metodo/fase-01.webp', tag: 'FASE 01', title: 'Boas-vindas e diagnóstico vocal', text: 'Comece entendendo sua voz, suas necessidades e o caminho certo para evoluir com segurança.' },
@@ -94,7 +95,7 @@ export default function Home() {
           <img className="hero-logo" src="/images/hero/hero-foco-em-canto.webp" alt="Foco em Canto" width="900" height="700" fetchPriority="high" />
           <h1>Libere o verdadeiro potencial da sua voz e <span>aprenda a cantar com confiança e potência</span> mesmo do zero</h1>
           <p>Domine sua voz com o método Foco em Canto: você terá afinação precisa, controle vocal e confiança, mesmo começando do zero.</p>
-          <div className="hero-vsl-player"><VslPlayer src={vslVideoUrl} /></div>
+          <div className="hero-vsl-player"><VslPlayer src={vslVideoUrl} poster={vslPosterUrl} /></div>
           <a href={offerAnchor} className="btn hero-vsl-btn">VER PLANOS DA MENTORIA</a>
           <div className="trust-box"><span><i>▣</i> Acesso Imediato</span><span><i>☆</i> 15 Dias de Garantia</span><span><i>▶</i> Aulas ao vivo</span><span><i>✓</i> Pagamento Seguro</span></div>
         </div>
