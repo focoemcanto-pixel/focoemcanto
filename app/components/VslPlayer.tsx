@@ -10,10 +10,8 @@ type VslPlayerProps = {
 
 function formatTime(value: number) {
   if (!Number.isFinite(value) || value <= 0) return '0:00'
-
   const minutes = Math.floor(value / 60)
   const seconds = Math.floor(value % 60)
-
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
@@ -21,42 +19,50 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const frameRef = useRef<HTMLDivElement | null>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [hasStarted, setHasStarted] = useState(false)
   const [duration, setDuration] = useState(0)
   const [currentTime, setCurrentTime] = useState(0)
 
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0
 
+  async function playVideo() {
+    const video = videoRef.current
+    if (!video) return
+    try {
+      setHasStarted(true)
+      await video.play()
+    } catch {
+      video.controls = true
+    }
+  }
+
   async function togglePlay() {
     const video = videoRef.current
     if (!video) return
-
     if (video.paused) {
-      try {
-        await video.play()
-      } catch {
-        video.setAttribute('controls', 'true')
-      }
+      await playVideo()
       return
     }
-
     video.pause()
   }
 
   async function handleFullscreen() {
+    const video = videoRef.current
     const frame = frameRef.current
-    if (!frame) return
-
+    if (!video || !frame) return
+    video.controls = true
+    if (!hasStarted) setHasStarted(true)
     try {
       if (frame.requestFullscreen) await frame.requestFullscreen()
+      else await video.play()
     } catch {
-      videoRef.current?.setAttribute('controls', 'true')
+      await video.play().catch(() => undefined)
     }
   }
 
   function handleProgressChange(value: string) {
     const video = videoRef.current
     if (!video || duration <= 0) return
-
     const nextTime = (Number(value) / 100) * duration
     video.currentTime = nextTime
     setCurrentTime(nextTime)
@@ -76,10 +82,11 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
           poster={poster}
           playsInline
           preload="metadata"
+          controls={hasStarted}
           controlsList="nodownload noplaybackrate"
           onLoadedMetadata={(event) => setDuration(event.currentTarget.duration)}
           onTimeUpdate={(event) => setCurrentTime(event.currentTarget.currentTime)}
-          onPlay={() => setIsPlaying(true)}
+          onPlay={() => { setHasStarted(true); setIsPlaying(true) }}
           onPause={() => setIsPlaying(false)}
           onEnded={() => setIsPlaying(false)}
           aria-label={title}
@@ -87,7 +94,16 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
           <source src={src} type="video/mp4" />
         </video>
 
-        {!isPlaying && (
+        {!hasStarted && (
+          <button className="vsl-thumb-layer" type="button" onClick={playVideo} aria-label="Reproduzir vídeo">
+            <span className="vsl-thumb-kicker">MENTORIA FOCO EM CANTO</span>
+            <strong>Conheça a mentoria por dentro</strong>
+            <small>Assista antes de escolher seu plano</small>
+            <span className="vsl-thumb-play">▶</span>
+          </button>
+        )}
+
+        {hasStarted && !isPlaying && (
           <button className="vsl-play-overlay" type="button" onClick={togglePlay} aria-label="Reproduzir vídeo">
             <span>▶</span>
           </button>
@@ -100,21 +116,8 @@ export default function VslPlayer({ src, poster, title = 'Vídeo de apresentaç�
         </button>
 
         <div className="vsl-progress-wrap">
-          <input
-            className="vsl-progress"
-            type="range"
-            min="0"
-            max="100"
-            step="0.1"
-            value={progress}
-            onChange={(event) => handleProgressChange(event.target.value)}
-            style={{ '--vsl-progress': `${progress}%` } as React.CSSProperties}
-            aria-label="Progresso do vídeo"
-          />
-          <div className="vsl-time">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
+          <input className="vsl-progress" type="range" min="0" max="100" step="0.1" value={progress} onChange={(event) => handleProgressChange(event.target.value)} style={{ '--vsl-progress': `${progress}%` } as React.CSSProperties} aria-label="Progresso do vídeo" />
+          <div className="vsl-time"><span>{formatTime(currentTime)}</span><span>{formatTime(duration)}</span></div>
         </div>
 
         <button className="vsl-fullscreen" type="button" onClick={handleFullscreen} aria-label="Abrir vídeo em tela cheia">Tela cheia</button>
