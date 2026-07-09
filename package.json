@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm install --no-save typescript@latest @types/node@latest @types/react@latest @types/react-dom@latest --progress=false && next build",
     "start": "next start",
     "lint": "next lint"
   },
