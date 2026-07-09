@@ -1,7 +1,17 @@
 # Admin WhatsApp — Agenda de Lives
 
 ## Objetivo
-Criar uma área administrativa em `admin.focoemcanto.com` para gerenciar disparos automáticos dos grupos de lives da Foco em Canto, substituindo a operação manual no Google Apps Script.
+Criar uma área administrativa em `/admin` dentro do próprio site principal da Foco em Canto para gerenciar disparos automáticos dos grupos de lives, substituindo a operação manual no Google Apps Script.
+
+## Decisão de rota
+Não usar subdomínio separado neste momento. O painel ficará no mesmo projeto, nas rotas internas:
+
+- `/admin` — painel inicial do Foco OS
+- `/admin/whatsapp` — dashboard de automações WhatsApp
+- `/admin/links` — links inteligentes e UTMs
+- `/admin/funis` — análise de funis futuramente
+
+Isso evita configuração extra de DNS/subdomínio e facilita o deploy atual.
 
 ## Visão do produto
 O painel deve permitir que Marcos peça a criação de uma semana de disparos, revise as mensagens e envie/agende tudo para os grupos corretos.
@@ -175,102 +185,10 @@ Estética premium, escura, semelhante a SaaS moderno:
 - destaque para mensagens da quarta-feira
 - contador de pendentes, enviados e erros
 
-## Mensagens-base
-
-### Domingo 19h — Enquete
-```text
-🎤 Pessoal, passando para preparar nossa semana!
-
-Qual desses temas você mais gostaria de ver na próxima Quarta Vocal?
-
-1️⃣ Afinação
-2️⃣ Extensão vocal
-3️⃣ Segunda voz
-4️⃣ Respiração
-5️⃣ Segurança para cantar
-
-Responde aqui com o número do tema que você mais precisa agora 👇
-```
-
-### Segunda 19h — Grupo aberto
-```text
-💬 Grupo aberto até 21h!
-
-Hoje é nosso Plantão Vocal. Mande sua principal dúvida sobre canto, técnica vocal, afinação, extensão ou segunda voz.
-
-Vou acompanhar as mensagens e separar algumas dúvidas para nossa aula de quarta. 🎤
-```
-
-### Terça 20h — Esquenta
-```text
-🔥 Amanhã temos Quarta Vocal às 20h!
-
-O tema da aula será: {{TEMA_DA_SEMANA}}
-
-Se você sente que precisa evoluir com mais direção, já separa esse horário.
-
-Vai ser uma aula prática, direta e com aplicação para sua voz. 🎙️
-```
-
-### Quarta 10h — Lembrete
-```text
-🚨 É hoje!
-
-Nossa Quarta Vocal acontece hoje às 20h.
-
-Tema: {{TEMA_DA_SEMANA}}
-
-Já coloca o alarme para não esquecer. Essa aula pode clarear muita coisa sobre sua evolução vocal. 🎤🔥
-```
-
-### Quarta 19h30 — Pré-live
-```text
-🎙️ Grupo aberto!
-
-Daqui a pouco começamos nossa Quarta Vocal, às 20h.
-
-Entra no clima, separa seu fone, água e já manda aqui:
-qual sua maior dificuldade com o tema de hoje?
-```
-
-### Quarta 20h — Link
-```text
-🔴 COMEÇAMOS AGORA!
-
-A Quarta Vocal já está ao vivo.
-
-👉 Acesse aqui: {{LINK_DA_LIVE}}
-
-Entra agora para acompanhar a aula desde o início. 🎤
-```
-
-### Quinta 10h — Replay
-```text
-📚 Replay disponível!
-
-Quem não conseguiu assistir ontem, ou quer rever com calma, pode acessar aqui:
-
-👉 {{LINK_DO_REPLAY}}
-
-Minha sugestão: assista anotando os pontos que você precisa aplicar ainda essa semana.
-```
-
-### Sexta 19h — Desafio
-```text
-🎯 Desafio da semana!
-
-Com base na aula de quarta, grave um áudio ou vídeo curto aplicando o que foi ensinado.
-
-Não precisa estar perfeito. O importante é praticar.
-
-Quem quiser, pode mandar aqui no grupo até 21h. 🎤
-```
-
 ## Próximo passo técnico
 
-1. Confirmar stack de deploy do domínio `admin.focoemcanto.com`.
+1. Manter o painel em `/admin` no domínio principal.
 2. Adicionar Supabase ou outro storage persistente.
-3. Criar páginas admin.
-4. Criar endpoints de envio Wasender.
-5. Criar cron de envio.
-6. Migrar os grupos atuais do Apps Script.
+3. Criar endpoints de envio Wasender.
+4. Criar cron de envio.
+5. Migrar os grupos atuais do Apps Script.
