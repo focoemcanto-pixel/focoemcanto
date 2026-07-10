@@ -3,6 +3,7 @@ const INDEX_KEY = 'foco:funnels:index'
 export async function onRequest(context) {
   const { request, env } = context
   if (!env.FOCO_LINKS) return json({ ok: false, message: 'Binding FOCO_LINKS não configurado.' }, 500)
+  if (!authorized(request, env)) return json({ ok: false, message: 'Não autorizado.' }, 401)
 
   if (request.method === 'GET') return handleGet(env)
   if (request.method === 'POST') return handlePost(request, env)
@@ -22,7 +23,6 @@ async function handleGet(env) {
 }
 
 async function handlePost(request, env) {
-  if (!authorized(request, env)) return json({ ok: false, message: 'Token administrativo inválido.' }, 401)
   let body
   try { body = await request.json() } catch { return json({ ok: false, message: 'Payload inválido.' }, 400) }
 
@@ -57,7 +57,6 @@ async function handlePost(request, env) {
 }
 
 async function handleDelete(request, env) {
-  if (!authorized(request, env)) return json({ ok: false, message: 'Token administrativo inválido.' }, 401)
   const url = new URL(request.url)
   const id = url.searchParams.get('id')
   if (!id) return json({ ok: false, message: 'ID obrigatório.' }, 400)
@@ -69,8 +68,12 @@ async function handleDelete(request, env) {
 
 function authorized(request, env) {
   if (!env.ADMIN_TOKEN) return false
+  const cookie = request.headers.get('Cookie') || ''
+  const match = cookie.match(/(?:^|;\s*)foco_admin_session=([^;]+)/)
+  if (match && decodeURIComponent(match[1]) === env.ADMIN_TOKEN) return true
   const header = request.headers.get('Authorization') || ''
-  return header === `Bearer ${env.ADMIN_TOKEN}`
+  const token = request.headers.get('X-Admin-Token') || ''
+  return header === `Bearer ${env.ADMIN_TOKEN}` || token === env.ADMIN_TOKEN
 }
 
 function number(value) {
