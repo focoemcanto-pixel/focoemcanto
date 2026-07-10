@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Entrar | Foco OS</title>
+<style>
+*{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:20px;font-family:Inter,Arial,sans-serif;color:#fff;background:radial-gradient(circle at 15% 0%,rgba(168,85,247,.28),transparent 34%),radial-gradient(circle at 88% 8%,rgba(36,211,181,.14),transparent 30%),linear-gradient(180deg,#05060a,#090b12 52%,#050505)}.card{width:min(460px,100%);padding:30px;border-radius:28px;background:rgba(14,17,27,.88);border:1px solid rgba(255,255,255,.1);box-shadow:0 30px 100px rgba(0,0,0,.42);backdrop-filter:blur(18px)}.brand{font-weight:950;font-size:20px;letter-spacing:-.04em;margin-bottom:26px}.brand span{color:#a855f7}.eyebrow{display:inline-flex;padding:7px 11px;border-radius:999px;color:#fde68a;background:rgba(244,200,75,.08);border:1px solid rgba(244,200,75,.25);font-size:11px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;margin-bottom:16px}h1{font-size:38px;line-height:.98;letter-spacing:-.055em;margin:0 0 12px}p{color:rgba(255,255,255,.58);line-height:1.6;margin:0 0 22px}.field{display:grid;gap:8px}.field label{font-size:11px;color:rgba(255,255,255,.55);font-weight:900;text-transform:uppercase;letter-spacing:.07em}.input{width:100%;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.055);color:#fff;padding:14px 15px;outline:none;font:inherit}.input:focus{border-color:#a855f7;box-shadow:0 0 0 4px rgba(168,85,247,.14)}.btn{width:100%;margin-top:14px;border:0;border-radius:14px;padding:14px;color:#fff;font-weight:900;cursor:pointer;background:linear-gradient(135deg,#a855f7,#7c3aed);box-shadow:0 18px 42px rgba(124,58,237,.3)}.msg{min-height:22px;margin-top:13px;color:#fecaca;font-size:13px}.small{margin-top:20px;color:rgba(255,255,255,.35);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<main class="card">
+  <div class="brand">FOCO <span>OS</span></div>
+  <div class="eyebrow">Área administrativa</div>
+  <h1>Entre no centro de comando</h1>
+  <p>Use o token administrativo configurado no Cloudflare. A sessão permanece ativa por 8 horas neste navegador.</p>
+  <form id="form">
+    <div class="field"><label>Token administrativo</label><input id="token" class="input" type="password" autocomplete="current-password" required autofocus></div>
+    <button class="btn" type="submit">Entrar no Foco OS</button>
+    <div id="msg" class="msg"></div>
+  </form>
+  <div class="small">Foco em Canto · acesso restrito</div>
+</main>
+<script>
+const form=document.getElementById('form'),msg=document.getElementById('msg');
+form.addEventListener('submit',async(e)=>{e.preventDefault();msg.textContent='Entrando...';const token=document.getElementById('token').value;try{const r=await fetch('/api/admin/session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({token})});const d=await r.json();if(!r.ok)throw new Error(d.message||'Não foi possível entrar.');const next=new URLSearchParams(location.search).get('next')||'/admin/';location.href=next}catch(err){msg.textContent=err.message}})
+</script>
+</body>
+</html>
