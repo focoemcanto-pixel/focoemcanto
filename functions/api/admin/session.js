@@ -1,26 +1,32 @@
+import { getAdminToken, isAdminAuthenticated } from '../../_lib/admin-auth.js'
+
 export async function onRequest(context) {
   const { request, env } = context
+  const adminToken = await getAdminToken(env)
 
-  if (!env.ADMIN_TOKEN) {
-    return json({ ok: false, message: 'ADMIN_TOKEN não configurado.' }, 500)
+  if (!adminToken) {
+    return json({
+      ok: false,
+      message: 'Token administrativo não encontrado. Configure ADMIN_TOKEN, FOCO_ADMIN_TOKEN ou a chave config:admin_token no KV FOCO_LINKS.',
+    }, 500)
   }
 
   if (request.method === 'GET') {
-    return json({ ok: isAuthenticated(request, env) })
+    return json({ ok: await isAdminAuthenticated(request, env) })
   }
 
   if (request.method === 'POST') {
     let body
     try { body = await request.json() } catch { return json({ ok: false, message: 'Payload inválido.' }, 400) }
-    const token = String(body.token || '')
-    if (token !== env.ADMIN_TOKEN) return json({ ok: false, message: 'Token inválido.' }, 401)
+    const token = String(body.token || '').trim()
+    if (token !== adminToken) return json({ ok: false, message: 'Token inválido.' }, 401)
 
     return new Response(JSON.stringify({ ok: true }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json; charset=utf-8',
         'Cache-Control': 'no-store',
-        'Set-Cookie': `foco_admin_session=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`,
+        'Set-Cookie': `foco_admin_session=${encodeURIComponent(adminToken)}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=28800`,
       },
     })
   }
@@ -37,12 +43,6 @@ export async function onRequest(context) {
   }
 
   return json({ ok: false, message: 'Método não permitido.' }, 405)
-}
-
-function isAuthenticated(request, env) {
-  const cookie = request.headers.get('Cookie') || ''
-  const match = cookie.match(/(?:^|;\s*)foco_admin_session=([^;]+)/)
-  return match && decodeURIComponent(match[1]) === env.ADMIN_TOKEN
 }
 
 function json(data, status = 200) {
