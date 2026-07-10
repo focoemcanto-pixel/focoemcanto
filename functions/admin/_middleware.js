@@ -17,5 +17,20 @@ export async function onRequest(context) {
     return Response.redirect(login.toString(), 302)
   }
 
-  return next()
+  const response = await next()
+  const contentType = response.headers.get('Content-Type') || ''
+  if (!contentType.includes('text/html')) return response
+
+  return new HTMLRewriter()
+    .on('head', {
+      element(element) {
+        element.append('<link rel="stylesheet" href="/admin/assets/foco-os-premium.css">', { html: true })
+      },
+    })
+    .on('body', {
+      element(element) {
+        element.append('<script src="/admin/assets/foco-os-shell.js"></script>', { html: true })
+      },
+    })
+    .transform(response)
 }
