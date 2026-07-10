@@ -16,22 +16,35 @@ export async function onRequestGet(context) {
   }
 
   const funnelIds = (await env.FOCO_LINKS.get('foco:funnels:index', 'json')) || []
-  let leads = 0
-  let sales = 0
-  let revenue = 0
+  let funnelLeads = 0
+  let funnelSales = 0
+  let funnelRevenue = 0
   let cost = 0
   let reach = 0
   let offerClicks = 0
   for (const id of funnelIds) {
     const item = await env.FOCO_LINKS.get(`foco:funnel:${id}`, 'json')
     if (!item) continue
-    leads += number(item.leads)
-    sales += number(item.sales)
-    revenue += number(item.revenue)
+    funnelLeads += number(item.leads)
+    funnelSales += number(item.sales)
+    funnelRevenue += number(item.revenue)
     cost += number(item.cost)
     reach += number(item.reach)
     offerClicks += number(item.offerClicks)
   }
+
+  const crmLeads = (await env.FOCO_LINKS.get('crm:leads', 'json')) || []
+  const crmClients = crmLeads.filter((item) => item.status === 'cliente')
+  const crmRevenue = crmClients.reduce((sum, item) => sum + number(item.value), 0)
+
+  const products = (await env.FOCO_LINKS.get('catalog:products', 'json')) || []
+  const enrollments = (await env.FOCO_LINKS.get('catalog:enrollments', 'json')) || []
+  const activeStudents = enrollments.filter((item) => item.status === 'active')
+  const enrollmentRevenue = enrollments.reduce((sum, item) => sum + number(item.amount), 0)
+
+  const leads = crmLeads.length || funnelLeads
+  const sales = enrollments.length || crmClients.length || funnelSales
+  const revenue = enrollmentRevenue || crmRevenue || funnelRevenue
 
   return json({
     ok: true,
@@ -43,10 +56,18 @@ export async function onRequestGet(context) {
       funnels: funnelIds.length,
       reach,
       leads,
+      funnelLeads,
       offerClicks,
       sales,
+      funnelSales,
       revenue,
+      funnelRevenue,
       cost,
+      crmLeads: crmLeads.length,
+      crmClients: crmClients.length,
+      products: products.length,
+      enrollments: enrollments.length,
+      activeStudents: activeStudents.length,
       conversion: leads > 0 ? (sales / leads) * 100 : 0,
       roi: cost > 0 ? (revenue - cost) / cost : null,
     },
