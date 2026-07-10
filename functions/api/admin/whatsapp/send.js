@@ -1,6 +1,10 @@
 export async function onRequestPost(context) {
   const { request, env } = context
 
+  if (!isAuthenticated(request, env)) {
+    return json({ ok: false, message: 'Não autorizado.' }, 401)
+  }
+
   if (!env.WASENDER_API_KEY) {
     return json({ ok: false, message: 'WASENDER_API_KEY não configurada no Cloudflare.' }, 500)
   }
@@ -46,6 +50,16 @@ export async function onRequestPost(context) {
 
   const ok = results.every((result) => result.ok)
   return json({ ok, results, message: ok ? 'Envio concluído.' : 'Um ou mais envios falharam.' }, ok ? 200 : 502)
+}
+
+function isAuthenticated(request, env) {
+  if (!env.ADMIN_TOKEN) return false
+  const cookie = request.headers.get('Cookie') || ''
+  const match = cookie.match(/(?:^|;\s*)foco_admin_session=([^;]+)/)
+  if (match && decodeURIComponent(match[1]) === env.ADMIN_TOKEN) return true
+  const token = request.headers.get('X-Admin-Token') || ''
+  const auth = request.headers.get('Authorization') || ''
+  return token === env.ADMIN_TOKEN || auth === `Bearer ${env.ADMIN_TOKEN}`
 }
 
 function json(data, status = 200) {
