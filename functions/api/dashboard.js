@@ -39,11 +39,12 @@ export async function onRequestGet(context) {
 
   const products = (await env.FOCO_LINKS.get('catalog:products', 'json')) || []
   const enrollments = (await env.FOCO_LINKS.get('catalog:enrollments', 'json')) || []
+  const validEnrollments = enrollments.filter((item) => item.status !== 'cancelled')
   const activeStudents = enrollments.filter((item) => item.status === 'active')
-  const enrollmentRevenue = enrollments.reduce((sum, item) => sum + number(item.amount), 0)
+  const enrollmentRevenue = validEnrollments.reduce((sum, item) => sum + number(item.amount), 0)
 
   const leads = crmLeads.length || funnelLeads
-  const sales = enrollments.length || crmClients.length || funnelSales
+  const sales = validEnrollments.length || crmClients.length || funnelSales
   const revenue = enrollmentRevenue || crmRevenue || funnelRevenue
 
   return json({
@@ -66,7 +67,7 @@ export async function onRequestGet(context) {
       crmLeads: crmLeads.length,
       crmClients: crmClients.length,
       products: products.length,
-      enrollments: enrollments.length,
+      enrollments: validEnrollments.length,
       activeStudents: activeStudents.length,
       conversion: leads > 0 ? (sales / leads) * 100 : 0,
       roi: cost > 0 ? (revenue - cost) / cost : null,
