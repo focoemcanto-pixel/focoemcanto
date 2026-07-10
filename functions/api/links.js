@@ -38,6 +38,7 @@ export async function onRequestPost(context) {
 
   const id = String(payload.id || `lnk_${Date.now()}`)
   const slug = sanitizeSlug(payload.slug || payload.name) || id.toLowerCase()
+  const previousSlug = sanitizeSlug(payload.previousSlug || '')
   const existing = await env.FOCO_LINKS.get(`link:${slug}`, 'json')
   if (existing && existing.id !== id) return json({ ok: false, message: 'Esse slug já está em uso.' }, 409)
 
@@ -66,6 +67,7 @@ export async function onRequestPost(context) {
   }
 
   await env.FOCO_LINKS.put(`link:${slug}`, JSON.stringify(item))
+  if (previousSlug && previousSlug !== slug) await env.FOCO_LINKS.delete(`link:${previousSlug}`)
   return json({ ok: true, link: item })
 }
 
@@ -84,9 +86,13 @@ export async function onRequestDelete(context) {
 
 function authorize(request, env) {
   if (!env.ADMIN_TOKEN) return json({ ok: false, message: 'ADMIN_TOKEN não configurado.' }, 500)
+  const cookie = request.headers.get('Cookie') || ''
+  const match = cookie.match(/(?:^|;\s*)foco_admin_session=([^;]+)/)
+  if (match && decodeURIComponent(match[1]) === env.ADMIN_TOKEN) return null
   const token = request.headers.get('X-Admin-Token') || ''
-  if (token !== env.ADMIN_TOKEN) return json({ ok: false, message: 'Não autorizado.' }, 401)
-  return null
+  const bearer = request.headers.get('Authorization') || ''
+  if (token === env.ADMIN_TOKEN || bearer === `Bearer ${env.ADMIN_TOKEN}`) return null
+  return json({ ok: false, message: 'Não autorizado.' }, 401)
 }
 
 function sanitizeSlug(value) {
