@@ -8,20 +8,48 @@
 
   function ensureField(){
     const textarea=document.getElementById('editMessage')
-    if(!textarea||document.getElementById('editImageUrl')) return
+    if(!textarea||document.getElementById('editImageFile')) return
     const spacer=document.createElement('div');spacer.style.height='10px'
     const wrap=document.createElement('div')
-    wrap.innerHTML=`<label class="field"><span>Imagem do disparo (opcional)</span><input id="editImageUrl" class="input" type="url" placeholder="https://.../imagem.jpg"><small class="muted">Use uma URL pública direta da imagem. O texto será enviado como legenda.</small></label><div id="editImagePreview" style="display:none;margin-top:10px"><img alt="Prévia da imagem" style="width:100%;max-height:260px;object-fit:contain;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:#090a10"></div>`
+    wrap.innerHTML=`<label class="field"><span>Imagem do disparo (opcional)</span><input id="editImageFile" class="input" type="file" accept="image/jpeg,image/png,image/webp,image/gif"><small class="muted">Selecione JPG, PNG, WEBP ou GIF de até 10 MB. O Foco OS fará o upload e criará o link público automaticamente.</small></label><input id="editImageUrl" type="hidden"><div id="editImageActions" class="actions" style="display:none;margin-top:8px"><button id="removeUploadedImage" type="button" class="ghost danger">Remover imagem</button></div><div id="editImagePreview" style="display:none;margin-top:10px"><img alt="Prévia da imagem" style="width:100%;max-height:260px;object-fit:contain;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:#090a10"><div id="editUploadStatus" class="muted" style="margin-top:8px;font-size:12px"></div></div>`
     textarea.after(spacer,wrap)
-    const input=document.getElementById('editImageUrl')
-    input.addEventListener('input',updatePreview)
+    document.getElementById('editImageFile').addEventListener('change',uploadSelectedImage)
+    document.getElementById('removeUploadedImage').addEventListener('click',()=>{
+      document.getElementById('editImageUrl').value=''
+      document.getElementById('editImageFile').value=''
+      updatePreview()
+    })
+  }
+
+  async function uploadSelectedImage(event){
+    const file=event.target.files?.[0]
+    if(!file)return
+    const status=document.getElementById('editUploadStatus')
+    const input=document.getElementById('editImageFile')
+    if(file.size>10*1024*1024){window.showNotice?.('A imagem deve ter no máximo 10 MB.',false);input.value='';return}
+    const form=new FormData();form.append('file',file)
+    input.disabled=true
+    status.textContent='Enviando imagem...'
+    document.getElementById('editImagePreview').style.display='block'
+    try{
+      const response=await fetch('/api/admin/media/upload',{method:'POST',body:form})
+      const data=await response.json().catch(()=>({}))
+      if(!response.ok||!data.ok)throw new Error(data.message||'Falha no upload')
+      document.getElementById('editImageUrl').value=data.url
+      updatePreview()
+      status.textContent='Upload concluído. A imagem já possui um link público seguro.'
+      window.showNotice?.('Imagem enviada com sucesso.')
+    }catch(error){
+      input.value='';status.textContent='';document.getElementById('editImagePreview').style.display='none'
+      window.showNotice?.('Não foi possível enviar a imagem: '+error.message,false)
+    }finally{input.disabled=false}
   }
 
   function updatePreview(){
-    const input=document.getElementById('editImageUrl'),box=document.getElementById('editImagePreview')
+    const input=document.getElementById('editImageUrl'),box=document.getElementById('editImagePreview'),actions=document.getElementById('editImageActions')
     if(!input||!box)return
     const url=input.value.trim(),img=box.querySelector('img')
-    if(url){img.src=url;box.style.display='block'}else{img.removeAttribute('src');box.style.display='none'}
+    if(url){img.src=url;box.style.display='block';actions.style.display='flex'}else{img.removeAttribute('src');box.style.display='none';actions.style.display='none'}
   }
 
   window.editMessage=function(id){
@@ -30,6 +58,8 @@
     ensureField()
     const item=window.load?.().find(x=>x.id===id)
     document.getElementById('editImageUrl').value=item?.imageUrl||''
+    document.getElementById('editImageFile').value=''
+    document.getElementById('editUploadStatus').textContent=item?.imageUrl?'Imagem já armazenada no Foco OS.':''
     updatePreview()
   }
 
@@ -41,7 +71,7 @@
       const item=items.find(x=>heading.includes(x.title)&&card.querySelector('.time')?.textContent.includes(x.date))
       if(!item?.imageUrl)return
       const media=document.createElement('div');media.className='foco-message-media';media.style.cssText='margin:0 0 14px;padding:10px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.09)'
-      media.innerHTML=`<img src="${escapeHtml(item.imageUrl)}" alt="Imagem do disparo" style="display:block;width:100%;max-height:320px;object-fit:contain;border-radius:12px;background:#090a10"><div class="muted" style="margin-top:8px;font-size:12px">🖼️ Imagem anexada ao disparo</div>`
+      media.innerHTML=`<img src="${escapeHtml(item.imageUrl)}" alt="Imagem do disparo" style="display:block;width:100%;max-height:320px;object-fit:contain;border-radius:12px;background:#090a10"><div class="muted" style="margin-top:8px;font-size:12px">🖼️ Imagem armazenada e anexada ao disparo</div>`
       card.querySelector('.text')?.before(media)
     })
   }
