@@ -4,6 +4,7 @@
   const GROUP_IDS=['120363404674461725@g.us','120363428159310476@g.us']
   const DEFAULT_TEST_NUMBER='5571993392294'
   let selectedId=null
+  let localPreviewUrl=''
   const oldEdit=window.editMessage
   const oldRender=window.render
 
@@ -57,6 +58,7 @@
     })
 
     document.getElementById('removeUploadedImage').addEventListener('click',()=>{
+      clearLocalPreview()
       document.getElementById('editImageUrl').value=''
       input.value=''
       document.getElementById('editUploadStatus').textContent=''
@@ -64,6 +66,18 @@
     })
 
     document.getElementById('sendWhatsappTest').addEventListener('click',sendTest)
+  }
+
+  function clearLocalPreview(){
+    if(localPreviewUrl){URL.revokeObjectURL(localPreviewUrl);localPreviewUrl=''}
+  }
+
+  function showPreview(src){
+    const box=document.getElementById('editImagePreview')
+    const img=box?.querySelector('img')
+    if(!box||!img||!src)return
+    img.src=src
+    box.style.display='block'
   }
 
   async function uploadSelectedImage(event){
@@ -74,39 +88,49 @@
     if(file.size>10*1024*1024){window.showNotice?.('A imagem deve ter no máximo 10 MB.',false);input.value='';return}
     if(!['image/jpeg','image/png','image/webp','image/gif'].includes(file.type)){window.showNotice?.('Formato de imagem não permitido.',false);input.value='';return}
 
-    const localUrl=URL.createObjectURL(file)
-    document.getElementById('editImagePreview').style.display='block'
-    document.querySelector('#editImagePreview img').src=localUrl
-    status.textContent='Preparando upload...'
+    clearLocalPreview()
+    localPreviewUrl=URL.createObjectURL(file)
+    showPreview(localPreviewUrl)
+    status.textContent='Prévia carregada · enviando imagem...'
 
     const form=new FormData();form.append('file',file)
     input.disabled=true
     try{
-      status.textContent='Enviando imagem para o Foco OS...'
       const response=await fetch('/api/admin/media/upload',{method:'POST',body:form})
       const data=await response.json().catch(()=>({}))
       if(!response.ok||!data.ok)throw new Error(data.message||'Falha no upload')
       document.getElementById('editImageUrl').value=data.url
-      updatePreview()
-      status.textContent='Upload concluído · link público criado automaticamente.'
+
+      const remoteImage=new Image()
+      remoteImage.onload=()=>{
+        showPreview(data.url)
+        clearLocalPreview()
+        status.textContent='Upload concluído · imagem pública pronta para envio.'
+      }
+      remoteImage.onerror=()=>{
+        status.textContent='Upload concluído. A prévia local será mantida até você salvar.'
+      }
+      remoteImage.src=data.url
       window.showNotice?.('Imagem enviada com sucesso.')
     }catch(error){
-      input.value='';document.getElementById('editImageUrl').value='';status.textContent='';updatePreview()
+      document.getElementById('editImageUrl').value=''
+      status.textContent='Falha no upload. A prévia local foi mantida para você tentar novamente.'
       window.showNotice?.('Não foi possível enviar a imagem: '+error.message,false)
-    }finally{input.disabled=false;URL.revokeObjectURL(localUrl)}
+    }finally{input.disabled=false}
   }
 
   function updatePreview(){
     const input=document.getElementById('editImageUrl'),box=document.getElementById('editImagePreview')
     if(!input||!box)return
     const url=input.value.trim(),img=box.querySelector('img')
-    if(url){img.src=url;box.style.display='block'}else{img.removeAttribute('src');box.style.display='none'}
+    if(url){showPreview(url)}else if(localPreviewUrl){showPreview(localPreviewUrl)}else{img.removeAttribute('src');box.style.display='none'}
   }
 
   window.editMessage=function(id){
     selectedId=id
     oldEdit?.(id)
     ensureField()
+    clearLocalPreview()
     const item=window.load?.().find(x=>x.id===id)
     document.getElementById('editImageUrl').value=item?.imageUrl||''
     document.getElementById('editImageFile').value=''
@@ -121,6 +145,7 @@
     const imageUrl=document.getElementById('editImageUrl')?.value.trim()||''
     if(number.length<10)return window.showNotice?.('Informe um número de teste válido com DDI e DDD.',false)
     if(!text&&!imageUrl)return window.showNotice?.('Digite uma mensagem ou carregue uma imagem antes do teste.',false)
+    if(localPreviewUrl&&!imageUrl)return window.showNotice?.('A imagem ainda não possui link público. Aguarde o upload terminar antes de testar.',false)
 
     localStorage.setItem('foco_whatsapp_test_number',number)
     const button=document.getElementById('sendWhatsappTest')
@@ -155,11 +180,12 @@
     const oldSave=saveButton.onclick
     saveButton.onclick=function(event){
       const id=selectedId,url=document.getElementById('editImageUrl')?.value.trim()||''
+      if(localPreviewUrl&&!url){event?.preventDefault?.();return window.showNotice?.('Aguarde o upload da imagem terminar antes de salvar.',false)}
       oldSave?.call(this,event)
       if(!id)return
       const items=window.load?.()||[],item=items.find(x=>x.id===id)
       if(item){item.imageUrl=url;window.save?.(items)}
-      selectedId=null
+      clearLocalPreview();selectedId=null
     }
   }
 
