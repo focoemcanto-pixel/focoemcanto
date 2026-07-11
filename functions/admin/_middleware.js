@@ -30,6 +30,9 @@ export async function onRequest(context) {
     .on('body', {
       element(element) {
         element.append('<script src="/admin/assets/foco-os-shell.js"></script>', { html: true })
+        if (url.pathname === '/admin/whatsapp/' || url.pathname === '/admin/whatsapp') {
+          element.append('<script src="/admin/assets/whatsapp-media.js"></script>', { html: true })
+        }
       },
     })
     .transform(response)
