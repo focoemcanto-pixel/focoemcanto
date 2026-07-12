@@ -21,17 +21,23 @@ export async function onRequest(context) {
   const contentType = response.headers.get('Content-Type') || ''
   if (!contentType.includes('text/html')) return response
 
+  const isWhatsapp = url.pathname === '/admin/whatsapp/' || url.pathname === '/admin/whatsapp'
+
   return new HTMLRewriter()
     .on('head', {
       element(element) {
         element.append('<link rel="stylesheet" href="/admin/assets/foco-os-premium.css">', { html: true })
+        if (isWhatsapp) {
+          element.append('<link rel="stylesheet" href="/admin/assets/whatsapp-modal-fix.css">', { html: true })
+        }
       },
     })
     .on('body', {
       element(element) {
         element.append('<script src="/admin/assets/foco-os-shell.js"></script>', { html: true })
-        if (url.pathname === '/admin/whatsapp/' || url.pathname === '/admin/whatsapp') {
+        if (isWhatsapp) {
           element.append('<script src="/admin/assets/whatsapp-media.js"></script>', { html: true })
+          element.append('<script src="/admin/assets/whatsapp-preview-fix.js"></script>', { html: true })
         }
       },
     })
