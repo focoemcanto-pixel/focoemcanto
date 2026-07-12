@@ -19,27 +19,13 @@ export async function onRequestPost(c){
     const body=await c.request.json()
     const items=Array.isArray(body.items)?body.items:[]
     const normalized=items.map(x=>({
-      id:String(x.id||crypto.randomUUID()),
-      date:String(x.date||''),
-      time:String(x.time||'19:00'),
-      title:String(x.title||'Mensagem'),
-      message:String(x.message||''),
-      status:String(x.status||'PENDENTE'),
-      sentAt:x.sentAt||null,
-      error:x.error||null,
-      campaignId:x.campaignId||null,
-      source:x.source||'manual',
-      groups:Array.isArray(x.groups)?x.groups:undefined,
-      imageUrl:String(x.imageUrl||''),
-      poll:x.poll&&typeof x.poll==='object'?{
-        question:String(x.poll.question||''),
-        options:Array.isArray(x.poll.options)?x.poll.options.map(String).filter(Boolean).slice(0,12):[],
-        multiSelect:Boolean(x.poll.multiSelect),
-      }:null,
-      weekId:x.weekId||null,
-      tags:Array.isArray(x.tags)?x.tags.map(String):[],
-      createdAt:x.createdAt||new Date().toISOString(),
-      updatedAt:new Date().toISOString(),
+      id:String(x.id||crypto.randomUUID()),date:String(x.date||''),time:String(x.time||'19:00'),title:String(x.title||'Mensagem'),message:String(x.message||''),
+      status:String(x.status||'PENDENTE'),sentAt:x.sentAt||null,error:x.error||null,campaignId:x.campaignId||null,source:x.source||'manual',
+      groups:Array.isArray(x.groups)?x.groups:undefined,imageUrl:String(x.imageUrl||''),
+      poll:x.poll&&typeof x.poll==='object'?{question:String(x.poll.question||''),options:Array.isArray(x.poll.options)?x.poll.options.map(String).filter(Boolean).slice(0,12):[],multiSelect:Boolean(x.poll.multiSelect)}:null,
+      weekId:x.weekId||null,tags:Array.isArray(x.tags)?x.tags.map(String):[],
+      autoEnabled:x.autoEnabled!==false,processingAt:x.processingAt||null,
+      createdAt:x.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),
     }))
     await c.env.FOCO_LINKS.put(KEY,JSON.stringify(normalized))
     return json({ok:true,items:normalized})
