@@ -96,9 +96,21 @@
   if(path==='/admin/whatsapp/'){
     const STORAGE_KEY='foco_os_whatsapp_schedule_v1'
     const syncToCloud=async list=>{
-      try{
-        await fetch('/api/whatsapp/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:list})})
-      }catch(error){console.warn('Falha ao sincronizar agenda:',error)}
+      const response=await fetch('/api/whatsapp/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:list})})
+      const data=await response.json().catch(()=>({}))
+      if(!response.ok||!data.ok)throw new Error(data.message||'Falha ao salvar agenda na nuvem.')
+      return data.items||list
+    }
+
+    window.refreshWhatsappSchedule=async()=>{
+      const response=await fetch('/api/whatsapp/schedule',{cache:'no-store'})
+      if(response.status===401){location.href='/admin/login/?next=/admin/whatsapp/';return []}
+      const data=await response.json().catch(()=>({}))
+      if(!response.ok||!data.ok)throw new Error(data.message||'Falha ao carregar agenda.')
+      const list=(data.items||[]).sort((a,b)=>`${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))
+      localStorage.setItem(STORAGE_KEY,JSON.stringify(list))
+      window.render?.()
+      return list
     }
 
     const startSync=async()=>{
@@ -109,25 +121,22 @@
         if(!response.ok)throw new Error(data.message||'Falha ao carregar agenda.')
         let local=[]
         try{local=JSON.parse(localStorage.getItem(STORAGE_KEY))||[]}catch{}
-        const merged=[...(data.items||[]),...local].reduce((map,item)=>map.set(item.id,item),new Map())
+        const merged=[...local,...(data.items||[])].reduce((map,item)=>map.set(item.id,item),new Map())
         const list=[...merged.values()].sort((a,b)=>`${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))
         localStorage.setItem(STORAGE_KEY,JSON.stringify(list))
-        if(typeof window.render==='function')window.render()
+        window.render?.()
         await syncToCloud(list)
 
         const originalSave=window.save
         if(typeof originalSave==='function'){
           window.save=function(nextItems){
             originalSave(nextItems)
-            syncToCloud(nextItems)
+            return syncToCloud(nextItems).catch(error=>{
+              console.warn('Falha ao sincronizar agenda:',error)
+              window.showNotice?.('Não foi possível salvar na nuvem: '+error.message,false)
+              throw error
+            })
           }
-        }
-
-        const notice=document.getElementById('notice')
-        if(notice&&list.some(x=>x.source==='assistant-ai')){
-          notice.textContent='Agenda sincronizada com as campanhas aprovadas no Assistente IA.'
-          notice.className='notice show ok'
-          setTimeout(()=>notice.className='notice',4500)
         }
       }catch(error){
         console.warn(error)
