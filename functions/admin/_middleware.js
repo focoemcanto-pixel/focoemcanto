@@ -42,6 +42,7 @@ export async function onRequest(context) {
           element.append('<script src="/admin/assets/whatsapp-polls.js"></script>', { html: true })
           element.append('<script src="/admin/assets/whatsapp-planner.js"></script>', { html: true })
           element.append('<script src="/admin/assets/whatsapp-manual-dispatch.js"></script>', { html: true })
+          element.append('<script src="/admin/assets/whatsapp-week-workflow.js"></script>', { html: true })
         }
       },
     })
