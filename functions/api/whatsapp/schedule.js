@@ -25,6 +25,7 @@ export async function onRequestPost(c){
       poll:x.poll&&typeof x.poll==='object'?{question:String(x.poll.question||''),options:Array.isArray(x.poll.options)?x.poll.options.map(String).filter(Boolean).slice(0,12):[],multiSelect:Boolean(x.poll.multiSelect)}:null,
       weekId:x.weekId||null,tags:Array.isArray(x.tags)?x.tags.map(String):[],
       autoEnabled:x.autoEnabled!==false,processingAt:x.processingAt||null,
+      deliveries:x.deliveries&&typeof x.deliveries==='object'?x.deliveries:{},
       createdAt:x.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString(),
     }))
     await c.env.FOCO_LINKS.put(KEY,JSON.stringify(normalized))
