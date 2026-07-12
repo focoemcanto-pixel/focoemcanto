@@ -38,6 +38,7 @@ export async function onRequest(context) {
         if (isWhatsapp) {
           element.append('<script src="/admin/assets/whatsapp-media.js"></script>', { html: true })
           element.append('<script src="/admin/assets/whatsapp-preview-fix.js"></script>', { html: true })
+          element.append('<script src="/admin/assets/whatsapp-polls.js"></script>', { html: true })
         }
       },
     })
