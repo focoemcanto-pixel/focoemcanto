@@ -29,6 +29,7 @@ export async function onRequest(context) {
         element.append('<link rel="stylesheet" href="/admin/assets/foco-os-premium.css">', { html: true })
         if (isWhatsapp) {
           element.append('<link rel="stylesheet" href="/admin/assets/whatsapp-modal-fix.css">', { html: true })
+          element.append('<link rel="stylesheet" href="/admin/assets/whatsapp-planner.css">', { html: true })
         }
       },
     })
@@ -39,6 +40,7 @@ export async function onRequest(context) {
           element.append('<script src="/admin/assets/whatsapp-media.js"></script>', { html: true })
           element.append('<script src="/admin/assets/whatsapp-preview-fix.js"></script>', { html: true })
           element.append('<script src="/admin/assets/whatsapp-polls.js"></script>', { html: true })
+          element.append('<script src="/admin/assets/whatsapp-planner.js"></script>', { html: true })
         }
       },
     })
