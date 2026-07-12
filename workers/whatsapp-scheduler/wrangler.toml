@@ -1,0 +1,9 @@
+name = "foco-whatsapp-scheduler"
+main = "src/index.js"
+compatibility_date = "2026-07-12"
+
+[triggers]
+crons = ["* * * * *"]
+
+[vars]
+FOCO_OS_URL = "https://focoemcanto.com"
