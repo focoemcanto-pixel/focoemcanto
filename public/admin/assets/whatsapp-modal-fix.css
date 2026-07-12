@@ -1,0 +1,12 @@
+@media (min-width: 1px){
+  #modal.modal{align-items:flex-start!important;overflow-y:auto!important;padding:24px 16px!important}
+  #modal .modalBox{max-height:calc(100dvh - 48px)!important;overflow-y:auto!important;overscroll-behavior:contain!important;scrollbar-gutter:stable!important;margin:auto!important}
+  #editImagePreview{max-width:100%!important;overflow:hidden!important}
+  #editImagePreview img{width:100%!important;height:auto!important;max-height:220px!important;object-fit:contain!important}
+  #focoUploadZone{min-height:104px!important}
+}
+@media (max-width:560px){
+  #modal.modal{padding:10px!important}
+  #modal .modalBox{max-height:calc(100dvh - 20px)!important;border-radius:18px!important;padding:18px!important}
+  #editImagePreview img{max-height:180px!important}
+}
