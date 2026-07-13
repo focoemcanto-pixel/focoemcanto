@@ -35,7 +35,7 @@
       if(!response.ok||!data.ok)throw new Error(data.message||'Falha ao carregar logs.')
       const logs=data.logs||[]
       if(!logs.length){list.innerHTML='<div class="muted">Nenhum envio registrado ainda.</div>';return}
-      list.innerHTML=logs.slice(0,30).map(log=>`<div style="padding:12px 0;border-top:1px solid rgba(255,255,255,.08)"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><strong style="color:${log.ok?'#bbf7d0':'#fecaca'}">${log.ok?'✓ Aceito pela API':'✕ Falhou ou parcial'}</strong><span class="muted" style="font-size:12px">${formatDate(log.at)}</span></div><div style="margin-top:5px">${escapeHtml(log.title||'Disparo')}</div><div class="muted" style="font-size:12px;margin-top:4px">${escapeHtml((log.groups||[]).map(groupName).join(', '))}${log.status?' · '+escapeHtml(log.status):''}${log.error?' · '+escapeHtml(log.error):''}</div></div>`).join('')
+      list.innerHTML=logs.slice(0,30).map(log=>`<div style="padding:12px 0;border-top:1px solid rgba(255,255,255,.08)"><div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap"><strong style="color:${log.ok?'#bbf7d0':'#fecaca'}">${log.ok?'✓ Aceito pela API':'✕ Falhou ou parcial'}</strong><span class="muted" style="font-size:12px">${formatDate(log.at)}</span></div><div style="margin-top:5px">${escapeHtml(log.title||'Disparo')}</div><div class="muted" style="font-size:12px;margin-top:4px">${escapeHtml((log.groups||[]).map(groupName).join(', '))}${log.status?' · '+escapeHtml(log.status):''}${log.type?' · '+escapeHtml(log.type):''}${log.error?' · '+escapeHtml(log.error):''}</div></div>`).join('')
     }catch(error){list.innerHTML='<div style="color:#fecaca">Não foi possível carregar os logs: '+escapeHtml(error.message)+'</div>'}
   }
 
@@ -66,7 +66,7 @@
     document.getElementById('groupSendStatus').style.display='none'
     document.querySelectorAll('.foco-target-group').forEach(box=>{box.checked=!item.deliveries?.[box.value]?.ok})
     if(!document.querySelector('.foco-target-group:checked'))document.querySelectorAll('.foco-target-group').forEach(box=>box.checked=true)
-    if(item.poll?.question)setModalStatus('A enquete nativa está temporariamente desativada. Edite este disparo e transforme a votação em texto antes de enviar.')
+    if(item.poll?.question)setModalStatus('Enquete nativa do WhatsApp. Selecione com atenção apenas os grupos que ainda não receberam.',true)
     document.getElementById('focoGroupSendModal').style.display='flex'
   }
 
@@ -80,19 +80,19 @@
   async function sendSelected(){
     const items=readItems(),item=items.find(x=>x.id===selectedItemId)
     if(!item)return setModalStatus('O disparo não foi encontrado. Atualize a página e tente novamente.')
-    if(item.poll?.question)return setModalStatus('A enquete nativa está bloqueada por segurança. Converta este disparo em uma mensagem de votação por texto.')
     const groups=[...document.querySelectorAll('.foco-target-group:checked')].map(x=>x.value)
     if(!groups.length)return setModalStatus('Selecione pelo menos um grupo.')
     const button=document.getElementById('confirmGroupSend'),original=button.textContent
     button.disabled=true;button.textContent='Enviando...';setModalStatus('Enviando solicitação. Aguarde a resposta da API...',true)
     try{
       const payload={groups,itemId:item.id,title:item.title,text:String(item.message||'')}
-      if(item.imageUrl)payload.imageUrl=item.imageUrl
+      if(item.poll?.question)payload.poll=item.poll
+      else if(item.imageUrl)payload.imageUrl=item.imageUrl
       const response=await fetch('/api/admin/whatsapp/send',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
       const data=await response.json().catch(()=>({}))
       const now=new Date().toISOString()
       item.deliveries=item.deliveries&&typeof item.deliveries==='object'?item.deliveries:{}
-      ;(data.results||[]).forEach(result=>{item.deliveries[result.group]={to:result.group,ok:Boolean(result.ok),acceptedByApi:Boolean(result.acceptedByApi),status:result.status,body:result.body,attempts:Number(item.deliveries[result.group]?.attempts||0)+1,attemptedAt:result.attemptedAt||now,manual:true}})
+      ;(data.results||[]).forEach(result=>{item.deliveries[result.group]={to:result.group,ok:Boolean(result.ok),acceptedByApi:Boolean(result.acceptedByApi),status:result.status,body:result.body,attempts:Number(item.deliveries[result.group]?.attempts||0)+1,attemptedAt:result.attemptedAt||now,manual:true,type:item.poll?.question?'poll':item.imageUrl?'image':'text'}})
       const expected=Array.isArray(item.groups)&&item.groups.length?item.groups:GROUPS.map(g=>g.id)
       const successCount=expected.filter(group=>item.deliveries[group]?.ok).length
       item.status=successCount===expected.length?'ENVIADO':successCount>0?'PARCIAL':'ERRO'
@@ -100,8 +100,8 @@
       item.autoEnabled=false;item.manualTargets=groups;item.error=item.status==='ENVIADO'?null:`${expected.length-successCount} grupo(s) ainda não foram aceitos pela API.`;item.updatedAt=now
       await persist(items);await renderLogs()
       if(!response.ok||!data.ok){const failed=(data.results||[]).filter(r=>!r.ok).map(r=>`${groupName(r.group)} (${r.status||'erro'})`).join(', ');throw new Error((data.message||'Falha no envio')+(failed?' — '+failed:''))}
-      setModalStatus(`Solicitação aceita pela API para ${groups.map(groupName).join(' e ')}.`,true)
-      window.showNotice?.(`✓ Solicitação aceita para ${groups.length} grupo(s).`)
+      setModalStatus(`${item.poll?.question?'Enquete':'Solicitação'} aceita pela API para ${groups.map(groupName).join(' e ')}.`,true)
+      window.showNotice?.(`✓ ${item.poll?.question?'Enquete':'Solicitação'} aceita para ${groups.length} grupo(s).`)
       setTimeout(()=>{document.getElementById('focoGroupSendModal').style.display='none';selectedItemId=null;window.refreshWhatsappSchedule?.().catch(()=>{})},1300)
     }catch(error){await renderLogs();setModalStatus('Não foi possível concluir: '+error.message);window.showNotice?.('Falha no disparo: '+error.message,false)}
     finally{button.disabled=false;button.textContent=original}
