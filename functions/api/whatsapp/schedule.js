@@ -24,10 +24,14 @@ export async function onRequestPost(c){
       const id=String(x.id||crypto.randomUUID())
       const saved=currentById.get(id)||{}
       const deliveries=x.deliveries&&typeof x.deliveries==='object'?x.deliveries:x.delivery&&typeof x.delivery==='object'?x.delivery:saved.deliveries&&typeof saved.deliveries==='object'?saved.deliveries:{}
+      const isTest=x.isTest===true||saved.isTest===true
+      const testNumber=String(x.testNumber||saved.testNumber||'').replace(/\D/g,'')
       return {
         id,date:String(x.date||''),time:String(x.time||'19:00'),title:String(x.title||'Mensagem'),message:String(x.message||''),
         status:String(x.status||saved.status||'PENDENTE'),sentAt:x.sentAt||saved.sentAt||null,error:x.error??saved.error??null,campaignId:x.campaignId||saved.campaignId||null,source:x.source||saved.source||'manual',
-        groups:Array.isArray(x.groups)?x.groups:Array.isArray(saved.groups)?saved.groups:undefined,imageUrl:String(x.imageUrl||saved.imageUrl||''),
+        groups:isTest?[]:Array.isArray(x.groups)?x.groups:Array.isArray(saved.groups)?saved.groups:undefined,
+        isTest,testNumber:isTest?testNumber:undefined,
+        imageUrl:String(x.imageUrl||saved.imageUrl||''),
         poll:x.poll&&typeof x.poll==='object'?{question:String(x.poll.question||''),options:Array.isArray(x.poll.options)?x.poll.options.map(String).filter(Boolean).slice(0,12):[],multiSelect:Boolean(x.poll.multiSelect)}:saved.poll||null,
         weekId:x.weekId||saved.weekId||null,tags:Array.isArray(x.tags)?x.tags.map(String):Array.isArray(saved.tags)?saved.tags:[],
         autoEnabled:x.autoEnabled!==undefined?x.autoEnabled!==false:saved.autoEnabled!==false,
