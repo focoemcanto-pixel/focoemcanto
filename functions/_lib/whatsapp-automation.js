@@ -37,19 +37,19 @@ export async function processDueMessages(env,{force=false,trigger='cron'}={}){
     await saveItems(env,items)
     try{
       const sendResult=await sendItem(env,item,async()=>{item.updatedAt=new Date().toISOString();await saveItems(env,items)})
-      const groups=getGroups(item)
-      const successCount=groups.filter(group=>item.deliveries?.[group]?.ok).length
-      const allOk=successCount===groups.length
+      const targets=getTargets(item)
+      const successCount=targets.filter(target=>item.deliveries?.[target]?.ok).length
+      const allOk=successCount===targets.length
       item.status=allOk?'ENVIADO':successCount>0?'PARCIAL':'ERRO'
       item.sentAt=allOk?new Date().toISOString():null
-      item.error=allOk?null:`${groups.length-successCount} grupo(s) ainda não receberam o disparo.`
+      item.error=allOk?null:`${targets.length-successCount} destino(s) ainda não receberam o disparo.`
       item.processingAt=null;item.lockId=null
       results.push({id:item.id,ok:allOk,status:item.status,results:sendResult,error:item.error})
-      await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:item.status,ok:allOk,results:sendResult})
+      await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:item.status,ok:allOk,results:sendResult,isTest:Boolean(item.isTest)})
     }catch(error){
       item.status='ERRO';item.error=String(error?.message||error);item.processingAt=null;item.lockId=null
       results.push({id:item.id,ok:false,status:item.status,error:item.error})
-      await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:'ERRO',ok:false,error:item.error})
+      await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:'ERRO',ok:false,error:item.error,isTest:Boolean(item.isTest)})
     }
     item.updatedAt=new Date().toISOString();await saveItems(env,items)
   }
@@ -59,25 +59,31 @@ export async function processDueMessages(env,{force=false,trigger='cron'}={}){
 }
 
 function normalizeDeliveries(item){return item.deliveries&&typeof item.deliveries==='object'?item.deliveries:item.delivery&&typeof item.delivery==='object'?item.delivery:{}}
-function getGroups(item){return Array.isArray(item.groups)&&item.groups.length?item.groups:DEFAULT_GROUPS}
+function getTargets(item){
+  if(item.isTest===true){
+    const number=String(item.testNumber||'').replace(/\D/g,'')
+    if(!number)throw new Error('Disparo de teste sem número de teste configurado.')
+    return[number]
+  }
+  return Array.isArray(item.groups)&&item.groups.length?item.groups:DEFAULT_GROUPS
+}
 function attemptsFor(item,to){return Number(item.deliveries?.[to]?.attempts||0)}
 function isLocked(item,now){if(!item.processingAt)return false;const age=now-new Date(item.processingAt);return Number.isFinite(age)&&age<LOCK_TTL_MS}
 function isEligible(item,now=new Date()){
   if(!item||!['PENDENTE','ERRO','PARCIAL','PROCESSANDO'].includes(item.status)||item.autoEnabled===false||!item.date||!item.time)return false
   if(item.status==='PROCESSANDO'&&isLocked(item,now))return false
-  const groups=getGroups(item),deliveries=normalizeDeliveries(item)
-  return groups.some(to=>!deliveries[to]?.ok&&attemptsFor({...item,deliveries},to)<MAX_ATTEMPTS)
+  let targets
+  try{targets=getTargets(item)}catch{return false}
+  const deliveries=normalizeDeliveries(item)
+  return targets.some(to=>!deliveries[to]?.ok&&attemptsFor({...item,deliveries},to)<MAX_ATTEMPTS)
 }
 function dueDate(item){return new Date(`${item.date}T${item.time}:00-03:00`)}
 async function saveItems(env,items){await env.FOCO_LINKS.put(SCHEDULE_KEY,JSON.stringify(items))}
-
-async function appendLog(env,entry){
-  try{const logs=await env.FOCO_LINKS.get(LOGS_KEY,{type:'json'})||[];logs.unshift({id:crypto.randomUUID(),at:new Date().toISOString(),...entry});await env.FOCO_LINKS.put(LOGS_KEY,JSON.stringify(logs.slice(0,200)))}catch{}
-}
+async function appendLog(env,entry){try{const logs=await env.FOCO_LINKS.get(LOGS_KEY,{type:'json'})||[];logs.unshift({id:crypto.randomUUID(),at:new Date().toISOString(),...entry});await env.FOCO_LINKS.put(LOGS_KEY,JSON.stringify(logs.slice(0,200)))}catch{}}
 
 async function sendItem(env,item,onProgress){
-  const groups=getGroups(item),apiUrl=env.WASENDER_API_URL||'https://app.wasenderapi.com/api/send-message',results=[]
-  for(const to of groups){
+  const targets=getTargets(item),apiUrl=env.WASENDER_API_URL||'https://app.wasenderapi.com/api/send-message',results=[]
+  for(const to of targets){
     const previous=item.deliveries?.[to]
     if(previous?.ok){results.push({to,ok:true,skipped:true,status:previous.status||200,body:previous.body||null});continue}
     if(attemptsFor(item,to)>=MAX_ATTEMPTS){results.push({to,ok:false,skipped:true,final:true,status:previous?.status||0,body:'Limite de tentativas atingido.'});continue}
@@ -89,10 +95,10 @@ async function sendItem(env,item,onProgress){
     try{
       const response=await fetch(apiUrl,{method:'POST',headers:{Authorization:`Bearer ${env.WASENDER_API_KEY}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload)})
       const raw=await response.text();let body=raw;try{body=JSON.parse(raw)}catch{}
-      const delivery={to,ok:response.ok,status:response.status,body,attempts:attemptsFor(item,to)+1,attemptedAt:new Date().toISOString(),acceptedByApi:response.ok}
+      const delivery={to,ok:response.ok,status:response.status,body,attempts:attemptsFor(item,to)+1,attemptedAt:new Date().toISOString(),acceptedByApi:response.ok,isTest:Boolean(item.isTest)}
       item.deliveries[to]=delivery;results.push(delivery);await onProgress?.()
     }catch(error){
-      const delivery={to,ok:false,status:0,body:String(error?.message||error),attempts:attemptsFor(item,to)+1,attemptedAt:new Date().toISOString(),acceptedByApi:false}
+      const delivery={to,ok:false,status:0,body:String(error?.message||error),attempts:attemptsFor(item,to)+1,attemptedAt:new Date().toISOString(),acceptedByApi:false,isTest:Boolean(item.isTest)}
       item.deliveries[to]=delivery;results.push(delivery);await onProgress?.()
     }
   }
