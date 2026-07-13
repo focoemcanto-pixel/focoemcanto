@@ -39,6 +39,7 @@ export async function onRequest(context) {
         element.append('<script src="/admin/assets/whatsapp-week-workflow.js"></script>', { html: true })
         element.append('<script src="/admin/assets/whatsapp-automation.js"></script>', { html: true })
         element.append('<script src="/admin/assets/whatsapp-group-send.js"></script>', { html: true })
+        element.append('<script src="/admin/assets/whatsapp-status-ui.js"></script>', { html: true })
       }
     }})
     .transform(response)
