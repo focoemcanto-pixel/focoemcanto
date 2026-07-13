@@ -17,19 +17,15 @@ export async function onRequestPost(context) {
   const itemId=String(payload.itemId||'')
   const title=String(payload.title||'Disparo manual')
 
-  if(payload.poll){
-    const response={ok:false,code:'POLL_DISABLED',message:'A enquete nativa está temporariamente desativada porque o formato ainda não foi validado no WhatsApp. Use uma votação em texto.'}
-    await appendLog(env,{source:'manual',itemId,title,status:'BLOQUEADO',ok:false,groups,error:response.message,type:'poll'})
-    return json(response,409)
-  }
-  if(!groups.length||(!text&&!imageUrl))return json({ok:false,message:'Informe os destinatários e um texto ou imagem.'},400)
+  if(!groups.length||(!text&&!imageUrl&&!poll))return json({ok:false,message:'Informe os destinatários e um texto, imagem ou enquete.'},400)
+  if(payload.poll&&!poll)return json({ok:false,message:'A enquete precisa ter uma pergunta e entre 2 e 12 opções.'},400)
   if(imageUrl&&!/^https:\/\//i.test(imageUrl))return json({ok:false,message:'A imagem precisa ter uma URL pública HTTPS.'},400)
 
   const apiUrl=env.WASENDER_API_URL||'https://app.wasenderapi.com/api/send-message'
   const results=[]
   for(const group of groups){
     try{
-      const messagePayload=imageUrl?{to:group,text,imageUrl}:{to:group,text}
+      const messagePayload=poll?{to:group,poll}:imageUrl?{to:group,text,imageUrl}:{to:group,text}
       const response=await fetch(apiUrl,{method:'POST',headers:{Authorization:`Bearer ${env.WASENDER_API_KEY}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(messagePayload)})
       const raw=await response.text();let body=raw;try{body=JSON.parse(raw)}catch{}
       results.push({group,ok:response.ok,acceptedByApi:response.ok,status:response.status,body,attemptedAt:new Date().toISOString()})
@@ -39,8 +35,9 @@ export async function onRequestPost(context) {
   }
   const ok=results.every(result=>result.ok)
   const partial=results.some(result=>result.ok)&&!ok
-  await appendLog(env,{source:'manual',itemId,title,status:ok?'ACEITO_API':partial?'PARCIAL':'ERRO',ok,groups,results,type:imageUrl?'image':'text'})
-  return json({ok,partial,results,media:Boolean(imageUrl),acceptedByApi:ok,message:ok?'Solicitação aceita pela API para todos os grupos.':partial?'Solicitação aceita apenas para parte dos grupos.':'Um ou mais envios falharam.'},ok?200:502)
+  const type=poll?'poll':imageUrl?'image':'text'
+  await appendLog(env,{source:'manual',itemId,title,status:ok?'ACEITO_API':partial?'PARCIAL':'ERRO',ok,groups,results,type})
+  return json({ok,partial,results,media:Boolean(imageUrl),poll:Boolean(poll),acceptedByApi:ok,message:ok?(poll?'Enquete aceita pela API para todos os grupos.':imageUrl?'Imagem aceita pela API para todos os grupos.':'Mensagem aceita pela API para todos os grupos.'):partial?'Solicitação aceita apenas para parte dos grupos.':'Um ou mais envios falharam.'},ok?200:502)
 }
 
 function normalizePoll(value){
