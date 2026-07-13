@@ -95,52 +95,55 @@
 
   if(path==='/admin/whatsapp/'){
     const STORAGE_KEY='foco_os_whatsapp_schedule_v1'
-    const syncToCloud=async list=>{
-      const response=await fetch('/api/whatsapp/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:list})})
-      const data=await response.json().catch(()=>({}))
-      if(!response.ok||!data.ok)throw new Error(data.message||'Falha ao salvar agenda na nuvem.')
-      return data.items||list
-    }
+    let cloudReady=false
+    const sortItems=list=>[...(list||[])].sort((a,b)=>`${a.date||''}${a.time||''}`.localeCompare(`${b.date||''}${b.time||''}`))
+    const writeLocal=list=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(sortItems(list)));window.render?.()}
 
-    window.refreshWhatsappSchedule=async()=>{
+    const fetchCloud=async()=>{
       const response=await fetch('/api/whatsapp/schedule',{cache:'no-store'})
       if(response.status===401){location.href='/admin/login/?next=/admin/whatsapp/';return []}
       const data=await response.json().catch(()=>({}))
       if(!response.ok||!data.ok)throw new Error(data.message||'Falha ao carregar agenda.')
-      const list=(data.items||[]).sort((a,b)=>`${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))
-      localStorage.setItem(STORAGE_KEY,JSON.stringify(list))
-      window.render?.()
+      return sortItems(data.items||[])
+    }
+
+    const syncToCloud=async list=>{
+      if(!cloudReady)return list
+      const response=await fetch('/api/whatsapp/schedule',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({items:list})})
+      const data=await response.json().catch(()=>({}))
+      if(!response.ok||!data.ok)throw new Error(data.message||'Falha ao salvar agenda na nuvem.')
+      const saved=sortItems(data.items||list)
+      writeLocal(saved)
+      return saved
+    }
+
+    window.refreshWhatsappSchedule=async()=>{
+      const list=await fetchCloud()
+      writeLocal(list)
       return list
     }
 
     const startSync=async()=>{
       try{
-        const response=await fetch('/api/whatsapp/schedule',{cache:'no-store'})
-        if(response.status===401)return location.href='/admin/login/?next=/admin/whatsapp/'
-        const data=await response.json()
-        if(!response.ok)throw new Error(data.message||'Falha ao carregar agenda.')
-        let local=[]
-        try{local=JSON.parse(localStorage.getItem(STORAGE_KEY))||[]}catch{}
-        const merged=[...local,...(data.items||[])].reduce((map,item)=>map.set(item.id,item),new Map())
-        const list=[...merged.values()].sort((a,b)=>`${a.date}${a.time}`.localeCompare(`${b.date}${b.time}`))
-        localStorage.setItem(STORAGE_KEY,JSON.stringify(list))
-        window.render?.()
-        await syncToCloud(list)
-
+        const list=await fetchCloud()
+        writeLocal(list)
+        cloudReady=true
         const originalSave=window.save
         if(typeof originalSave==='function'){
           window.save=function(nextItems){
             originalSave(nextItems)
-            return syncToCloud(nextItems).catch(error=>{
+            return syncToCloud(nextItems).catch(async error=>{
               console.warn('Falha ao sincronizar agenda:',error)
               window.showNotice?.('Não foi possível salvar na nuvem: '+error.message,false)
+              try{await window.refreshWhatsappSchedule()}catch{}
               throw error
             })
           }
         }
+        window.showNotice?.('Agenda carregada da nuvem. O KV é a fonte oficial dos disparos.')
       }catch(error){
         console.warn(error)
-        window.showNotice?.('Não foi possível sincronizar a agenda na nuvem: '+error.message,false)
+        window.showNotice?.('Não foi possível carregar a agenda da nuvem: '+error.message,false)
       }
     }
     startSync()
