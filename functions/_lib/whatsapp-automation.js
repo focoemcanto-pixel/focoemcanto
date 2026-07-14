@@ -1,16 +1,24 @@
 const SCHEDULE_KEY='whatsapp:schedule'
 const SETTINGS_KEY='whatsapp:automation:settings'
 const LOGS_KEY='whatsapp:send_logs'
+const GROUPS_KEY='whatsapp:groups'
 const DEFAULT_GROUPS=['120363404674461725@g.us','120363428159310476@g.us']
 const MAX_ATTEMPTS=3
 const LOCK_TTL_MS=5*60*1000
+
+async function readActiveGroups(env){
+  const saved=await env.FOCO_LINKS.get(GROUPS_KEY,{type:'json'})
+  if(!Array.isArray(saved)||!saved.length)return DEFAULT_GROUPS
+  return saved.filter(group=>group&&group.enabled!==false&&group.id).map(group=>String(group.id))
+}
 
 export async function getAutomationState(env){
   if(!env.FOCO_LINKS)throw new Error('FOCO_LINKS não configurado.')
   const settings=await env.FOCO_LINKS.get(SETTINGS_KEY,{type:'json'})||{}
   const items=await env.FOCO_LINKS.get(SCHEDULE_KEY,{type:'json'})||[]
+  const activeGroups=await readActiveGroups(env)
   const now=new Date()
-  const next=items.filter(isEligible).map(item=>({...item,dueAt:dueDate(item)})).filter(x=>x.dueAt>now).sort((a,b)=>a.dueAt-b.dueAt)[0]||null
+  const next=items.filter(item=>isEligible(item,now,activeGroups)).map(item=>({...item,dueAt:dueDate(item)})).filter(x=>x.dueAt>now).sort((a,b)=>a.dueAt-b.dueAt)[0]||null
   return {enabled:settings.enabled!==false,lastRunAt:settings.lastRunAt||null,lastRunStatus:settings.lastRunStatus||null,lastError:settings.lastError||null,lastTrigger:settings.lastTrigger||null,nextItem:next?{id:next.id,title:next.title,date:next.date,time:next.time}:null}
 }
 
@@ -27,8 +35,9 @@ export async function processDueMessages(env,{force=false,trigger='cron'}={}){
   const settings=await env.FOCO_LINKS.get(SETTINGS_KEY,{type:'json'})||{}
   if(settings.enabled===false&&!force)return {ok:true,paused:true,processed:0,results:[]}
   const items=await env.FOCO_LINKS.get(SCHEDULE_KEY,{type:'json'})||[]
+  const activeGroups=await readActiveGroups(env)
   const now=new Date()
-  const due=items.filter(item=>isEligible(item,now)&&(force||dueDate(item)<=now)).slice(0,20)
+  const due=items.filter(item=>isEligible(item,now,activeGroups)&&(force||dueDate(item)<=now)).slice(0,20)
   const results=[]
   for(const item of due){
     const runId=crypto.randomUUID()
@@ -36,8 +45,8 @@ export async function processDueMessages(env,{force=false,trigger='cron'}={}){
     item.deliveries=normalizeDeliveries(item)
     await saveItems(env,items)
     try{
-      const sendResult=await sendItem(env,item,async()=>{item.updatedAt=new Date().toISOString();await saveItems(env,items)})
-      const targets=getTargets(item)
+      const sendResult=await sendItem(env,item,activeGroups,async()=>{item.updatedAt=new Date().toISOString();await saveItems(env,items)})
+      const targets=getTargets(item,activeGroups)
       const successCount=targets.filter(target=>item.deliveries?.[target]?.ok).length
       const allOk=successCount===targets.length
       item.status=allOk?'ENVIADO':successCount>0?'PARCIAL':'ERRO'
@@ -59,21 +68,25 @@ export async function processDueMessages(env,{force=false,trigger='cron'}={}){
 }
 
 function normalizeDeliveries(item){return item.deliveries&&typeof item.deliveries==='object'?item.deliveries:item.delivery&&typeof item.delivery==='object'?item.delivery:{}}
-function getTargets(item){
+function getTargets(item,activeGroups){
   if(item.isTest===true){
     const number=String(item.testNumber||'').replace(/\D/g,'')
     if(!number)throw new Error('Disparo de teste sem número de teste configurado.')
     return[number]
   }
-  return Array.isArray(item.groups)&&item.groups.length?item.groups:DEFAULT_GROUPS
+  const configured=Array.isArray(item.groups)&&item.groups.length?item.groups:activeGroups
+  const activeSet=new Set(activeGroups)
+  const filtered=configured.filter(group=>activeSet.has(group))
+  if(!filtered.length)throw new Error('Nenhum grupo ativo configurado no Foco OS.')
+  return filtered
 }
 function attemptsFor(item,to){return Number(item.deliveries?.[to]?.attempts||0)}
 function isLocked(item,now){if(!item.processingAt)return false;const age=now-new Date(item.processingAt);return Number.isFinite(age)&&age<LOCK_TTL_MS}
-function isEligible(item,now=new Date()){
+function isEligible(item,now=new Date(),activeGroups=DEFAULT_GROUPS){
   if(!item||!['PENDENTE','ERRO','PARCIAL','PROCESSANDO'].includes(item.status)||item.autoEnabled===false||!item.date||!item.time)return false
   if(item.status==='PROCESSANDO'&&isLocked(item,now))return false
   let targets
-  try{targets=getTargets(item)}catch{return false}
+  try{targets=getTargets(item,activeGroups)}catch{return false}
   const deliveries=normalizeDeliveries(item)
   return targets.some(to=>!deliveries[to]?.ok&&attemptsFor({...item,deliveries},to)<MAX_ATTEMPTS)
 }
@@ -81,8 +94,8 @@ function dueDate(item){return new Date(`${item.date}T${item.time}:00-03:00`)}
 async function saveItems(env,items){await env.FOCO_LINKS.put(SCHEDULE_KEY,JSON.stringify(items))}
 async function appendLog(env,entry){try{const logs=await env.FOCO_LINKS.get(LOGS_KEY,{type:'json'})||[];logs.unshift({id:crypto.randomUUID(),at:new Date().toISOString(),...entry});await env.FOCO_LINKS.put(LOGS_KEY,JSON.stringify(logs.slice(0,200)))}catch{}}
 
-async function sendItem(env,item,onProgress){
-  const targets=getTargets(item),apiUrl=env.WASENDER_API_URL||'https://app.wasenderapi.com/api/send-message',results=[]
+async function sendItem(env,item,activeGroups,onProgress){
+  const targets=getTargets(item,activeGroups),apiUrl=env.WASENDER_API_URL||'https://app.wasenderapi.com/api/send-message',results=[]
   for(const to of targets){
     const previous=item.deliveries?.[to]
     if(previous?.ok){results.push({to,ok:true,skipped:true,status:previous.status||200,body:previous.body||null});continue}
