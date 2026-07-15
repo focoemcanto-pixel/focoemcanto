@@ -5,6 +5,7 @@ const GROUPS_KEY='whatsapp:groups'
 const DEFAULT_GROUPS=['120363404674461725@g.us','120363428159310476@g.us']
 const MAX_ATTEMPTS=3
 const LOCK_TTL_MS=5*60*1000
+const GROUP_SEND_DELAY_MS=6000
 
 async function readActiveGroups(env){
   const saved=await env.FOCO_LINKS.get(GROUPS_KEY,{type:'json'})
@@ -54,7 +55,7 @@ export async function processDueMessages(env,{force=false,trigger='cron'}={}){
       item.error=allOk?null:`${targets.length-successCount} destino(s) ainda não receberam o disparo.`
       item.processingAt=null;item.lockId=null
       results.push({id:item.id,ok:allOk,status:item.status,results:sendResult,error:item.error})
-      await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:item.status,ok:allOk,results:sendResult,isTest:Boolean(item.isTest)})
+      await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:item.status,ok:allOk,results:sendResult,isTest:Boolean(item.isTest),groupSendDelayMs:GROUP_SEND_DELAY_MS})
     }catch(error){
       item.status='ERRO';item.error=String(error?.message||error);item.processingAt=null;item.lockId=null
       results.push({id:item.id,ok:false,status:item.status,error:item.error})
@@ -93,25 +94,29 @@ function isEligible(item,now=new Date(),activeGroups=DEFAULT_GROUPS){
 function dueDate(item){return new Date(`${item.date}T${item.time}:00-03:00`)}
 async function saveItems(env,items){await env.FOCO_LINKS.put(SCHEDULE_KEY,JSON.stringify(items))}
 async function appendLog(env,entry){try{const logs=await env.FOCO_LINKS.get(LOGS_KEY,{type:'json'})||[];logs.unshift({id:crypto.randomUUID(),at:new Date().toISOString(),...entry});await env.FOCO_LINKS.put(LOGS_KEY,JSON.stringify(logs.slice(0,200)))}catch{}}
+function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 
 async function sendItem(env,item,activeGroups,onProgress){
   const targets=getTargets(item,activeGroups),apiUrl=env.WASENDER_API_URL||'https://app.wasenderapi.com/api/send-message',results=[]
-  for(const to of targets){
+  for(let index=0;index<targets.length;index++){
+    const to=targets[index]
     const previous=item.deliveries?.[to]
     if(previous?.ok){results.push({to,ok:true,skipped:true,status:previous.status||200,body:previous.body||null});continue}
     if(attemptsFor(item,to)>=MAX_ATTEMPTS){results.push({to,ok:false,skipped:true,final:true,status:previous?.status||0,body:'Limite de tentativas atingido.'});continue}
+    if(index>0&&!item.isTest)await wait(GROUP_SEND_DELAY_MS)
     let payload
     if(item.poll?.question&&Array.isArray(item.poll.options)&&item.poll.options.length>=2)payload={to,poll:{question:String(item.poll.question),options:item.poll.options.map(String).slice(0,12),multiSelect:Boolean(item.poll.multiSelect)}}
     else if(item.imageUrl)payload={to,text:String(item.message||''),imageUrl:String(item.imageUrl)}
     else if(item.message)payload={to,text:String(item.message)}
     else throw new Error('Disparo sem conteúdo.')
+    const startedAt=new Date().toISOString()
     try{
       const response=await fetch(apiUrl,{method:'POST',headers:{Authorization:`Bearer ${env.WASENDER_API_KEY}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload)})
       const raw=await response.text();let body=raw;try{body=JSON.parse(raw)}catch{}
-      const delivery={to,ok:response.ok,status:response.status,body,attempts:attemptsFor(item,to)+1,attemptedAt:new Date().toISOString(),acceptedByApi:response.ok,isTest:Boolean(item.isTest)}
+      const delivery={to,ok:response.ok,status:response.status,body,attempts:attemptsFor(item,to)+1,attemptedAt:startedAt,completedAt:new Date().toISOString(),acceptedByApi:response.ok,isTest:Boolean(item.isTest),sequence:index+1,delayBeforeMs:index>0&&!item.isTest?GROUP_SEND_DELAY_MS:0}
       item.deliveries[to]=delivery;results.push(delivery);await onProgress?.()
     }catch(error){
-      const delivery={to,ok:false,status:0,body:String(error?.message||error),attempts:attemptsFor(item,to)+1,attemptedAt:new Date().toISOString(),acceptedByApi:false,isTest:Boolean(item.isTest)}
+      const delivery={to,ok:false,status:0,body:String(error?.message||error),attempts:attemptsFor(item,to)+1,attemptedAt:startedAt,completedAt:new Date().toISOString(),acceptedByApi:false,isTest:Boolean(item.isTest),sequence:index+1,delayBeforeMs:index>0&&!item.isTest?GROUP_SEND_DELAY_MS:0}
       item.deliveries[to]=delivery;results.push(delivery);await onProgress?.()
     }
   }
