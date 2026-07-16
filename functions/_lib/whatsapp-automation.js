@@ -2,15 +2,36 @@ const SCHEDULE_KEY='whatsapp:schedule'
 const SETTINGS_KEY='whatsapp:automation:settings'
 const LOGS_KEY='whatsapp:send_logs'
 const GROUPS_KEY='whatsapp:groups'
+const EXECUTION_LOCK_KEY='whatsapp:automation:execution_lock'
 const DEFAULT_GROUPS=['120363404674461725@g.us','120363428159310476@g.us']
 const MAX_ATTEMPTS=3
 const LOCK_TTL_MS=5*60*1000
+const EXECUTION_LOCK_TTL_MS=45*1000
 const GROUP_SEND_DELAY_MS=6000
 
 async function readActiveGroups(env){
   const saved=await env.FOCO_LINKS.get(GROUPS_KEY,{type:'json'})
   if(!Array.isArray(saved)||!saved.length)return DEFAULT_GROUPS
   return saved.filter(group=>group&&group.enabled!==false&&group.id).map(group=>String(group.id))
+}
+function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
+
+async function acquireExecutionLock(env,trigger){
+  const now=Date.now()
+  const current=await env.FOCO_LINKS.get(EXECUTION_LOCK_KEY,{type:'json'})
+  if(current?.token&&Number(current.expiresAt)>now)return null
+  const token=crypto.randomUUID()
+  const lock={token,trigger,createdAt:new Date(now).toISOString(),expiresAt:now+EXECUTION_LOCK_TTL_MS}
+  await env.FOCO_LINKS.put(EXECUTION_LOCK_KEY,JSON.stringify(lock),{expirationTtl:60})
+  await wait(800)
+  const confirmed=await env.FOCO_LINKS.get(EXECUTION_LOCK_KEY,{type:'json'})
+  return confirmed?.token===token?lock:null
+}
+async function releaseExecutionLock(env,token){
+  try{
+    const current=await env.FOCO_LINKS.get(EXECUTION_LOCK_KEY,{type:'json'})
+    if(current?.token===token)await env.FOCO_LINKS.delete(EXECUTION_LOCK_KEY)
+  }catch{}
 }
 
 export async function getAutomationState(env){
@@ -33,39 +54,48 @@ export async function setAutomationEnabled(env,enabled){
 export async function processDueMessages(env,{force=false,trigger='cron'}={}){
   if(!env.FOCO_LINKS)throw new Error('FOCO_LINKS não configurado.')
   if(!env.WASENDER_API_KEY)throw new Error('WASENDER_API_KEY não configurada.')
-  const settings=await env.FOCO_LINKS.get(SETTINGS_KEY,{type:'json'})||{}
-  if(settings.enabled===false&&!force)return {ok:true,paused:true,processed:0,results:[]}
-  const items=await env.FOCO_LINKS.get(SCHEDULE_KEY,{type:'json'})||[]
-  const activeGroups=await readActiveGroups(env)
-  const now=new Date()
-  const due=items.filter(item=>isEligible(item,now,activeGroups)&&(force||dueDate(item)<=now)).slice(0,20)
-  const results=[]
-  for(const item of due){
-    const runId=crypto.randomUUID()
-    item.status='PROCESSANDO';item.processingAt=now.toISOString();item.lockId=runId;item.error=null
-    item.deliveries=normalizeDeliveries(item)
-    await saveItems(env,items)
-    try{
-      const sendResult=await sendItem(env,item,activeGroups,async()=>{item.updatedAt=new Date().toISOString();await saveItems(env,items)})
-      const targets=getTargets(item,activeGroups)
-      const successCount=targets.filter(target=>item.deliveries?.[target]?.ok).length
-      const allOk=successCount===targets.length
-      item.status=allOk?'ENVIADO':successCount>0?'PARCIAL':'ERRO'
-      item.sentAt=allOk?new Date().toISOString():null
-      item.error=allOk?null:`${targets.length-successCount} destino(s) ainda não receberam o disparo.`
-      item.processingAt=null;item.lockId=null
-      results.push({id:item.id,ok:allOk,status:item.status,results:sendResult,error:item.error})
-      await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:item.status,ok:allOk,results:sendResult,isTest:Boolean(item.isTest),groupSendDelayMs:GROUP_SEND_DELAY_MS})
-    }catch(error){
-      item.status='ERRO';item.error=String(error?.message||error);item.processingAt=null;item.lockId=null
-      results.push({id:item.id,ok:false,status:item.status,error:item.error})
-      await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:'ERRO',ok:false,error:item.error,isTest:Boolean(item.isTest)})
-    }
-    item.updatedAt=new Date().toISOString();await saveItems(env,items)
+  const executionLock=await acquireExecutionLock(env,trigger)
+  if(!executionLock){
+    await appendLog(env,{source:'automatic',trigger,status:'IGNORADO_CONCORRENCIA',ok:true,message:'Outra execução já estava processando a agenda.'})
+    return {ok:true,skipped:true,reason:'EXECUTION_ALREADY_RUNNING',processed:0,results:[]}
   }
-  const finished={...settings,lastRunAt:new Date().toISOString(),lastRunStatus:results.some(x=>!x.ok)?'ERRO':'OK',lastError:results.find(x=>!x.ok)?.error||null,lastTrigger:trigger}
-  await env.FOCO_LINKS.put(SETTINGS_KEY,JSON.stringify(finished))
-  return {ok:true,paused:false,processed:results.length,results}
+  try{
+    const settings=await env.FOCO_LINKS.get(SETTINGS_KEY,{type:'json'})||{}
+    if(settings.enabled===false&&!force)return {ok:true,paused:true,processed:0,results:[]}
+    const items=await env.FOCO_LINKS.get(SCHEDULE_KEY,{type:'json'})||[]
+    const activeGroups=await readActiveGroups(env)
+    const now=new Date()
+    const due=items.filter(item=>isEligible(item,now,activeGroups)&&(force||dueDate(item)<=now)).slice(0,20)
+    const results=[]
+    for(const item of due){
+      const runId=crypto.randomUUID()
+      item.status='PROCESSANDO';item.processingAt=now.toISOString();item.lockId=runId;item.error=null
+      item.deliveries=normalizeDeliveries(item)
+      await saveItems(env,items)
+      try{
+        const sendResult=await sendItem(env,item,activeGroups,async()=>{item.updatedAt=new Date().toISOString();await saveItems(env,items)})
+        const targets=getTargets(item,activeGroups)
+        const successCount=targets.filter(target=>item.deliveries?.[target]?.ok).length
+        const allOk=successCount===targets.length
+        item.status=allOk?'ENVIADO':successCount>0?'PARCIAL':'ERRO'
+        item.sentAt=allOk?new Date().toISOString():null
+        item.error=allOk?null:`${targets.length-successCount} destino(s) ainda não receberam o disparo.`
+        item.processingAt=null;item.lockId=null
+        results.push({id:item.id,ok:allOk,status:item.status,results:sendResult,error:item.error})
+        await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:item.status,ok:allOk,results:sendResult,isTest:Boolean(item.isTest),groupSendDelayMs:GROUP_SEND_DELAY_MS,executionToken:executionLock.token})
+      }catch(error){
+        item.status='ERRO';item.error=String(error?.message||error);item.processingAt=null;item.lockId=null
+        results.push({id:item.id,ok:false,status:item.status,error:item.error})
+        await appendLog(env,{source:'automatic',trigger,itemId:item.id,title:item.title,status:'ERRO',ok:false,error:item.error,isTest:Boolean(item.isTest),executionToken:executionLock.token})
+      }
+      item.updatedAt=new Date().toISOString();await saveItems(env,items)
+    }
+    const finished={...settings,lastRunAt:new Date().toISOString(),lastRunStatus:results.some(x=>!x.ok)?'ERRO':'OK',lastError:results.find(x=>!x.ok)?.error||null,lastTrigger:trigger}
+    await env.FOCO_LINKS.put(SETTINGS_KEY,JSON.stringify(finished))
+    return {ok:true,paused:false,processed:results.length,results}
+  }finally{
+    await releaseExecutionLock(env,executionLock.token)
+  }
 }
 
 function normalizeDeliveries(item){return item.deliveries&&typeof item.deliveries==='object'?item.deliveries:item.delivery&&typeof item.delivery==='object'?item.delivery:{}}
@@ -94,7 +124,6 @@ function isEligible(item,now=new Date(),activeGroups=DEFAULT_GROUPS){
 function dueDate(item){return new Date(`${item.date}T${item.time}:00-03:00`)}
 async function saveItems(env,items){await env.FOCO_LINKS.put(SCHEDULE_KEY,JSON.stringify(items))}
 async function appendLog(env,entry){try{const logs=await env.FOCO_LINKS.get(LOGS_KEY,{type:'json'})||[];logs.unshift({id:crypto.randomUUID(),at:new Date().toISOString(),...entry});await env.FOCO_LINKS.put(LOGS_KEY,JSON.stringify(logs.slice(0,200)))}catch{}}
-function wait(ms){return new Promise(resolve=>setTimeout(resolve,ms))}
 
 async function sendItem(env,item,activeGroups,onProgress){
   const targets=getTargets(item,activeGroups),apiUrl=env.WASENDER_API_URL||'https://app.wasenderapi.com/api/send-message',results=[]
@@ -113,10 +142,10 @@ async function sendItem(env,item,activeGroups,onProgress){
     try{
       const response=await fetch(apiUrl,{method:'POST',headers:{Authorization:`Bearer ${env.WASENDER_API_KEY}`,'Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload)})
       const raw=await response.text();let body=raw;try{body=JSON.parse(raw)}catch{}
-      const delivery={to,ok:response.ok,status:response.status,body,attempts:attemptsFor(item,to)+1,attemptedAt:startedAt,completedAt:new Date().toISOString(),acceptedByApi:response.ok,isTest:Boolean(item.isTest),sequence:index+1,delayBeforeMs:index>0&&!item.isTest?GROUP_SEND_DELAY_MS:0}
+      const delivery={to,ok:response.ok,status:response.status,body,attempts:attemptsFor(item,to)+1,attemptedAt:startedAt,completedAt:new Date().toISOString(),acceptedByApi:response.ok,isTest:Boolean(item.isTest),sequence:index+1,delayBeforeMs:index>0&&!item.isTest?GROUP_SEND_DELAY_MS:0,executionToken:item.lockId}
       item.deliveries[to]=delivery;results.push(delivery);await onProgress?.()
     }catch(error){
-      const delivery={to,ok:false,status:0,body:String(error?.message||error),attempts:attemptsFor(item,to)+1,attemptedAt:startedAt,completedAt:new Date().toISOString(),acceptedByApi:false,isTest:Boolean(item.isTest),sequence:index+1,delayBeforeMs:index>0&&!item.isTest?GROUP_SEND_DELAY_MS:0}
+      const delivery={to,ok:false,status:0,body:String(error?.message||error),attempts:attemptsFor(item,to)+1,attemptedAt:startedAt,completedAt:new Date().toISOString(),acceptedByApi:false,isTest:Boolean(item.isTest),sequence:index+1,delayBeforeMs:index>0&&!item.isTest?GROUP_SEND_DELAY_MS:0,executionToken:item.lockId}
       item.deliveries[to]=delivery;results.push(delivery);await onProgress?.()
     }
   }
