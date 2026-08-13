@@ -9,6 +9,7 @@ function json(data, status = 200) {
 
 const clean = (value, max = 500) => String(value || '').trim().slice(0, max)
 const phone = value => clean(value, 30).replace(/\D/g, '')
+const allowedColors = new Set(['#7427b9','#4f1b93','#236da0','#168c8c','#26784d','#6d7f2b','#aa7220','#b85620','#ad386f','#873044'])
 
 async function readPrefix(kv, prefix) {
   const out = []
@@ -42,6 +43,7 @@ export async function onRequestPost({ request, env }) {
     const input = body.student || {}
     const id = clean(input.id || `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`, 80)
     const previous = await env.FOCO_LINKS.get(`aulas:student:${id}`, 'json')
+    const requestedColor = clean(input.color, 20).toLowerCase()
     const student = {
       id,
       name: clean(input.name, 120),
@@ -57,6 +59,7 @@ export async function onRequestPost({ request, env }) {
       monthlyValue: clean(input.monthlyValue, 30),
       paymentDay: clean(input.paymentDay, 10),
       notes: clean(input.notes, 1000),
+      color: allowedColors.has(requestedColor) ? requestedColor : (previous?.color || '#7427b9'),
       status: input.status === 'inactive' ? 'inactive' : 'active',
       createdAt: previous?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
