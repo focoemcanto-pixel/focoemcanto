@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import './aulas.css'
 import './price-fix.css'
+import './availability.css'
 
 export const metadata: Metadata = {
   title: 'Aulas Individuais de Canto | Foco em Canto',
