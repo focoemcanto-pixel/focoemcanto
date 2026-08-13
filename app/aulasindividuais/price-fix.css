@@ -1,0 +1,68 @@
+.ai-price{
+  display:grid;
+  grid-template-columns:max-content max-content;
+  align-items:end;
+  justify-content:start;
+  column-gap:8px;
+  row-gap:4px;
+  margin:28px 0 18px;
+}
+
+.ai-price small{
+  position:static;
+  grid-column:1 / -1;
+  margin:0;
+  display:block;
+  font-size:12px;
+  line-height:1.2;
+  font-weight:700;
+  letter-spacing:.02em;
+  color:#818792;
+}
+
+.ai-price strong{
+  display:block;
+  font-size:44px;
+  line-height:.95;
+  letter-spacing:-.045em;
+  white-space:nowrap;
+}
+
+.ai-price span{
+  display:block;
+  margin:0 0 4px;
+  font-size:18px;
+  line-height:1;
+  color:#818792;
+  white-space:nowrap;
+}
+
+.ai-plan-card.featured .ai-price small,
+.ai-plan-card.featured .ai-price span{
+  color:#aeb5c0;
+}
+
+@media(max-width:600px){
+  .ai-price{
+    margin:26px 0 22px;
+    column-gap:7px;
+  }
+
+  .ai-price strong{
+    font-size:40px;
+  }
+
+  .ai-price span{
+    font-size:16px;
+    margin-bottom:3px;
+  }
+
+  .ai-price small{
+    font-size:11px;
+  }
+}
+
+@media(max-width:380px){
+  .ai-price strong{font-size:36px}
+  .ai-price span{font-size:15px}
+}
