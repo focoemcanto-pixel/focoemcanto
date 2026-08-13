@@ -9,7 +9,8 @@ const days=['Segunda','Terça','Quarta','Quinta','Sexta','Sábado']
 const statusLabel:Record<string,string>={waiting:'Na lista',contacted:'Contatado',offered:'Vaga oferecida',enrolled:'Matriculado',inactive:'Inativo'}
 
 function wa(phone:string,message:string){const p=phone.startsWith('55')?phone:`55${phone}`;return `https://wa.me/${p}?text=${encodeURIComponent(message)}`}
-function matchScore(lead:Lead,slot:Slot){let s=0;const exact=lead.availability?.some(a=>a.startsWith(slot.day));if(exact)s+=55;if(lead.modality==='Tenho interesse nas duas'||lead.modality===slot.modality)s+=25;if(lead.flexible)s+=8;if(lead.startIntent==='Imediatamente')s+=12;else if(lead.startIntent==='Nos próximos 30 dias')s+=7;return Math.min(s,100)}
+function slotPeriod(time:string){const hour=Number(time.split(':')[0]||0);return hour<12?'Manhã':hour<18?'Tarde':'Noite'}
+function matchScore(lead:Lead,slot:Slot){let s=0;const target=`${slot.day} - ${slotPeriod(slot.time)}`;const exact=lead.availability?.includes(target);const sameDay=lead.availability?.some(a=>a.startsWith(slot.day));if(exact)s+=55;else if(sameDay&&lead.flexible)s+=35;if(lead.modality==='Tenho interesse nas duas'||lead.modality===slot.modality)s+=25;if(lead.flexible)s+=8;if(lead.startIntent==='Imediatamente')s+=12;else if(lead.startIntent==='Nos próximos 30 dias')s+=7;return Math.min(s,100)}
 
 export default function AulasManager(){
  const [leads,setLeads]=useState<Lead[]>([]),[slots,setSlots]=useState<Slot[]>([]),[tab,setTab]=useState<'agenda'|'interessados'>('agenda'),[loading,setLoading]=useState(true)
