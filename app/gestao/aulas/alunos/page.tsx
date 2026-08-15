@@ -1,5 +1,5 @@
-import AlunosManager from './AlunosManager'
+import AlunosManagerV2 from './AlunosManagerV2'
 
 export default function AlunosPage() {
-  return <AlunosManager />
+  return <AlunosManagerV2 />
 }
