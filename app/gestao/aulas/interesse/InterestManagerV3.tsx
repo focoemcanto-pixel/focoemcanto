@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import styles from '../unified-aulas.module.css'
+import premium from './interest-v3.module.css'
 
 type Lead={id?:string;status?:string;name?:string;whatsapp?:string;modality?:string;availability?:unknown;flexible?:boolean;startIntent?:string;goal?:string;neighborhood?:string;city?:string;createdAt?:string}
 type Slot={id:string;day:string;dayOrder?:number;time:string;modality:string;status:string;studentId?:string}
-
 type Match={slot:Slot;score:number;label:string}
 
 const txt=(v:unknown)=>typeof v==='string'?v:''
@@ -96,11 +96,10 @@ export default function InterestManagerV3(){
     const ok=window.confirm(`Preencher ${match.slot.day}, ${match.slot.time} (${modality}) com ${txt(lead.name)||'este interessado'}?\n\nIsso criará o aluno, ocupará a vaga e marcará o cadastro como matriculado.`)
     if(!ok)return
     setBusy(`fill-${lead.id}`)
-    try{
-      await post({action:'fillSlotFromLead',leadId:lead.id,slotId:match.slot.id,modality})
-      await load()
-    }catch(e:any){alert(e.message)}finally{setBusy('')}
+    try{await post({action:'fillSlotFromLead',leadId:lead.id,slotId:match.slot.id,modality});await load()}catch(e:any){alert(e.message)}finally{setBusy('')}
   }
+
+  const statusClass=(status?:string)=>premium[`status_${txt(status)||'waiting'}`]||premium.status_waiting
 
   return <main className={styles.page}>
     <header className={styles.top}><div><span>FOCO EM CANTO</span><h1>Gestão de Aulas</h1></div><div className={styles.topActions}><a href="/aulasindividuais/" target="_blank">Página pública ↗</a></div></header>
@@ -108,39 +107,39 @@ export default function InterestManagerV3(){
       <nav className={styles.tabs}><a href="/gestao/aulas/">Agenda</a><a href="/gestao/aulas/alunos/">Alunos</a><a href="/gestao/aulas/interesse/" className={styles.active}>Lista de interesse</a></nav>
 
       <section style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:12,marginBottom:22}}>
-        <div className={styles.smartStat}><span>Interessados ativos</span><strong>{enriched.filter(l=>['waiting','contacted','offered',''].includes(txt(l.status))).length}</strong><small>Pessoas aguardando oportunidade</small></div>
-        <div className={styles.smartStat}><span>Encaixes perfeitos</span><strong>{perfect}</strong><small>Compatibilidade alta com vagas abertas</small></div>
-        <div className={styles.smartStat}><span>Vagas abertas</span><strong>{openSlots.length}</strong><small>Horários prontos para preenchimento</small></div>
+        <div className={premium.smartStat}><span>Interessados ativos</span><strong>{enriched.filter(l=>['waiting','contacted','offered',''].includes(txt(l.status))).length}</strong><small>Pessoas aguardando oportunidade</small></div>
+        <div className={premium.smartStat}><span>Encaixes perfeitos</span><strong>{perfect}</strong><small>Compatibilidade alta com vagas abertas</small></div>
+        <div className={premium.smartStat}><span>Vagas abertas</span><strong>{openSlots.length}</strong><small>Horários prontos para preenchimento</small></div>
       </section>
 
       <div className={styles.sectionBar}><div><h2>Lista de interesse</h2><p>Prioridade inteligente baseada em modalidade, dia, turno e horário.</p></div></div>
-      <div className={styles.smartFilters}>
-        {[['active','Ativos'],['waiting','Na espera'],['contacted','Contato feito'],['offered','Vaga oferecida'],['enrolled','Matriculados'],['all','Todos']].map(([v,l])=><button key={v} className={filter===v?styles.smartFilterActive:''} onClick={()=>setFilter(v)}>{l}</button>)}
+      <div className={premium.smartFilters}>
+        {[['active','Ativos'],['waiting','Na espera'],['contacted','Contato feito'],['offered','Vaga oferecida'],['enrolled','Matriculados'],['all','Todos']].map(([v,l])=><button key={v} className={filter===v?premium.smartFilterActive:''} onClick={()=>setFilter(v)}>{l}</button>)}
       </div>
 
       {loading&&<div className={styles.loading}>Analisando interessados e vagas...</div>}
       {error&&<div className={styles.error}>{error}<div style={{marginTop:10}}><button onClick={load}>Tentar novamente</button></div></div>}
-      {!loading&&!error&&<section className={styles.smartLeadGrid}>
+      {!loading&&!error&&<section className={premium.smartLeadGrid}>
         {visible.map((lead,i)=>{
           const name=txt(lead.name)||'Interessado';const best=lead.best as Match|null
           const msg=best?`Oi, ${name.split(' ')[0]}! Tudo bem? Aqui é o Marcos 😊 Surgiu uma vaga para aula individual na ${best.slot.day.toLowerCase()}, às ${best.slot.time}, na modalidade ${best.slot.modality.toLowerCase()}. Você ainda tem interesse em iniciar?`:`Oi, ${name.split(' ')[0]}! Tudo bem? Aqui é o Marcos 😊 Você se cadastrou na minha lista de interesse para aulas individuais de canto.`
-          return <article className={styles.smartLeadCard} key={txt(lead.id)||`lead-${i}`}>
-            <div className={styles.smartLeadTop}>
-              <div><div className={styles.smartNameRow}><strong>{name}</strong><span className={`${styles.statusPill} ${styles[`status_${txt(lead.status)||'waiting'}`]||''}`}>{statusLabel(lead.status)}</span></div><p>{txt(lead.modality)||'Modalidade não informada'} • {txt(lead.startIntent)||'início não informado'}</p></div>
-              {best?<div className={styles.matchBadge}><b>{best.score}%</b><span>{best.label}</span></div>:<div className={styles.noMatchBadge}>Sem encaixe agora</div>}
+          return <article className={premium.smartLeadCard} key={txt(lead.id)||`lead-${i}`}>
+            <div className={premium.smartLeadTop}>
+              <div><div className={premium.smartNameRow}><strong>{name}</strong><span className={`${premium.statusPill} ${statusClass(lead.status)}`}>{statusLabel(lead.status)}</span></div><p>{txt(lead.modality)||'Modalidade não informada'} • {txt(lead.startIntent)||'início não informado'}</p></div>
+              {best?<div className={premium.matchBadge}><b>{best.score}%</b><span>{best.label}</span></div>:<div className={premium.noMatchBadge}>Sem encaixe agora</div>}
             </div>
 
-            <div className={styles.smartLeadBody}>
-              <div><span className={styles.smartLabel}>DISPONIBILIDADE</span><p>{listAvailability(lead.availability).join(' • ')||'Não informada'}</p></div>
-              <div><span className={styles.smartLabel}>OBJETIVO</span><p>{txt(lead.goal)||'Não informado'}</p></div>
+            <div className={premium.smartLeadBody}>
+              <div><span className={premium.smartLabel}>DISPONIBILIDADE</span><p>{listAvailability(lead.availability).join(' • ')||'Não informada'}</p></div>
+              <div><span className={premium.smartLabel}>OBJETIVO</span><p>{txt(lead.goal)||'Não informado'}</p></div>
             </div>
 
-            {best&&<div className={styles.bestSlot}><div><span>Melhor vaga sugerida</span><strong>{best.slot.day} • {best.slot.time}</strong><small>{best.slot.modality}</small></div><a href="/gestao/aulas/">Ver na agenda ↗</a></div>}
+            {best&&<div className={premium.bestSlot}><div><span>Melhor vaga sugerida</span><strong>{best.slot.day} • {best.slot.time}</strong><small>{best.slot.modality}</small></div><a href="/gestao/aulas/">Ver na agenda ↗</a></div>}
 
-            <div className={styles.smartActions}>
-              {lead.whatsapp&&<a className={styles.whatsappBtn} href={wa(lead.whatsapp,msg)} target="_blank">WhatsApp</a>}
+            <div className={premium.smartActions}>
+              {lead.whatsapp&&<a className={premium.whatsappBtn} href={wa(lead.whatsapp,msg)} target="_blank">WhatsApp</a>}
               {txt(lead.status)!=='contacted'&&txt(lead.status)!=='enrolled'&&<button disabled={busy===`status-${lead.id}`} onClick={()=>updateStatus(lead,'contacted')}>Marcar contato</button>}
-              {best&&txt(lead.status)!=='enrolled'&&<button className={styles.fillBtn} disabled={busy===`fill-${lead.id}`} onClick={()=>fill(lead,best)}>{busy===`fill-${lead.id}`?'Preenchendo...':'Preencher vaga'}</button>}
+              {best&&txt(lead.status)!=='enrolled'&&<button className={premium.fillBtn} disabled={busy===`fill-${lead.id}`} onClick={()=>fill(lead,best)}>{busy===`fill-${lead.id}`?'Preenchendo...':'Preencher vaga'}</button>}
             </div>
           </article>
         })}
