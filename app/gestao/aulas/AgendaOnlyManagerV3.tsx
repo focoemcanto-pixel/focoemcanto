@@ -64,7 +64,24 @@ export default function AgendaOnlyManagerV3(){
   useEffect(()=>{load()},[])
 
   async function post(payload:any){const r=await fetch('/api/admin/aulas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Não foi possível concluir.');return d}
-  async function addSlot(e:FormEvent){e.preventDefault();const slot={...newSlot,dayOrder:days.indexOf(newSlot.day)+1};try{const d=await post({action:'saveSlot',slot});if(d?.slot)setSlots(v=>[...v.filter(s=>s.id!==d.slot.id),d.slot]);setOpening(false);setDay(newSlot.day);setNewSlot({...blank})}catch(e:any){alert(e.message)}}
+  async function addSlot(e:FormEvent){
+    e.preventDefault()
+    const slot={...newSlot,dayOrder:days.indexOf(newSlot.day)+1}
+    const tempId=`temp-${Date.now()}-${Math.random().toString(36).slice(2,7)}`
+    const optimistic:Slot={...slot,id:tempId,studentId:''}
+    setSlots(v=>[...v,optimistic])
+    setDay(slot.day)
+    setOpening(false)
+    setNewSlot({...blank})
+    try{
+      const d=await post({action:'saveSlot',slot})
+      if(!d?.slot)throw new Error('O servidor não confirmou a vaga.')
+      setSlots(v=>v.map(s=>s.id===tempId?d.slot:s))
+    }catch(e:any){
+      setSlots(v=>v.filter(s=>s.id!==tempId))
+      alert(e.message)
+    }
+  }
   async function updateStatus(status:Slot['status']){if(!selected)return;try{const d=await post({action:'saveSlot',slot:{...selected,status}});setSlots(v=>v.map(s=>s.id===selected.id?d.slot:s));setSelected(d.slot)}catch(e:any){alert(e.message)}}
   async function remove(){if(!selected||!confirm(`Remover ${selected.day} ${selected.time}?`))return;try{await post({action:'deleteSlot',id:selected.id});setSlots(v=>v.filter(s=>s.id!==selected.id));setSelected(null)}catch(e:any){alert(e.message)}}
   function ranked(slot:Slot){return leads.filter(l=>['waiting','contacted','offered',''].includes(text(l.status))).map(lead=>({lead,score:score(lead,slot)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score)}
