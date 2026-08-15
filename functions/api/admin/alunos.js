@@ -9,6 +9,11 @@ function json(data, status = 200) {
 
 const clean = (value, max = 500) => String(value || '').trim().slice(0, max)
 const phone = value => clean(value, 30).replace(/\D/g, '')
+const lessonDuration = value => {
+  const n = Number(value || 60)
+  return [30,45,60,75,90,105,120].includes(n) ? n : 60
+}
+const weeklyFrequency = value => Number(value) === 2 ? 2 : 1
 
 async function readPrefix(kv, prefix) {
   const out = []
@@ -23,6 +28,7 @@ async function readPrefix(kv, prefix) {
 }
 
 function normalizeStudent(raw = {}) {
+  const frequency = weeklyFrequency(raw.weeklyFrequency)
   return {
     ...raw,
     id: clean(raw.id, 80),
@@ -36,6 +42,11 @@ function normalizeStudent(raw = {}) {
     day: clean(raw.day, 20),
     dayOrder: Number(raw.dayOrder || 9),
     time: clean(raw.time, 10),
+    durationMinutes: lessonDuration(raw.durationMinutes),
+    weeklyFrequency: frequency,
+    secondDay: frequency === 2 ? clean(raw.secondDay, 20) : '',
+    secondDayOrder: frequency === 2 ? Number(raw.secondDayOrder || 9) : 9,
+    secondTime: frequency === 2 ? clean(raw.secondTime, 10) : '',
     monthlyValue: clean(raw.monthlyValue, 30),
     paymentDay: clean(raw.paymentDay, 10),
     notes: clean(raw.notes, 1000),
@@ -72,6 +83,8 @@ export async function onRequestPost({ request, env }) {
       updatedAt: new Date().toISOString(),
     })
     if (!clean(input.name, 120) || !student.day || !student.time) return json({ error: 'Nome, dia e horário são obrigatórios.' }, 422)
+    if (student.weeklyFrequency === 2 && (!student.secondDay || !student.secondTime)) return json({ error: 'Informe o dia e o horário do segundo encontro semanal.' }, 422)
+    if (student.weeklyFrequency === 2 && student.day === student.secondDay && student.time === student.secondTime) return json({ error: 'Os dois encontros semanais não podem ter o mesmo dia e horário.' }, 422)
 
     await env.FOCO_LINKS.put(`aulas:student:${id}`, JSON.stringify(student))
 
@@ -89,22 +102,31 @@ export async function onRequestPost({ request, env }) {
     }
 
     if (student.status === 'active') {
-      const target = slots.find(slot => slot.day === student.day && slot.time === student.time && slot.modality === student.modality && (!slot.studentId || slot.studentId === id))
-      const slotId = target?.id || `${Date.now()}-${crypto.randomUUID().slice(0, 7)}`
-      const slot = {
-        ...(target || {}),
-        id: slotId,
-        day: student.day,
-        dayOrder: student.dayOrder,
-        time: student.time,
-        modality: student.modality,
-        status: 'occupied',
-        studentId: id,
-        studentName: student.name,
-        studentWhatsapp: student.whatsapp,
-        updatedAt: new Date().toISOString(),
+      const schedules = [
+        { day: student.day, dayOrder: student.dayOrder, time: student.time },
+        ...(student.weeklyFrequency === 2 ? [{ day: student.secondDay, dayOrder: student.secondDayOrder, time: student.secondTime }] : []),
+      ]
+      const usedSlotIds = new Set()
+      for (const schedule of schedules) {
+        const target = slots.find(slot => !usedSlotIds.has(slot.id) && slot.day === schedule.day && slot.time === schedule.time && slot.modality === student.modality && (!slot.studentId || slot.studentId === id))
+        const slotId = target?.id || `${Date.now()}-${crypto.randomUUID().slice(0, 7)}`
+        usedSlotIds.add(slotId)
+        const slot = {
+          ...(target || {}),
+          id: slotId,
+          day: schedule.day,
+          dayOrder: schedule.dayOrder,
+          time: schedule.time,
+          durationMinutes: student.durationMinutes,
+          modality: student.modality,
+          status: 'occupied',
+          studentId: id,
+          studentName: student.name,
+          studentWhatsapp: student.whatsapp,
+          updatedAt: new Date().toISOString(),
+        }
+        await env.FOCO_LINKS.put(`aulas:slot:${slotId}`, JSON.stringify(slot))
       }
-      await env.FOCO_LINKS.put(`aulas:slot:${slotId}`, JSON.stringify(slot))
     }
     return json({ ok: true, student })
   }
