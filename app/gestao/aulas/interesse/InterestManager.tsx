@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import styles from '../unified-aulas.module.css'
 
 type Lead={id:string;status?:string;name?:string;whatsapp?:string;modality?:string;availability?:string[];startIntent?:string;goal?:string;neighborhood?:string;city?:string}
@@ -14,16 +14,27 @@ export default function InterestManager(){
   const [loading,setLoading]=useState(true)
   const [error,setError]=useState('')
 
-  useEffect(()=>{
+  const load=useCallback(async()=>{
+    setLoading(true)
+    setError('')
     const controller=new AbortController()
-    const timer=setTimeout(()=>controller.abort(),12000)
-    fetch('/api/admin/interessados',{cache:'no-store',signal:controller.signal})
-      .then(async r=>{if(!r.ok)throw new Error('Não foi possível carregar a lista.');return r.json()})
-      .then(d=>setLeads(Array.isArray(d.leads)?d.leads:[]))
-      .catch(err=>setError(err?.name==='AbortError'?'A lista demorou demais para responder. Atualize a página.':err?.message||'Erro ao carregar.'))
-      .finally(()=>{clearTimeout(timer);setLoading(false)})
-    return()=>{clearTimeout(timer);controller.abort()}
+    const timer=setTimeout(()=>controller.abort(),6000)
+    try{
+      const r=await fetch('/api/admin/interessados',{cache:'no-store',signal:controller.signal})
+      const d=await r.json().catch(()=>({}))
+      if(!r.ok)throw new Error(d?.detail||d?.error||'Não foi possível carregar a lista.')
+      setLeads(Array.isArray(d.leads)?d.leads:[])
+      if(d.partial)setError(`A lista carregou parcialmente. ${d.failedCount||0} registro(s) não responderam.`)
+    }catch(err:any){
+      setLeads([])
+      setError(err?.name==='AbortError'?'A API demorou mais de 6 segundos para responder.':'Falha ao carregar a lista: '+(err?.message||'erro desconhecido'))
+    }finally{
+      clearTimeout(timer)
+      setLoading(false)
+    }
   },[])
+
+  useEffect(()=>{load()},[load])
 
   return <main className={styles.page}>
     <header className={styles.top}>
@@ -38,14 +49,14 @@ export default function InterestManager(){
       </nav>
       <div className={styles.sectionBar}><div><h2>Lista de interesse</h2><p>Pessoas que solicitaram uma vaga pela página pública.</p></div></div>
       {loading&&<div className={styles.loading}>Carregando interessados...</div>}
-      {error&&<div className={styles.error}>{error}</div>}
-      {!loading&&!error&&<section className={styles.leads}>
+      {!loading&&error&&<div className={styles.error} style={{display:'flex',justifyContent:'space-between',gap:12,alignItems:'center'}}><span>{error}</span><button onClick={load} style={{padding:'9px 12px',borderRadius:9,border:0,fontWeight:800,cursor:'pointer'}}>Tentar novamente</button></div>}
+      {!loading&&<section className={styles.leads}>
         {leads.map((lead,index)=>{const name=text(lead.name)||'Interessado';return <article className={styles.leadCard} key={text(lead.id)||`lead-${index}`}>
           <div><strong>{name}</strong><span>{text(lead.modality)||'Modalidade não informada'} • {text(lead.startIntent)||'início não informado'}</span><small>{availability(lead.availability)||'Disponibilidade não informada'}</small></div>
           <div className={styles.goal}>{text(lead.goal)||'Objetivo não informado'}</div>
           {lead.whatsapp&&<a href={wa(lead.whatsapp,`Oi, ${name.split(' ')[0]}! Tudo bem? Aqui é o Marcos 😊 Você se cadastrou na minha lista de interesse para aulas individuais de canto.`)} target="_blank">WhatsApp</a>}
         </article>})}
-        {!leads.length&&<div className={styles.bigEmpty}>Ainda não há interessados cadastrados.</div>}
+        {!leads.length&&!error&&<div className={styles.bigEmpty}>Ainda não há interessados cadastrados.</div>}
       </section>}
     </div>
   </main>
