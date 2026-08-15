@@ -9,11 +9,9 @@ function json(data, status = 200) {
 
 const clean = (value, max = 500) => String(value || '').trim().slice(0, max)
 const phone = value => clean(value, 30).replace(/\D/g, '')
-const lessonDuration = value => {
-  const n = Number(value || 60)
-  return [30,45,60,75,90,105,120].includes(n) ? n : 60
-}
-const weeklyFrequency = value => Number(value) === 2 ? 2 : 1
+const toMin = value => { const [h,m] = clean(value,10).split(':').map(Number); return Number.isFinite(h)&&Number.isFinite(m) ? h*60+m : 0 }
+const addMinutes = (time, n = 60) => { const total = toMin(time) + n; return `${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}` }
+const durationFrom = (start, end, fallback = 60) => { const d = toMin(end)-toMin(start); return d > 0 ? d : fallback }
 
 async function readPrefix(kv, prefix) {
   const out = []
@@ -28,7 +26,10 @@ async function readPrefix(kv, prefix) {
 }
 
 function normalizeStudent(raw = {}) {
-  const frequency = weeklyFrequency(raw.weeklyFrequency)
+  const time = clean(raw.time,10)
+  const fallbackDuration = Number(raw.durationMinutes || 60) > 0 ? Number(raw.durationMinutes || 60) : 60
+  const endTime = clean(raw.endTime,10) || (time ? addMinutes(time, fallbackDuration) : '')
+  const durationMinutes = durationFrom(time, endTime, fallbackDuration)
   return {
     ...raw,
     id: clean(raw.id, 80),
@@ -38,15 +39,12 @@ function normalizeStudent(raw = {}) {
     modality: clean(raw.modality || 'Online', 30),
     address: clean(raw.address, 300),
     neighborhood: clean(raw.neighborhood, 120),
-    city: clean(raw.city, 120),
+    city: clean(raw.city || 'Salvador', 120),
     day: clean(raw.day, 20),
     dayOrder: Number(raw.dayOrder || 9),
-    time: clean(raw.time, 10),
-    durationMinutes: lessonDuration(raw.durationMinutes),
-    weeklyFrequency: frequency,
-    secondDay: frequency === 2 ? clean(raw.secondDay, 20) : '',
-    secondDayOrder: frequency === 2 ? Number(raw.secondDayOrder || 9) : 9,
-    secondTime: frequency === 2 ? clean(raw.secondTime, 10) : '',
+    time,
+    endTime,
+    durationMinutes,
     monthlyValue: clean(raw.monthlyValue, 30),
     paymentDay: clean(raw.paymentDay, 10),
     notes: clean(raw.notes, 1000),
@@ -54,6 +52,8 @@ function normalizeStudent(raw = {}) {
     status: raw.status === 'inactive' ? 'inactive' : 'active',
   }
 }
+
+const overlaps = (aStart,aEnd,bStart,bEnd) => toMin(aStart) < toMin(bEnd) && toMin(aEnd) > toMin(bStart)
 
 export async function onRequestGet({ request, env }) {
   if (!(await isAdminAuthenticated(request, env))) return json({ error: 'Não autorizado.' }, 401)
@@ -67,7 +67,6 @@ export async function onRequestGet({ request, env }) {
 export async function onRequestPost({ request, env }) {
   if (!(await isAdminAuthenticated(request, env))) return json({ error: 'Não autorizado.' }, 401)
   if (!env?.FOCO_LINKS) return json({ error: 'Base indisponível.' }, 500)
-
   let body
   try { body = await request.json() } catch { return json({ error: 'Dados inválidos.' }, 400) }
   const action = clean(body.action, 40)
@@ -76,57 +75,40 @@ export async function onRequestPost({ request, env }) {
     const input = body.student || {}
     const id = clean(input.id || `${Date.now()}-${crypto.randomUUID().slice(0, 8)}`, 80)
     const previous = await env.FOCO_LINKS.get(`aulas:student:${id}`, 'json')
-    const student = normalizeStudent({
-      ...input,
-      id,
-      createdAt: previous?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    })
-    if (!clean(input.name, 120) || !student.day || !student.time) return json({ error: 'Nome, dia e horário são obrigatórios.' }, 422)
-    if (student.weeklyFrequency === 2 && (!student.secondDay || !student.secondTime)) return json({ error: 'Informe o dia e o horário do segundo encontro semanal.' }, 422)
-    if (student.weeklyFrequency === 2 && student.day === student.secondDay && student.time === student.secondTime) return json({ error: 'Os dois encontros semanais não podem ter o mesmo dia e horário.' }, 422)
+    const student = normalizeStudent({ ...input, id, createdAt: previous?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() })
+    if (!clean(input.name, 120) || !student.day || !student.time || !student.endTime) return json({ error: 'Nome, dia, início e término são obrigatórios.' }, 422)
+    if (toMin(student.endTime) <= toMin(student.time)) return json({ error: 'O término precisa ser depois do início.' }, 422)
+
+    const rawStudents = await readPrefix(env.FOCO_LINKS, 'aulas:student:')
+    const conflict = rawStudents.map(normalizeStudent).find(other => other.id !== id && other.status === 'active' && other.day === student.day && overlaps(student.time, student.endTime, other.time, other.endTime))
+    if (conflict) return json({ error: `Conflito de horário com ${conflict.name}: ${conflict.time}–${conflict.endTime}.` }, 409)
 
     await env.FOCO_LINKS.put(`aulas:student:${id}`, JSON.stringify(student))
 
     const slots = await readPrefix(env.FOCO_LINKS, 'aulas:slot:')
-    const oldStudentSlots = slots.filter(slot => slot.studentId === id)
-    for (const slot of oldStudentSlots) {
-      await env.FOCO_LINKS.put(`aulas:slot:${slot.id}`, JSON.stringify({
-        ...slot,
-        status: 'available',
-        studentId: '',
-        studentName: '',
-        studentWhatsapp: '',
-        updatedAt: new Date().toISOString(),
-      }))
+    for (const slot of slots.filter(slot => slot.studentId === id)) {
+      await env.FOCO_LINKS.put(`aulas:slot:${slot.id}`, JSON.stringify({ ...slot, status: 'available', studentId: '', studentName: '', studentWhatsapp: '', updatedAt: new Date().toISOString() }))
     }
 
     if (student.status === 'active') {
-      const schedules = [
-        { day: student.day, dayOrder: student.dayOrder, time: student.time },
-        ...(student.weeklyFrequency === 2 ? [{ day: student.secondDay, dayOrder: student.secondDayOrder, time: student.secondTime }] : []),
-      ]
-      const usedSlotIds = new Set()
-      for (const schedule of schedules) {
-        const target = slots.find(slot => !usedSlotIds.has(slot.id) && slot.day === schedule.day && slot.time === schedule.time && slot.modality === student.modality && (!slot.studentId || slot.studentId === id))
-        const slotId = target?.id || `${Date.now()}-${crypto.randomUUID().slice(0, 7)}`
-        usedSlotIds.add(slotId)
-        const slot = {
-          ...(target || {}),
-          id: slotId,
-          day: schedule.day,
-          dayOrder: schedule.dayOrder,
-          time: schedule.time,
-          durationMinutes: student.durationMinutes,
-          modality: student.modality,
-          status: 'occupied',
-          studentId: id,
-          studentName: student.name,
-          studentWhatsapp: student.whatsapp,
-          updatedAt: new Date().toISOString(),
-        }
-        await env.FOCO_LINKS.put(`aulas:slot:${slotId}`, JSON.stringify(slot))
+      const target = slots.find(slot => slot.day === student.day && slot.time === student.time && slot.modality === student.modality && (!slot.studentId || slot.studentId === id))
+      const slotId = target?.id || `${Date.now()}-${crypto.randomUUID().slice(0, 7)}`
+      const slot = {
+        ...(target || {}),
+        id: slotId,
+        day: student.day,
+        dayOrder: student.dayOrder,
+        time: student.time,
+        endTime: student.endTime,
+        durationMinutes: student.durationMinutes,
+        modality: student.modality,
+        status: 'occupied',
+        studentId: id,
+        studentName: student.name,
+        studentWhatsapp: student.whatsapp,
+        updatedAt: new Date().toISOString(),
       }
+      await env.FOCO_LINKS.put(`aulas:slot:${slotId}`, JSON.stringify(slot))
     }
     return json({ ok: true, student })
   }
@@ -140,14 +122,7 @@ export async function onRequestPost({ request, env }) {
     await env.FOCO_LINKS.put(key, JSON.stringify(updated))
     const slots = await readPrefix(env.FOCO_LINKS, 'aulas:slot:')
     for (const slot of slots.filter(item => item.studentId === id)) {
-      await env.FOCO_LINKS.put(`aulas:slot:${slot.id}`, JSON.stringify({
-        ...slot,
-        status: 'available',
-        studentId: '',
-        studentName: '',
-        studentWhatsapp: '',
-        updatedAt: new Date().toISOString(),
-      }))
+      await env.FOCO_LINKS.put(`aulas:slot:${slot.id}`, JSON.stringify({ ...slot, status: 'available', studentId: '', studentName: '', studentWhatsapp: '', updatedAt: new Date().toISOString() }))
     }
     return json({ ok: true, student: updated })
   }
