@@ -25,27 +25,57 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           {`
             (function () {
               var phone = '5571996125869';
+
+              // O normalizador existe apenas para os CTAs/balões públicos do site.
+              // Links da área administrativa precisam manter o número do aluno/lead.
+              function isManagementPage() {
+                return window.location.pathname.indexOf('/gestao/') === 0;
+              }
+
               function normalize(anchor) {
-                if (!anchor || !anchor.href) return;
+                if (!anchor || !anchor.href || isManagementPage()) return;
                 try {
-                  var url = new URL(anchor.href, window.location.href);
+                  var currentHref = anchor.href;
+                  var url = new URL(currentHref, window.location.href);
+
                   if (url.hostname === 'wa.me') {
                     url.pathname = '/' + phone;
-                    anchor.href = url.toString();
+                    var nextHref = url.toString();
+                    if (nextHref !== currentHref) anchor.href = nextHref;
                     return;
                   }
+
                   if (url.hostname === 'api.whatsapp.com' && url.pathname.indexOf('/send') === 0) {
+                    if (url.searchParams.get('phone') === phone) return;
                     url.searchParams.set('phone', phone);
-                    anchor.href = url.toString();
+                    var nextApiHref = url.toString();
+                    if (nextApiHref !== currentHref) anchor.href = nextApiHref;
                   }
                 } catch (_) {}
               }
+
               function normalizeAll() {
+                if (isManagementPage()) return;
                 document.querySelectorAll('a[href*="wa.me/"],a[href*="api.whatsapp.com/send"]').forEach(normalize);
               }
+
               normalizeAll();
-              new MutationObserver(normalizeAll).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+
+              // Observa apenas novos elementos. Não observa href, evitando ciclo de mutações.
+              new MutationObserver(function (mutations) {
+                if (isManagementPage()) return;
+                var shouldNormalize = false;
+                for (var i = 0; i < mutations.length; i++) {
+                  if (mutations[i].addedNodes && mutations[i].addedNodes.length) {
+                    shouldNormalize = true;
+                    break;
+                  }
+                }
+                if (shouldNormalize) normalizeAll();
+              }).observe(document.body, { childList: true, subtree: true });
+
               document.addEventListener('click', function (event) {
+                if (isManagementPage()) return;
                 var target = event.target && event.target.closest ? event.target.closest('a') : null;
                 normalize(target);
               }, true);
