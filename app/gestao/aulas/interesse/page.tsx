@@ -1,5 +1,5 @@
-import InterestManagerV2 from './InterestManagerV2'
+import InterestManagerV3 from './InterestManagerV3'
 
 export default function InterestPage() {
-  return <InterestManagerV2 />
+  return <InterestManagerV3 />
 }
