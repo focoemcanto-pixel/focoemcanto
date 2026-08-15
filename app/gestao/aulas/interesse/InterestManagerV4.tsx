@@ -34,15 +34,7 @@ function compatibility(lead:Lead,slot:Slot){
   return best
 }
 function matchLabel(score:number){if(score>=95)return 'Encaixe perfeito';if(score>=80)return 'Ótimo encaixe';if(score>=65)return 'Possível encaixe';return 'Sem vaga compatível'}
-function priority(lead:Lead,best?:Match|null){
-  let p=best?.score||0
-  if(norm(lead.startIntent).includes('imediat'))p+=12
-  if(txt(lead.status)==='waiting'||!txt(lead.status))p+=8
-  if(txt(lead.status)==='contacted')p+=4
-  p+=Math.min(10,daysSince(lead.createdAt))
-  if(txt(lead.status)==='offered'&&hoursSince(lead.updatedAt)>=24)p-=8
-  return Math.max(0,Math.min(120,p))
-}
+function priority(lead:Lead,best?:Match|null){let p=best?.score||0;if(norm(lead.startIntent).includes('imediat'))p+=12;if(txt(lead.status)==='waiting'||!txt(lead.status))p+=8;if(txt(lead.status)==='contacted')p+=4;p+=Math.min(10,daysSince(lead.createdAt));if(txt(lead.status)==='offered'&&hoursSince(lead.updatedAt)>=24)p-=8;return Math.max(0,Math.min(120,p))}
 function priorityLabel(p:number){if(p>=105)return '🔥 Prioridade máxima';if(p>=90)return 'Alta prioridade';if(p>=70)return 'Boa oportunidade';return 'Acompanhar'}
 
 export default function InterestManagerV4(){
@@ -58,6 +50,7 @@ export default function InterestManagerV4(){
 
   async function post(payload:any){const r=await fetch('/api/admin/aulas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Não foi possível concluir.');return d}
   async function updateStatus(lead:Lead,status:string){if(!lead.id)return;setBusy(`status-${lead.id}`);try{await post({action:'updateLeadStatus',id:lead.id,status});setLeads(v=>v.map(x=>x.id===lead.id?{...x,status,updatedAt:new Date().toISOString()}:x))}catch(e:any){alert(e.message)}finally{setBusy('')}}
+  async function deleteLead(lead:Lead){if(!lead.id)return;const name=txt(lead.name)||'este interessado';if(!window.confirm(`Excluir definitivamente ${name}?\n\nEssa ação remove o cadastro da lista de interesse e não poderá ser desfeita.`))return;setBusy(`delete-${lead.id}`);try{await post({action:'deleteLead',id:lead.id});setLeads(v=>v.filter(x=>x.id!==lead.id))}catch(e:any){alert(e.message)}finally{setBusy('')}}
   async function fill(lead:Lead,match:Match){if(!lead.id)return;const modality=match.slot.modality==='Online ou Presencial'?(norm(lead.modality).includes('presencial')&&!norm(lead.modality).includes('online')?'Presencial':'Online'):match.slot.modality;const ok=window.confirm(`Preencher ${match.slot.day}, ${match.slot.time} (${modality}) com ${txt(lead.name)||'este interessado'}?\n\nIsso criará o aluno, ocupará a vaga e marcará o cadastro como matriculado.`);if(!ok)return;setBusy(`fill-${lead.id}`);try{await post({action:'fillSlotFromLead',leadId:lead.id,slotId:match.slot.id,modality});await load()}catch(e:any){alert(e.message)}finally{setBusy('')}}
 
   return <main className={styles.page}>
@@ -71,7 +64,7 @@ export default function InterestManagerV4(){
         <div className={styles.smartStat}><span>Vagas abertas</span><strong>{openSlots.length}</strong><small>Prontas para preenchimento</small></div>
       </section>
       <div className={styles.sectionBar}><div><h2>Lista de interesse</h2><p>Ordenada automaticamente por prioridade comercial e compatibilidade.</p></div></div>
-      <div className={styles.smartFilters}>{[['active','Ativos'],['waiting','Na espera'],['contacted','Contato feito'],['offered','Vaga oferecida'],['enrolled','Matriculados'],['all','Todos']].map(([v,l])=><button key={v} className={filter===v?styles.smartFilterActive:''} onClick={()=>setFilter(v)}>{l}</button>)}</div>
+      <div className={styles.smartFilters}>{[['active','Ativos'],['waiting','Na espera'],['contacted','Contato feito'],['offered','Vaga oferecida'],['inactive','Arquivados'],['enrolled','Matriculados'],['all','Todos']].map(([v,l])=><button key={v} className={filter===v?styles.smartFilterActive:''} onClick={()=>setFilter(v)}>{l}</button>)}</div>
       {loading&&<div className={styles.loading}>Analisando interessados e vagas...</div>}
       {error&&<div className={styles.error}>{error}<div style={{marginTop:10}}><button onClick={load}>Tentar novamente</button></div></div>}
       {!loading&&!error&&<section className={styles.smartLeadGrid}>
@@ -80,7 +73,7 @@ export default function InterestManagerV4(){
           {follow&&<div style={{marginTop:12,padding:'10px 12px',borderRadius:12,background:'#2d2117',border:'1px solid rgba(242,180,127,.18)',color:'#f2b47f',fontSize:11,fontWeight:800}}>⚠️ Vaga oferecida há {lead.offeredHours}h sem conclusão. Faça follow-up ou avance para o próximo candidato.</div>}
           <div className={styles.smartLeadBody}><div><span className={styles.smartLabel}>DISPONIBILIDADE</span><p>{listAvailability(lead.availability).join(' • ')||'Não informada'}</p></div><div><span className={styles.smartLabel}>OBJETIVO</span><p>{txt(lead.goal)||'Não informado'}</p></div></div>
           {best&&<div className={styles.bestSlot}><div><span>Melhor vaga sugerida</span><strong>{best.slot.day} • {best.slot.time}</strong><small>{best.slot.modality}</small></div><a href="/gestao/aulas/">Ver na agenda ↗</a></div>}
-          <div className={styles.smartActions}>{lead.whatsapp&&<a className={styles.whatsappBtn} href={wa(lead.whatsapp,msg)} target="_blank">{follow?'Fazer follow-up':'WhatsApp'}</a>}{txt(lead.status)!=='contacted'&&txt(lead.status)!=='enrolled'&&<button disabled={busy===`status-${lead.id}`} onClick={()=>updateStatus(lead,'contacted')}>Marcar contato</button>}{best&&txt(lead.status)!=='enrolled'&&<button className={styles.fillBtn} disabled={busy===`fill-${lead.id}`} onClick={()=>fill(lead,best)}>{busy===`fill-${lead.id}`?'Preenchendo...':'Preencher vaga'}</button>}</div>
+          <div className={styles.smartActions}>{lead.whatsapp&&<a className={styles.whatsappBtn} href={wa(lead.whatsapp,msg)} target="_blank">{follow?'Fazer follow-up':'WhatsApp'}</a>}{txt(lead.status)!=='contacted'&&txt(lead.status)!=='enrolled'&&txt(lead.status)!=='inactive'&&<button disabled={busy===`status-${lead.id}`} onClick={()=>updateStatus(lead,'contacted')}>Marcar contato</button>}{txt(lead.status)!=='inactive'&&txt(lead.status)!=='enrolled'&&<button disabled={busy===`status-${lead.id}`} onClick={()=>updateStatus(lead,'inactive')}>Arquivar</button>}{txt(lead.status)==='inactive'&&<button disabled={busy===`status-${lead.id}`} onClick={()=>updateStatus(lead,'waiting')}>Restaurar</button>}{best&&txt(lead.status)!=='enrolled'&&txt(lead.status)!=='inactive'&&<button className={styles.fillBtn} disabled={busy===`fill-${lead.id}`} onClick={()=>fill(lead,best)}>{busy===`fill-${lead.id}`?'Preenchendo...':'Preencher vaga'}</button>}<button disabled={busy===`delete-${lead.id}`} onClick={()=>deleteLead(lead)} style={{background:'#35191d',color:'#f1a6ad',border:'1px solid rgba(241,166,173,.18)'}}>{busy===`delete-${lead.id}`?'Excluindo...':'Excluir'}</button></div>
         </article>})}
         {!visible.length&&<div className={styles.bigEmpty}>Nenhum cadastro neste filtro.</div>}
       </section>}
