@@ -9,7 +9,7 @@ type Match={slot:Slot;score:number;label:string}
 
 const txt=(v:unknown)=>typeof v==='string'?v:''
 const norm=(v:unknown)=>txt(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()
-const wa=(phone:unknown,msg:string)=>{const d=txt(phone).replace(/\D/g,'');if(!d)return '#';const p=d.startsWith('55')?d:`55${d}`;return `https://wa.me/${p}?text=${encodeURIComponent(msg)}`}
+const wa=(phone:unknown,msg:string)=>{const raw=txt(phone).trim();const d=raw.replace(/\D/g,'');if(!d)return '#';const p=raw.startsWith('+')?d:(d.startsWith('55')?d:`55${d}`);return `https://wa.me/${p}?text=${encodeURIComponent(msg)}`}
 const listAvailability=(v:unknown)=>Array.isArray(v)?v.slice(0,20).map(x=>txt(x).slice(0,120)).filter(Boolean):[]
 const period=(time:string)=>{const h=Number((time||'00:00').split(':')[0]);return h<12?'Manhã':h<18?'Tarde':'Noite'}
 const statusLabel=(s?:string)=>({waiting:'Na espera',contacted:'Contato feito',offered:'Vaga oferecida',enrolled:'Matriculado',inactive:'Arquivado'}[s||'waiting']||'Na espera')
