@@ -1,5 +1,5 @@
-import AgendaOnlyManagerV2 from './AgendaOnlyManagerV2'
+import AgendaOnlyManagerV3 from './AgendaOnlyManagerV3'
 
 export default function GestaoAulasPage() {
-  return <AgendaOnlyManagerV2 />
+  return <AgendaOnlyManagerV3 />
 }
