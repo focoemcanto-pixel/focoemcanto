@@ -16,7 +16,7 @@ const blank={day:'Segunda',time:'09:00',durationMinutes:60,modality:'Online',sta
 const text=(v:unknown)=>typeof v==='string'?v:''
 const norm=(v:unknown)=>text(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()
 const period=(time:string)=>{const h=Number((time||'00:00').split(':')[0]);return h<12?'Manhã':h<18?'Tarde':'Noite'}
-const wa=(phone:unknown,msg:string)=>{const d=text(phone).replace(/\D/g,'');if(!d)return '#';return `https://wa.me/${d.startsWith('55')?d:`55${d}`}?text=${encodeURIComponent(msg)}`}
+const wa=(phone:unknown,msg:string)=>{const raw=text(phone).trim();const d=raw.replace(/\D/g,'');if(!d)return '#';const p=raw.startsWith('+')?d:(d.startsWith('55')?d:`55${d}`);return `https://wa.me/${p}?text=${encodeURIComponent(msg)}`}
 const minutes=(time?:string)=>{const [h,m]=text(time).split(':').map(Number);return Number.isFinite(h)&&Number.isFinite(m)?h*60+m:0}
 const safeDuration=(value?:number)=>{const n=Number(value||60);return Number.isFinite(n)&&n>0?n:60}
 const clock=(total:number)=>`${String(Math.floor(total/60)%24).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`
@@ -64,24 +64,7 @@ export default function AgendaOnlyManagerV3(){
   useEffect(()=>{load()},[])
 
   async function post(payload:any){const r=await fetch('/api/admin/aulas',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||'Não foi possível concluir.');return d}
-  async function addSlot(e:FormEvent){
-    e.preventDefault()
-    const slot={...newSlot,dayOrder:days.indexOf(newSlot.day)+1}
-    const tempId=`temp-${Date.now()}-${Math.random().toString(36).slice(2,7)}`
-    const optimistic:Slot={...slot,id:tempId,studentId:''}
-    setSlots(v=>[...v,optimistic])
-    setDay(slot.day)
-    setOpening(false)
-    setNewSlot({...blank})
-    try{
-      const d=await post({action:'saveSlot',slot})
-      if(!d?.slot)throw new Error('O servidor não confirmou a vaga.')
-      setSlots(v=>v.map(s=>s.id===tempId?d.slot:s))
-    }catch(e:any){
-      setSlots(v=>v.filter(s=>s.id!==tempId))
-      alert(e.message)
-    }
-  }
+  async function addSlot(e:FormEvent){e.preventDefault();const dayToShow=newSlot.day;const tempId=`temp-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;const optimistic:Slot={...newSlot,id:tempId,dayOrder:days.indexOf(newSlot.day)+1};setSlots(v=>[...v,optimistic]);setOpening(false);setDay(dayToShow);setNewSlot({...blank});try{const d=await post({action:'saveSlot',slot:{...optimistic,id:undefined}});if(d?.slot)setSlots(v=>v.map(s=>s.id===tempId?d.slot:s))}catch(e:any){setSlots(v=>v.filter(s=>s.id!==tempId));alert(e.message)}}
   async function updateStatus(status:Slot['status']){if(!selected)return;try{const d=await post({action:'saveSlot',slot:{...selected,status}});setSlots(v=>v.map(s=>s.id===selected.id?d.slot:s));setSelected(d.slot)}catch(e:any){alert(e.message)}}
   async function remove(){if(!selected||!confirm(`Remover ${selected.day} ${selected.time}?`))return;try{await post({action:'deleteSlot',id:selected.id});setSlots(v=>v.filter(s=>s.id!==selected.id));setSelected(null)}catch(e:any){alert(e.message)}}
   function ranked(slot:Slot){return leads.filter(l=>['waiting','contacted','offered',''].includes(text(l.status))).map(lead=>({lead,score:score(lead,slot)})).filter(x=>x.score>0).sort((a,b)=>b.score-a.score)}
@@ -90,13 +73,7 @@ export default function AgendaOnlyManagerV3(){
   async function fill(lead:Lead){if(!selected||!lead.id)return;const modality=selected.modality==='Online ou Presencial'?(norm(lead.modality).includes('presencial')&&!norm(lead.modality).includes('online')?'Presencial':'Online'):selected.modality;if(!confirm(`Preencher ${selected.day}, ${selected.time}–${endTime(selected.time,selected.durationMinutes)} (${modality}) com ${lead.name||'este interessado'}?\n\nO cadastro será convertido em aluno e essa vaga ficará ocupada.`))return;setBusy(lead.id);try{await post({action:'fillSlotFromLead',leadId:lead.id,slotId:selected.id,modality});setSelected(null);await load()}catch(e:any){alert(e.message)}finally{setBusy('')}}
 
   const active=students.filter(s=>s.status==='active')
-  const occurrences=useMemo<StudentOccurrence[]>(()=>active.flatMap(student=>{
-    const durationMinutes=safeDuration(student.durationMinutes)
-    const rows:StudentOccurrence[]=[]
-    if(student.day&&student.time)rows.push({key:`${student.id}-1`,student,day:student.day,time:student.time,durationMinutes})
-    if(Number(student.weeklyFrequency)===2&&student.secondDay&&student.secondTime)rows.push({key:`${student.id}-2`,student,day:student.secondDay,time:student.secondTime,durationMinutes})
-    return rows
-  }),[students])
+  const occurrences=useMemo<StudentOccurrence[]>(()=>active.flatMap(student=>{const durationMinutes=safeDuration(student.durationMinutes);const rows:StudentOccurrence[]=[];if(student.day&&student.time)rows.push({key:`${student.id}-1`,student,day:student.day,time:student.time,durationMinutes});if(Number(student.weeklyFrequency)===2&&student.secondDay&&student.secondTime)rows.push({key:`${student.id}-2`,student,day:student.secondDay,time:student.secondTime,durationMinutes});return rows}),[students])
   const overlapsStudent=(slot:Slot)=>occurrences.some(o=>o.day===slot.day&&minutes(slot.time)<minutes(o.time)+o.durationMinutes&&minutes(slot.time)+safeDuration(slot.durationMinutes)>minutes(o.time))
   const open=slots.filter(s=>s.status==='available'&&!s.studentId&&!overlapsStudent(s))
   const filteredOccurrences=occurrences.filter(o=>modalityMatches(o.student.modality,modalityFilter))
