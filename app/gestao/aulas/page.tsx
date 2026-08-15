@@ -1,5 +1,5 @@
-import UnifiedAulasManagerV4 from './UnifiedAulasManagerV4'
+import UnifiedAulasManagerV5 from './UnifiedAulasManagerV5'
 
 export default function GestaoAulasPage() {
-  return <UnifiedAulasManagerV4 />
+  return <UnifiedAulasManagerV5 />
 }
