@@ -13,6 +13,9 @@ const duration = value => {
   const n = Number(value || 60)
   return [30,45,60,75,90,105,120].includes(n) ? n : 60
 }
+const toMin = value => { const [h,m] = clean(value,10).split(':').map(Number); return Number.isFinite(h)&&Number.isFinite(m) ? h*60+m : 0 }
+const addMinutes = (time, n = 60) => { const total = toMin(time) + n; return `${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}` }
+const overlaps = (aStart,aEnd,bStart,bEnd) => toMin(aStart) < toMin(bEnd) && toMin(aEnd) > toMin(bStart)
 
 async function readPrefix(kv, prefix) {
   const out = []
@@ -32,6 +35,9 @@ async function readPrefix(kv, prefix) {
 }
 
 function normalizeStudent(raw = {}) {
+  const time = clean(raw.time, 10)
+  const durationMinutes = duration(raw.durationMinutes)
+  const endTime = clean(raw.endTime, 10) || (time ? addMinutes(time, durationMinutes) : '')
   return {
     ...raw,
     id: clean(raw.id, 80),
@@ -44,12 +50,9 @@ function normalizeStudent(raw = {}) {
     city: clean(raw.city || 'Salvador', 120),
     day: clean(raw.day, 20),
     dayOrder: Number(raw.dayOrder || 9),
-    time: clean(raw.time, 10),
-    durationMinutes: duration(raw.durationMinutes),
-    weeklyFrequency: Number(raw.weeklyFrequency) === 2 ? 2 : 1,
-    secondDay: clean(raw.secondDay, 20),
-    secondDayOrder: Number(raw.secondDayOrder || 9),
-    secondTime: clean(raw.secondTime, 10),
+    time,
+    endTime,
+    durationMinutes: Math.max(1, toMin(endTime) - toMin(time)) || durationMinutes,
     monthlyValue: clean(raw.monthlyValue, 30),
     paymentDay: clean(raw.paymentDay, 10),
     notes: clean(raw.notes, 1000),
@@ -107,6 +110,35 @@ export async function onRequestPost({ request, env }) {
       updatedAt: new Date().toISOString(),
     }
     if (!normalized.day || !normalized.time) return json({ error: 'Dia e horário são obrigatórios.' }, 422)
+
+    const newEnd = clean(slot.endTime, 10) || addMinutes(normalized.time, normalized.durationMinutes)
+    normalized.endTime = newEnd
+    normalized.durationMinutes = Math.max(1, toMin(newEnd) - toMin(normalized.time)) || normalized.durationMinutes
+
+    const [slots, rawStudents] = await Promise.all([
+      readPrefix(env.FOCO_LINKS, 'aulas:slot:'),
+      readPrefix(env.FOCO_LINKS, 'aulas:student:'),
+    ])
+
+    const slotConflict = slots.find(existing => {
+      if (clean(existing.id,80) === id || existing.day !== normalized.day) return false
+      const existingStart = clean(existing.time,10)
+      const existingEnd = clean(existing.endTime,10) || addMinutes(existingStart, duration(existing.durationMinutes))
+      return overlaps(normalized.time, normalized.endTime, existingStart, existingEnd)
+    })
+    if (slotConflict) {
+      const existingEnd = clean(slotConflict.endTime,10) || addMinutes(clean(slotConflict.time,10), duration(slotConflict.durationMinutes))
+      const who = clean(slotConflict.studentName,120)
+      return json({ error: who
+        ? `Esse intervalo conflita com ${who}: ${slotConflict.time}–${existingEnd}.`
+        : `Já existe um horário cadastrado nesse intervalo: ${slotConflict.time}–${existingEnd}.` }, 409)
+    }
+
+    const studentConflict = rawStudents.map(normalizeStudent).find(student => student.status === 'active' && student.day === normalized.day && overlaps(normalized.time, normalized.endTime, student.time, student.endTime))
+    if (studentConflict && studentConflict.id !== normalized.studentId) {
+      return json({ error: `Esse intervalo conflita com ${studentConflict.name}: ${studentConflict.time}–${studentConflict.endTime}.` }, 409)
+    }
+
     await env.FOCO_LINKS.put(`aulas:slot:${id}`, JSON.stringify(normalized))
     return json({ ok: true, slot: normalized })
   }
@@ -160,8 +192,9 @@ export async function onRequestPost({ request, env }) {
     }
     const studentId = `lead-${leadId}`.slice(0, 80)
     const previous = await env.FOCO_LINKS.get(`aulas:student:${studentId}`, 'json')
-    const student = normalizeStudent({...previous,id:studentId,name:lead.name,whatsapp:lead.whatsapp,email:lead.email,modality,address:lead.address || '',neighborhood:lead.neighborhood || '',city:lead.city || 'Salvador',day:slot.day,dayOrder:slot.dayOrder,time:slot.time,durationMinutes:duration(slot.durationMinutes),weeklyFrequency:1,monthlyValue:clean(body.monthlyValue, 30) || (modality === 'Presencial' ? '600' : '500'),paymentDay:clean(body.paymentDay, 10) || '10',notes:`Convertido da lista de interesse. Objetivo: ${clean(lead.goal, 240)}`,color:clean(body.color, 20) || '#168c8c',status:'active',createdAt:previous?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString()})
-    const occupiedSlot = {...slot,durationMinutes:student.durationMinutes,modality,status:'occupied',studentId,studentName:student.name,studentWhatsapp:student.whatsapp,updatedAt:new Date().toISOString()}
+    const slotEnd = clean(slot.endTime,10) || addMinutes(clean(slot.time,10), duration(slot.durationMinutes))
+    const student = normalizeStudent({...previous,id:studentId,name:lead.name,whatsapp:lead.whatsapp,email:lead.email,modality,address:lead.address || '',neighborhood:lead.neighborhood || '',city:lead.city || 'Salvador',day:slot.day,dayOrder:slot.dayOrder,time:slot.time,endTime:slotEnd,durationMinutes:duration(slot.durationMinutes),monthlyValue:clean(body.monthlyValue, 30) || (modality === 'Presencial' ? '600' : '500'),paymentDay:clean(body.paymentDay, 10) || '10',notes:`Convertido da lista de interesse. Objetivo: ${clean(lead.goal, 240)}`,color:clean(body.color, 20) || '#168c8c',status:'active',createdAt:previous?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString()})
+    const occupiedSlot = {...slot,endTime:student.endTime,durationMinutes:student.durationMinutes,modality,status:'occupied',studentId,studentName:student.name,studentWhatsapp:student.whatsapp,updatedAt:new Date().toISOString()}
     const updatedLead = {...lead,status:'enrolled',enrolledAt:new Date().toISOString(),enrolledSlotId:slotId,updatedAt:new Date().toISOString()}
     await Promise.all([env.FOCO_LINKS.put(`aulas:student:${studentId}`, JSON.stringify(student)),env.FOCO_LINKS.put(slotKey, JSON.stringify(occupiedSlot)),env.FOCO_LINKS.put(leadKey, JSON.stringify(updatedLead))])
     return json({ ok: true, student, slot: occupiedSlot, lead: updatedLead })
