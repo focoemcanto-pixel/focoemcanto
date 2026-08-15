@@ -9,21 +9,11 @@ function json(data, status = 200) {
 
 const clean = (value, max = 500) => String(value || '').trim().slice(0, max)
 
-async function readLeads(kv) {
-  const out = []
-  let cursor
-  let safety = 0
-  do {
-    const page = await kv.list({ prefix: 'aulas:lead:', cursor, limit: 200 })
-    const values = await Promise.all(page.keys.map(key => kv.get(key.name, 'json')))
-    out.push(...values.filter(Boolean))
-    if (page.list_complete) break
-    const next = page.cursor
-    if (!next || next === cursor) break
-    cursor = next
-    safety += 1
-  } while (safety < 20)
-  return out
+function withTimeout(promise, ms, label = 'Operação') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(`${label} excedeu ${ms}ms`)), ms)),
+  ])
 }
 
 function normalizeLead(raw = {}) {
@@ -46,12 +36,47 @@ function normalizeLead(raw = {}) {
   }
 }
 
-export async function onRequestGet({ request, env }) {
-  if (!(await isAdminAuthenticated(request, env))) return json({ error: 'Não autorizado.' }, 401)
-  if (!env?.FOCO_LINKS) return json({ error: 'Base indisponível.' }, 500)
-  const leads = (await readLeads(env.FOCO_LINKS)).map(normalizeLead)
+async function readLeadsOnce(kv) {
+  const page = await withTimeout(
+    kv.list({ prefix: 'aulas:lead:', limit: 100 }),
+    2500,
+    'Listagem de interessados'
+  )
+
+  const leads = []
+  const failed = []
+
+  for (const key of page.keys.slice(0, 100)) {
+    try {
+      const value = await withTimeout(kv.get(key.name, 'json'), 1500, `Leitura ${key.name}`)
+      if (value) leads.push(normalizeLead(value))
+    } catch {
+      failed.push(key.name)
+    }
+  }
+
   leads.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)))
-  return json({ leads, count: leads.length })
+  return { leads, failed, truncated: !page.list_complete }
+}
+
+export async function onRequestGet({ request, env }) {
+  try {
+    if (!(await withTimeout(isAdminAuthenticated(request, env), 2500, 'Autenticação'))) {
+      return json({ error: 'Não autorizado.' }, 401)
+    }
+    if (!env?.FOCO_LINKS) return json({ error: 'Base indisponível.' }, 500)
+
+    const result = await readLeadsOnce(env.FOCO_LINKS)
+    return json({
+      leads: result.leads,
+      count: result.leads.length,
+      partial: result.failed.length > 0,
+      failedCount: result.failed.length,
+      truncated: result.truncated,
+    })
+  } catch (error) {
+    return json({ error: 'Falha ao carregar interessados.', detail: String(error?.message || error) }, 504)
+  }
 }
 
 export async function onRequestPost({ request, env }) {
