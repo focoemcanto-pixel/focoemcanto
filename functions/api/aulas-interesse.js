@@ -10,7 +10,10 @@ function clean(value, max = 500) {
 }
 
 function normalizePhone(value) {
-  return clean(value, 30).replace(/\D/g, '')
+  const raw = clean(value, 30)
+  const digits = raw.replace(/\D/g, '')
+  if (!digits || digits.length < 8 || digits.length > 15) return ''
+  return `+${digits}`
 }
 
 export async function onRequestPost({ request, env }) {
@@ -21,13 +24,14 @@ export async function onRequestPost({ request, env }) {
 
   const name = clean(body.name, 120)
   const whatsapp = normalizePhone(body.whatsapp)
+  const whatsappCountry = clean(body.whatsappCountry, 4).toUpperCase()
   const modality = clean(body.modality, 60)
   let availability = []
   try { availability = JSON.parse(body.availability || '[]') } catch {}
   availability = Array.isArray(availability) ? availability.map(item => clean(item, 60)).filter(Boolean).slice(0, 30) : []
 
-  if (!name || whatsapp.length < 10 || !modality || !availability.length || body.acceptedTerms !== 'sim') {
-    return json({ error: 'Preencha os campos obrigatórios e confirme as condições.' }, 422)
+  if (!name || !whatsapp || !modality || !availability.length || body.acceptedTerms !== 'sim') {
+    return json({ error: 'Confira os campos obrigatórios, especialmente o WhatsApp, e confirme as condições.' }, 422)
   }
 
   const now = new Date().toISOString()
@@ -39,6 +43,7 @@ export async function onRequestPost({ request, env }) {
     status: 'waiting',
     name,
     whatsapp,
+    whatsappCountry,
     instagram: clean(body.instagram, 120),
     source: clean(body.source, 80),
     modality,
