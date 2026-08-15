@@ -8,7 +8,7 @@ const colors=['#7427b9','#236da0','#168c8c','#26784d','#6d7f2b','#aa7220','#b856
 const toMin=(t:string)=>{const [h,m]=String(t||'').split(':').map(Number);return Number.isFinite(h)&&Number.isFinite(m)?h*60+m:0}
 const addMinutes=(t:string,n=60)=>{const total=(toMin(t)+n)%(24*60);return `${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}`}
 const emptyStudent:Student={id:'',name:'',whatsapp:'',email:'',modality:'Online',address:'',neighborhood:'',city:'Salvador',day:'Segunda',dayOrder:1,time:'09:00',endTime:'10:00',durationMinutes:60,monthlyValue:'500',paymentDay:'10',notes:'',color:'#7427b9',status:'active'}
-function wa(phone:string,message:string){const digits=phone.replace(/\D/g,'');const p=digits.startsWith('55')?digits:`55${digits}`;return `https://wa.me/${p}?text=${encodeURIComponent(message)}`}
+function wa(phone:string,message:string){const raw=String(phone||'').trim();const digits=raw.replace(/\D/g,'');const p=raw.startsWith('+')?digits:(digits.startsWith('55')?digits:`55${digits}`);return `https://wa.me/${p}?text=${encodeURIComponent(message)}`}
 
 export default function AlunosManagerV2(){
   const [students,setStudents]=useState<Student[]>([]),[loading,setLoading]=useState(true),[modal,setModal]=useState(false),[form,setForm]=useState<Student>({...emptyStudent}),[saving,setSaving]=useState(false),[error,setError]=useState('')
