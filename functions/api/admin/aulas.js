@@ -8,7 +8,11 @@ function json(data, status = 200) {
 }
 
 const clean = (value, max = 500) => String(value || '').trim().slice(0, max)
-const phone = value => clean(value, 30).replace(/\D/g, '')
+const phone = value => {
+  const raw = clean(value, 30)
+  const digits = raw.replace(/\D/g, '')
+  return raw.startsWith('+') && digits ? `+${digits}` : digits
+}
 const duration = value => {
   const n = Number(value || 60)
   return [30,45,60,75,90,105,120].includes(n) ? n : 60
@@ -129,15 +133,11 @@ export async function onRequestPost({ request, env }) {
     if (slotConflict) {
       const existingEnd = clean(slotConflict.endTime,10) || addMinutes(clean(slotConflict.time,10), duration(slotConflict.durationMinutes))
       const who = clean(slotConflict.studentName,120)
-      return json({ error: who
-        ? `Esse intervalo conflita com ${who}: ${slotConflict.time}–${existingEnd}.`
-        : `Já existe um horário cadastrado nesse intervalo: ${slotConflict.time}–${existingEnd}.` }, 409)
+      return json({ error: who ? `Esse intervalo conflita com ${who}: ${slotConflict.time}–${existingEnd}.` : `Já existe um horário cadastrado nesse intervalo: ${slotConflict.time}–${existingEnd}.` }, 409)
     }
 
     const studentConflict = rawStudents.map(normalizeStudent).find(student => student.status === 'active' && student.day === normalized.day && overlaps(normalized.time, normalized.endTime, student.time, student.endTime))
-    if (studentConflict && studentConflict.id !== normalized.studentId) {
-      return json({ error: `Esse intervalo conflita com ${studentConflict.name}: ${studentConflict.time}–${studentConflict.endTime}.` }, 409)
-    }
+    if (studentConflict && studentConflict.id !== normalized.studentId) return json({ error: `Esse intervalo conflita com ${studentConflict.name}: ${studentConflict.time}–${studentConflict.endTime}.` }, 409)
 
     await env.FOCO_LINKS.put(`aulas:slot:${id}`, JSON.stringify(normalized))
     return json({ ok: true, slot: normalized })
