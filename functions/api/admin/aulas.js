@@ -108,6 +108,16 @@ export async function onRequestPost({ request, env }) {
     return json({ ok: true })
   }
 
+  if (action === 'deleteLead') {
+    const id = clean(body.id, 80)
+    if (!id) return json({ error: 'ID inválido.' }, 400)
+    const key = `aulas:lead:${id}`
+    const lead = await env.FOCO_LINKS.get(key, 'json')
+    if (!lead) return json({ error: 'Interessado não encontrado.' }, 404)
+    await env.FOCO_LINKS.delete(key)
+    return json({ ok: true })
+  }
+
   if (action === 'updateLeadStatus') {
     const id = clean(body.id, 80)
     const key = `aulas:lead:${id}`
@@ -124,17 +134,12 @@ export async function onRequestPost({ request, env }) {
     const leadId = clean(body.leadId, 80)
     const slotId = clean(body.slotId, 80)
     if (!leadId || !slotId) return json({ error: 'Interessado e horário são obrigatórios.' }, 422)
-
     const leadKey = `aulas:lead:${leadId}`
     const slotKey = `aulas:slot:${slotId}`
-    const [lead, slot] = await Promise.all([
-      env.FOCO_LINKS.get(leadKey, 'json'),
-      env.FOCO_LINKS.get(slotKey, 'json'),
-    ])
+    const [lead, slot] = await Promise.all([env.FOCO_LINKS.get(leadKey, 'json'),env.FOCO_LINKS.get(slotKey, 'json')])
     if (!lead) return json({ error: 'Interessado não encontrado.' }, 404)
     if (!slot) return json({ error: 'Horário não encontrado.' }, 404)
     if (slot.status !== 'available' || slot.studentId) return json({ error: 'Essa vaga não está mais disponível.' }, 409)
-
     const leadModality = clean(lead.modality, 60).toLowerCase()
     let modality = clean(body.modality, 30)
     if (!['Online','Presencial'].includes(modality)) {
@@ -143,47 +148,12 @@ export async function onRequestPost({ request, env }) {
       else if (leadModality.includes('presencial') && !leadModality.includes('online')) modality = 'Presencial'
       else modality = 'Online'
     }
-
     const studentId = `lead-${leadId}`.slice(0, 80)
     const previous = await env.FOCO_LINKS.get(`aulas:student:${studentId}`, 'json')
-    const student = normalizeStudent({
-      ...previous,
-      id: studentId,
-      name: lead.name,
-      whatsapp: lead.whatsapp,
-      email: lead.email,
-      modality,
-      address: lead.address || '',
-      neighborhood: lead.neighborhood || '',
-      city: lead.city || 'Salvador',
-      day: slot.day,
-      dayOrder: slot.dayOrder,
-      time: slot.time,
-      monthlyValue: clean(body.monthlyValue, 30) || (modality === 'Presencial' ? '600' : '500'),
-      paymentDay: clean(body.paymentDay, 10) || '10',
-      notes: `Convertido da lista de interesse. Objetivo: ${clean(lead.goal, 240)}`,
-      color: clean(body.color, 20) || '#168c8c',
-      status: 'active',
-      createdAt: previous?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    })
-
-    const occupiedSlot = {
-      ...slot,
-      modality,
-      status: 'occupied',
-      studentId,
-      studentName: student.name,
-      studentWhatsapp: student.whatsapp,
-      updatedAt: new Date().toISOString(),
-    }
-    const updatedLead = { ...lead, status: 'enrolled', enrolledAt: new Date().toISOString(), enrolledSlotId: slotId, updatedAt: new Date().toISOString() }
-
-    await Promise.all([
-      env.FOCO_LINKS.put(`aulas:student:${studentId}`, JSON.stringify(student)),
-      env.FOCO_LINKS.put(slotKey, JSON.stringify(occupiedSlot)),
-      env.FOCO_LINKS.put(leadKey, JSON.stringify(updatedLead)),
-    ])
+    const student = normalizeStudent({...previous,id:studentId,name:lead.name,whatsapp:lead.whatsapp,email:lead.email,modality,address:lead.address || '',neighborhood:lead.neighborhood || '',city:lead.city || 'Salvador',day:slot.day,dayOrder:slot.dayOrder,time:slot.time,monthlyValue:clean(body.monthlyValue, 30) || (modality === 'Presencial' ? '600' : '500'),paymentDay:clean(body.paymentDay, 10) || '10',notes:`Convertido da lista de interesse. Objetivo: ${clean(lead.goal, 240)}`,color:clean(body.color, 20) || '#168c8c',status:'active',createdAt:previous?.createdAt || new Date().toISOString(),updatedAt:new Date().toISOString()})
+    const occupiedSlot = {...slot,modality,status:'occupied',studentId,studentName:student.name,studentWhatsapp:student.whatsapp,updatedAt:new Date().toISOString()}
+    const updatedLead = {...lead,status:'enrolled',enrolledAt:new Date().toISOString(),enrolledSlotId:slotId,updatedAt:new Date().toISOString()}
+    await Promise.all([env.FOCO_LINKS.put(`aulas:student:${studentId}`, JSON.stringify(student)),env.FOCO_LINKS.put(slotKey, JSON.stringify(occupiedSlot)),env.FOCO_LINKS.put(leadKey, JSON.stringify(updatedLead))])
     return json({ ok: true, student, slot: occupiedSlot, lead: updatedLead })
   }
 
