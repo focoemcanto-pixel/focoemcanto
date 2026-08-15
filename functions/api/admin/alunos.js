@@ -4,7 +4,7 @@ function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' } })
 }
 const clean = (value, max = 500) => String(value || '').trim().slice(0, max)
-const phone = value => clean(value, 30).replace(/\D/g, '')
+const phone = value => { const raw=clean(value,30); const digits=raw.replace(/\D/g,''); return raw.startsWith('+')&&digits?`+${digits}`:digits }
 const toMin = value => { const [h,m] = clean(value,10).split(':').map(Number); return Number.isFinite(h)&&Number.isFinite(m) ? h*60+m : 0 }
 const addMinutes = (time, n = 60) => { const total = toMin(time) + n; return `${String(Math.floor(total/60)).padStart(2,'0')}:${String(total%60).padStart(2,'0')}` }
 const durationFrom = (start, end, fallback = 60) => { const d = toMin(end)-toMin(start); return d > 0 ? d : fallback }
@@ -51,7 +51,6 @@ export async function onRequestPost({request,env}) {
 
     await env.FOCO_LINKS.put(`aulas:student:${id}`,JSON.stringify(student))
     const slots=await readPrefix(env.FOCO_LINKS,'aulas:slot:')
-
     for (const slot of slots.filter(slot=>slot.studentId===id||slot.blockedByStudentId===id)) {
       await env.FOCO_LINKS.put(`aulas:slot:${slot.id}`,JSON.stringify({...slot,status:'available',studentId:'',studentName:'',studentWhatsapp:'',blockedByStudentId:'',blockedByStudentName:'',updatedAt:new Date().toISOString()}))
     }
