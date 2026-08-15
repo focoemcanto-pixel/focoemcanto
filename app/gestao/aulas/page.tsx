@@ -1,5 +1,5 @@
-import UnifiedAulasManagerV6 from './UnifiedAulasManagerV6'
+import AgendaOnlyManager from './AgendaOnlyManager'
 
 export default function GestaoAulasPage() {
-  return <UnifiedAulasManagerV6 />
+  return <AgendaOnlyManager />
 }
