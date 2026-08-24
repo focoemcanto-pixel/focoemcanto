@@ -13,11 +13,17 @@ const verifySchema={type:'object',additionalProperties:false,required:['faithful
 async function generate(env,blob,item,retryInstruction=''){
  const form=new FormData();form.append('model',env.CLOSET_IMAGE_MODEL||'gpt-image-1.5');form.append('image',blob,'garment.png');form.append('size','1024x1024');form.append('quality','high');form.append('background','transparent');form.append('output_format','png');form.append('input_fidelity','high')
  const desc=[item?.name,item?.subcategory,item?.category,item?.color,item?.pattern,item?.style].filter(Boolean).join(', '),brand=item?.brand?`Marca detectada com confiança: ${item.brand}.`:'',label=item?.label_text?`Texto realmente legível na etiqueta/logo: "${item.label_text}".`:''
+ const isAccessory=item?.category==='Acessórios'
+ const separation=isAccessory
+  ?`ALVO ÚNICO: gere SOMENTE o acessório descrito nos dados do scanner. Remova completamente camisa, blusa, vestido, corpo e qualquer outra peça usada junto. Se for gravata, produza apenas a gravata isolada; se for óculos, apenas os óculos; se for relógio, apenas o relógio. Não incorpore tecido ou partes da roupa de fundo ao acessório.`
+  :`SEPARAÇÃO OBRIGATÓRIA: esta imagem pode mostrar acessórios ou outras camadas sobre a peça-alvo. Eles NÃO fazem parte do produto. Remova gravata, gravata-borboleta, lenço, cachecol, colar, cinto, suspensório, relógio, óculos e outras peças independentes que estejam sobre/ao lado da peça-alvo. Exemplo: para uma camisa usada com gravata, gere a CAMISA SOZINHA, sem gravata. Preserve apenas elementos intrínsecos da própria peça, como botões, bolsos, gola, punhos, estampas e logos pertencentes a ela.`
  form.append('prompt',`Crie uma versão de catálogo da MESMA peça observada nesta imagem para um guarda-roupa virtual. Esta é uma edição/reconstrução fiel, não uma troca por uma peça genérica.
 
-FIDELIDADE OBRIGATÓRIA: preserve a cor real específica do tecido, inclusive nuances como off-white, creme, marfim, areia, bege, grafite etc.; não converta automaticamente tons claros para branco puro. Preserve gola, mangas, modelagem, comprimento, costuras, botões, bolsos, recortes, estampas, logos e outros detalhes visíveis. ${brand} ${label} Se houver uma marca ou texto visível confirmado acima, preserve esse detalhe visual o mais fielmente possível. Se algo não estiver legível na referência, NÃO invente texto, marca ou logo.
+${separation}
 
-APRESENTAÇÃO: remova completamente pessoa, mãos, braços, pernas, cabide, móveis e cenário. Mostre somente a peça, frontal, centralizada, simétrica e naturalmente estendida como fotografia premium de e-commerce/flat lay. Corrija amassados, deformações por estar vestida e perspectiva, sem alterar o design da peça. Fundo totalmente transparente. Sem manequim, sem corpo, sem sombra humana, sem texto novo adicionado.
+FIDELIDADE OBRIGATÓRIA: preserve a cor real específica do tecido, inclusive nuances como off-white, creme, marfim, areia, bege, grafite etc.; não converta automaticamente tons claros para branco puro. Preserve gola, mangas, modelagem, comprimento, costuras, botões, bolsos, recortes, estampas, logos e outros detalhes visíveis QUE PERTENÇAM À PEÇA-ALVO. ${brand} ${label} Se houver uma marca ou texto visível confirmado acima, preserve esse detalhe visual o mais fielmente possível. Se algo não estiver legível na referência, NÃO invente texto, marca ou logo.
+
+APRESENTAÇÃO: remova completamente pessoa, mãos, braços, pernas, cabide, móveis e cenário. Mostre somente a peça-alvo, frontal, centralizada, simétrica e naturalmente estendida como fotografia premium de e-commerce/flat lay. Corrija amassados, deformações por estar vestida e perspectiva, sem alterar o design. Fundo totalmente transparente. Sem manequim, sem corpo, sem sombra humana, sem texto novo adicionado.
 
 Dados do scanner: ${desc||'peça de vestuário'}.${retryInstruction?`\n\nCORREÇÃO OBRIGATÓRIA APÓS AUDITORIA: ${retryInstruction}`:''}`)
  const response=await fetch('https://api.openai.com/v1/images/edits',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`},body:form}),data=await response.json()
@@ -26,7 +32,7 @@ Dados do scanner: ${desc||'peça de vestuário'}.${retryInstruction?`\n\nCORREÇ
 
 async function verify(env,original,catalog,item){
  const model=env.CLOSET_VISION_MODEL||'gpt-5.6-luna'
- const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model,instructions:`Compare a referência da peça com o asset de catálogo. Avalie fidelidade do PRODUTO, não pose/amassados. Verifique sobretudo mudança de categoria/modelagem, cor, gola, mangas, comprimento, bolsos, estampa e detalhes distintivos. score 0..1. faithful=true se a peça continua sendo claramente o mesmo produto. Produza retry_instruction somente para divergência material.`,input:[{role:'user',content:[{type:'input_text',text:`Metadados refinados: ${JSON.stringify(item)}. Imagem 1 = referência. Imagem 2 = catálogo.`},{type:'input_image',image_url:original,detail:'high'},{type:'input_image',image_url:catalog,detail:'low'}]}],text:{format:{type:'json_schema',name:'closet_catalog_verify',strict:true,schema:verifySchema}}})})
+ const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model,instructions:`Compare a referência da peça com o asset de catálogo. Avalie fidelidade do PRODUTO, não pose/amassados. Verifique sobretudo mudança de categoria/modelagem, cor, gola, mangas, comprimento, bolsos, estampa e detalhes distintivos. Também confirme SEPARAÇÃO: acessórios ou outras peças independentes presentes na referência não podem ter sido fundidos à peça-alvo. Para camisa com gravata, a camisa catalogada deve estar sem gravata; para gravata, o catálogo deve conter somente a gravata. score 0..1. faithful=true se a peça continua sendo claramente o mesmo produto e está corretamente isolada. Produza retry_instruction somente para divergência material.`,input:[{role:'user',content:[{type:'input_text',text:`Metadados refinados: ${JSON.stringify(item)}. Imagem 1 = referência. Imagem 2 = catálogo.`},{type:'input_image',image_url:original,detail:'high'},{type:'input_image',image_url:catalog,detail:'low'}]}],text:{format:{type:'json_schema',name:'closet_catalog_verify',strict:true,schema:verifySchema}}})})
  const data=await response.json();if(!response.ok)throw new Error(data?.error?.message||'Falha na conferência do asset.');const text=outputText(data);if(!text)throw new Error('Conferência sem resultado.');return JSON.parse(text)
 }
 
@@ -34,7 +40,7 @@ function severeAudit(audit){
  const score=Number(audit?.score||0)
  if(score<.78)return true
  const text=[...(audit?.issues||[]),audit?.retry_instruction||''].join(' ').toLowerCase()
- return /outra peça|categoria errada|tipo errado|cor muito diferente|cor incorreta|manga errada|gola errada|estampa errada|logo inventado/.test(text)
+ return /outra peça|categoria errada|tipo errado|cor muito diferente|cor incorreta|manga errada|gola errada|estampa errada|logo inventado|gravata.*camisa|acessório.*fundido|não isolad/.test(text)
 }
 
 export async function onRequestPost({request,env}){
