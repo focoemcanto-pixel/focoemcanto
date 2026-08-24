@@ -56,14 +56,24 @@ export default function ClosetPage(){
    if(!r.ok||!data?.ok)throw new Error(data?.message||'Não consegui analisar esta foto.');
    const items=(data.scan?.items||[]) as ScanItem[];
    if(!items.length){setScanError(data.scan?.reason||'Não encontrei peças válidas.');setSheet('scanReject');return}
-   const ready:PreparedItem[]=[];
-   for(let i=0;i<items.length;i++){
-    const item=items[i];
-    setScanPhase('cataloging');setProcessingText(`Criando versão de catálogo ${i+1} de ${items.length}`);
-    const crop=await cropByBox(image,item.box);
-    const catalogAsset=await catalogizeGarment(crop,item);
-    ready.push({...item,image:catalogAsset});
-   }
+   setScanPhase('cataloging');
+   setProcessingText(items.length===1?'Criando sua versão de catálogo':'Criando versões de catálogo em paralelo');
+   const ready=new Array<PreparedItem>(items.length);
+   let nextIndex=0,completed=0;
+   const worker=async()=>{
+    while(true){
+     const i=nextIndex++;
+     if(i>=items.length)return;
+     const item=items[i];
+     const crop=await cropByBox(image,item.box);
+     const catalogAsset=await catalogizeGarment(crop,item);
+     ready[i]={...item,image:catalogAsset};
+     completed+=1;
+     setProcessingText(items.length===1?'Versão de catálogo pronta':`Preparando em paralelo · ${completed} de ${items.length} prontas`);
+    }
+   };
+   const concurrency=Math.min(2,items.length);
+   await Promise.all(Array.from({length:concurrency},()=>worker()));
    setPrepared(ready);loadDraft(0,ready);setSheet('edit');
   }catch(e:any){setScanError(e?.message||'Falha no scanner.');setSheet('scanReject')}
  }
@@ -82,7 +92,7 @@ export default function ClosetPage(){
  <input ref={cameraRef} className={styles.hiddenInput} type="file" accept="image/*" capture="environment" onChange={receivePhoto}/><input ref={galleryRef} className={styles.hiddenInput} type="file" accept="image/*" onChange={receivePhoto}/>
  {sheet&&<button className={styles.scrim} onClick={()=>setSheet(null)}/>}<aside className={`${styles.sheet} ${sheet?styles.sheetOpen:''}`}><div className={styles.sheetHandle}/>
  {sheet==='add'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Cadastro rápido</span><h3>Uma foto pode virar várias peças.</h3></div><button onClick={()=>setSheet(null)}>×</button></div><p className={styles.sheetIntro}>Pode fotografar a roupa sozinha ou escolher uma foto sua já vestido. O sistema identifica cada item e cria uma versão limpa de catálogo para o closet.</p><div className={styles.captureGrid}><button onClick={()=>cameraRef.current?.click()}><span>◎</span><strong>Tirar foto</strong><small>usar câmera</small></button><button onClick={()=>galleryRef.current?.click()}><span>▧</span><strong>Escolher foto</strong><small>abrir galeria</small></button></div></>}
- {sheet==='scan'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Scanner do closet</span><h3>{scanPhase==='detecting'?'Analisando seu look...':'Criando peças para o closet...'}</h3></div></div><div className={scanStyles.scanStage}>{draftOriginal&&<img src={draftOriginal} alt="Foto sendo analisada"/>}<div className={scanStyles.scanFrame}><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanLine}/></div></div><div className={scanStyles.scanCopy}><strong>{processingText}</strong><p>{scanPhase==='detecting'?'Estou identificando cada roupa visível e seus detalhes.':'Agora cada item está sendo reconstruído como a mesma peça, porém reta, centralizada, sem corpo e com fundo transparente — pronta para montar looks.'}</p><div className={scanStyles.scanDots}><i/><i/><i/></div></div></>}
+ {sheet==='scan'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Scanner do closet</span><h3>{scanPhase==='detecting'?'Analisando seu look...':'Criando peças para o closet...'}</h3></div></div><div className={scanStyles.scanStage}>{draftOriginal&&<img src={draftOriginal} alt="Foto sendo analisada"/>}<div className={scanStyles.scanFrame}><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanLine}/></div></div><div className={scanStyles.scanCopy}><strong>{processingText}</strong><p>{scanPhase==='detecting'?'Estou identificando cada roupa visível e seus detalhes.':'As peças válidas estão sendo preparadas em paralelo, mantendo a mesma qualidade e fidelidade do catálogo.'}</p><div className={scanStyles.scanDots}><i/><i/><i/></div></div></>}
  {sheet==='scanReject'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Scanner do closet</span><h3>Não consegui preparar as peças.</h3></div><button onClick={()=>setSheet(null)}>×</button></div><div className={scanStyles.rejectCard}><strong>Tente outra foto.</strong><p>{scanError||'Deixe as roupas mais visíveis e com boa iluminação.'}</p></div><div className={scanStyles.retryGrid}><button onClick={()=>cameraRef.current?.click()}>Tirar outra foto</button><button onClick={()=>galleryRef.current?.click()}>Galeria</button></div></>}
  {sheet==='edit'&&current&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>{prepared.length>1?`${prepared.length} peças identificadas · ${currentIndex+1} de ${prepared.length}`:'Peça de catálogo pronta'}</span><h3>{currentIndex===0?'Confira e guarde':'Próxima peça'}</h3></div><button onClick={()=>setSheet(null)}>×</button></div>{prepared.length>1&&<div style={{display:'flex',gap:8,overflowX:'auto',padding:'8px 0 12px'}}>{prepared.map((p,i)=><button key={i} onClick={()=>{setCurrentIndex(i);loadDraft(i)}} style={{flex:'0 0 72px',height:86,border:i===currentIndex?'2px solid #211b17':'1px solid #ddd0c2',borderRadius:14,background:'#f4ecdf',padding:5}}><img src={p.image} alt={p.name} style={{width:'100%',height:'100%',objectFit:'contain'}}/></button>)}</div>}<div className={`${styles.editorPreview} ${scanStyles.transparentPreview}`}><img src={current.image} alt={current.name}/><span className={scanStyles.detectedBadge}>✓ versão de catálogo</span></div><div className={styles.formGrid}><label>Nome<input value={draftName} onChange={e=>setDraftName(e.target.value)}/></label><label>Categoria<select value={draftCategory} onChange={e=>setDraftCategory(e.target.value as Category)}>{categories.filter(c=>c!=='Todos').map(c=><option key={c}>{c}</option>)}</select></label><label>Cor principal<input value={draftColor} onChange={e=>setDraftColor(e.target.value)}/></label></div><button className={styles.savePieceButton} onClick={saveCurrent}>{currentIndex<prepared.length-1?'Guardar e ver próxima →':'Guardar no meu closet'}</button><button className={scanStyles.secondaryAction} onClick={()=>setSheet('add')}>Usar outra foto</button></>}
  {sheet==='closetStatus'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Primeiro look</span><h3>Seu stylist está pronto.</h3></div><button onClick={()=>setSheet(null)}>×</button></div><p className={styles.sheetIntro}>Você precisa de parte de cima, parte de baixo e calçado.</p><button className={styles.savePieceButton} onClick={()=>setSheet('add')}>Adicionar peças</button></>}
