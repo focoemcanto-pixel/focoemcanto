@@ -19,12 +19,20 @@ export async function onRequestPost({request,env}){
   form.append('model',env.CLOSET_IMAGE_MODEL||'gpt-image-1.5')
   form.append('image',blob,'garment.png')
   form.append('size','1024x1024')
-  form.append('quality','medium')
+  form.append('quality','high')
   form.append('background','transparent')
   form.append('output_format','png')
   form.append('input_fidelity','high')
   const desc=[item?.name,item?.subcategory,item?.category,item?.color,item?.pattern,item?.style].filter(Boolean).join(', ')
-  form.append('prompt',`Transforme a peça de roupa desta imagem em um asset de catálogo para um guarda-roupa virtual. Preserve com máxima fidelidade a MESMA peça observada: cor real, gola, mangas, modelagem, comprimento, costuras, botões, bolsos, estampas, logos e detalhes visíveis. Não troque o produto por uma peça genérica e não invente elementos que não estejam visíveis. Remova completamente pessoa, mãos, braços, pernas, cabide, móveis e cenário. Apresente somente a peça isolada, vista frontalmente, centralizada, simétrica e naturalmente estendida como fotografia de e-commerce/flat lay, corrigindo apenas amassados, deformações causadas por estar vestida e perspectiva da foto. Fundo totalmente transparente. Sem manequim, sem corpo, sem sombra de pessoa, sem texto adicionado. Item identificado pelo scanner: ${desc||'peça de vestuário'}.`)
+  const brand=item?.brand?`Marca detectada com confiança: ${item.brand}.`:''
+  const label=item?.label_text?`Texto realmente legível na etiqueta/logo: "${item.label_text}".`:''
+  form.append('prompt',`Crie uma versão de catálogo da MESMA peça observada nesta imagem para um guarda-roupa virtual. Esta é uma edição/reconstrução fiel, não uma troca por uma peça genérica.
+
+FIDELIDADE OBRIGATÓRIA: preserve a cor real específica do tecido, inclusive nuances como off-white, creme, marfim, areia, bege, grafite etc.; não converta automaticamente tons claros para branco puro. Preserve gola, mangas, modelagem, comprimento, costuras, botões, bolsos, recortes, estampas, logos e outros detalhes visíveis. ${brand} ${label} Se houver uma marca ou texto visível confirmado acima, preserve esse detalhe visual o mais fielmente possível. Se algo não estiver legível na referência, NÃO invente texto, marca ou logo.
+
+APRESENTAÇÃO: remova completamente pessoa, mãos, braços, pernas, cabide, móveis e cenário. Mostre somente a peça, frontal, centralizada, simétrica e naturalmente estendida como fotografia premium de e-commerce/flat lay. Corrija amassados, deformações por estar vestida e perspectiva, sem alterar o design da peça. Fundo totalmente transparente. Sem manequim, sem corpo, sem sombra humana, sem texto novo adicionado.
+
+Dados do scanner: ${desc||'peça de vestuário'}.`)
   const response=await fetch('https://api.openai.com/v1/images/edits',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`},body:form})
   const data=await response.json()
   if(!response.ok)return json({ok:false,message:data?.error?.message||'Não consegui criar a versão de catálogo.'},502)
