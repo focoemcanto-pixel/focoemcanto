@@ -26,8 +26,15 @@ Dados do scanner: ${desc||'peça de vestuário'}.${retryInstruction?`\n\nCORREÇ
 
 async function verify(env,original,catalog,item){
  const model=env.CLOSET_VISION_MODEL||'gpt-5.6-luna'
- const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model,instructions:`Compare a fotografia original recortada da peça com o asset de catálogo gerado. Avalie fidelidade do PRODUTO, não pose/amassados. Verifique principalmente: nuance de cor, tipo/modelagem, gola, mangas, comprimento, recortes, bolsos, estampa, logo/etiqueta e detalhes distintivos. A versão de catálogo pode estar reta e desamassada, mas não pode virar outra peça. score de 0 a 1. faithful=true apenas se score >= 0.86 e não houver alteração material. Produza retry_instruction curta e objetiva apenas se precisar corrigir.`,input:[{role:'user',content:[{type:'input_text',text:`Metadados refinados: ${JSON.stringify(item)}. Imagem 1 = referência original. Imagem 2 = asset gerado.`},{type:'input_image',image_url:original,detail:'high'},{type:'input_image',image_url:catalog,detail:'high'}]}],text:{format:{type:'json_schema',name:'closet_catalog_verify',strict:true,schema:verifySchema}}})})
+ const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{Authorization:`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({model,instructions:`Compare a referência da peça com o asset de catálogo. Avalie fidelidade do PRODUTO, não pose/amassados. Verifique sobretudo mudança de categoria/modelagem, cor, gola, mangas, comprimento, bolsos, estampa e detalhes distintivos. score 0..1. faithful=true se a peça continua sendo claramente o mesmo produto. Produza retry_instruction somente para divergência material.`,input:[{role:'user',content:[{type:'input_text',text:`Metadados refinados: ${JSON.stringify(item)}. Imagem 1 = referência. Imagem 2 = catálogo.`},{type:'input_image',image_url:original,detail:'high'},{type:'input_image',image_url:catalog,detail:'low'}]}],text:{format:{type:'json_schema',name:'closet_catalog_verify',strict:true,schema:verifySchema}}})})
  const data=await response.json();if(!response.ok)throw new Error(data?.error?.message||'Falha na conferência do asset.');const text=outputText(data);if(!text)throw new Error('Conferência sem resultado.');return JSON.parse(text)
+}
+
+function severeAudit(audit){
+ const score=Number(audit?.score||0)
+ if(score<.78)return true
+ const text=[...(audit?.issues||[]),audit?.retry_instruction||''].join(' ').toLowerCase()
+ return /outra peça|categoria errada|tipo errado|cor muito diferente|cor incorreta|manga errada|gola errada|estampa errada|logo inventado/.test(text)
 }
 
 export async function onRequestPost({request,env}){
@@ -39,8 +46,11 @@ export async function onRequestPost({request,env}){
   let catalog=await generate(env,blob,item),audit=null,retried=false
   try{
    audit=await verify(env,image,catalog,item)
-   if(!audit.faithful||Number(audit.score)<.86){retried=true;catalog=await generate(env,blob,item,audit.retry_instruction||`Corrija estas divergências: ${(audit.issues||[]).join('; ')}`);audit=await verify(env,image,catalog,item)}
-  }catch{/* se a auditoria falhar, preserva o asset gerado em vez de perder o cadastro */}
+   if(severeAudit(audit)){
+    retried=true
+    catalog=await generate(env,blob,item,audit.retry_instruction||`Corrija estas divergências materiais: ${(audit.issues||[]).join('; ')}`)
+   }
+  }catch{/* auditoria é proteção adicional; não descarta um asset de alta qualidade se ela falhar */}
   return json({ok:true,image:catalog,model:env.CLOSET_IMAGE_MODEL||'gpt-image-1.5',verified:Boolean(audit?.faithful),fidelity_score:audit?.score??null,issues:audit?.issues||[],retried})
  }catch(error){return json({ok:false,message:error?.message||'Falha ao normalizar a peça.'},500)}
 }
