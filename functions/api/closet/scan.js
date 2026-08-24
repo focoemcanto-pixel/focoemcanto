@@ -9,7 +9,7 @@ const itemSchema={
  }
 }
 const scanSchema={type:'object',additionalProperties:false,required:['valid','reason','items'],properties:{valid:{type:'boolean'},reason:{type:'string'},items:{type:'array',maxItems:8,items:itemSchema}}}
-const refineSchema={type:'object',additionalProperties:false,required:['name','color','subcategory','pattern','style','brand','label_text','confidence'],properties:{name:{type:'string'},color:{type:'string'},subcategory:{type:'string'},pattern:{type:'string'},style:{type:'string'},brand:{type:'string'},label_text:{type:'string'},confidence:{type:'number'}}}
+const refineSchema={type:'object',additionalProperties:false,required:['present','name','color','subcategory','pattern','style','brand','label_text','confidence','visibility','reconstructable'],properties:{present:{type:'boolean'},name:{type:'string'},color:{type:'string'},subcategory:{type:'string'},pattern:{type:'string'},style:{type:'string'},brand:{type:'string'},label_text:{type:'string'},confidence:{type:'number'},visibility:{type:'number'},reconstructable:{type:'boolean'}}}
 
 function outputText(data){return data.output_text||data.output?.flatMap(i=>i.content||[]).find(i=>i.type==='output_text')?.text||''}
 async function askVision(env,payload){
@@ -18,13 +18,11 @@ async function askVision(env,payload){
 }
 
 function keepItem(item){
- if(!item||item.reconstructable!==true)return false
- const confidence=Number(item.confidence||0),visibility=Number(item.visibility||0)
- if(['Blusas','Calças','Vestidos'].includes(item.category))return confidence>=.64&&visibility>=.38
- if(item.category==='Calçados')return confidence>=.68&&visibility>=.55
- if(item.category==='Bolsas')return confidence>=.72&&visibility>=.68
- if(item.category==='Acessórios')return confidence>=.74&&visibility>=.68
- return confidence>=.68&&visibility>=.55
+ if(!item||item.confidence<.68||item.reconstructable!==true)return false
+ const visibility=Number(item.visibility||0)
+ if(item.category==='Bolsas')return visibility>=.70
+ if(item.category==='Acessórios')return visibility>=.74&&item.confidence>=.78
+ return visibility>=.52
 }
 
 export async function onRequestPost({request,env}){
@@ -35,34 +33,41 @@ export async function onRequestPost({request,env}){
   if(image.length>8_000_000)return json({ok:false,message:'Imagem muito grande. Tente novamente.'},413)
   const model=env.CLOSET_VISION_MODEL||'gpt-5.6-luna'
 
-  const first=await askVision(env,{model,instructions:`Você é o scanner visual de um guarda-roupa virtual. Sua função é encontrar as peças REAIS que compõem o look da pessoa e selecionar somente as que podem virar assets confiáveis do closet.
+  const first=await askVision(env,{model,instructions:`Você é o scanner visual de um guarda-roupa virtual. Sua tarefa é detectar APENAS peças que EXISTEM VISUALMENTE na fotografia, não completar mentalmente um look.
 
-FAÇA UMA VARREDURA ESTRUTURADA DO LOOK, nesta ordem: (1) parte de cima; (2) parte de baixo; (3) vestido/macacão se houver; (4) calçados; (5) acessórios pessoais realmente visíveis, como óculos, relógio, cinto, joias e boné; (6) bolsa somente se o corpo da bolsa estiver suficientemente visível. Não pare depois de encontrar a primeira roupa. Parte de cima e parte de baixo são itens independentes e devem ser retornados separadamente quando ambos estiverem visíveis.
+REGRA ABSOLUTA ANTI-ALUCINAÇÃO: nunca crie uma peça porque ela seria provável, porque poderia estar por baixo de outra roupa ou porque combina com o look. Uma camiseta escondida sob um suéter NÃO existe para este cadastro. Se você não consegue apontar pixels visíveis pertencentes à peça, NÃO retorne o item.
 
-IMPORTANTE PARA FOTOS VESTIDAS: uma calça NÃO precisa aparecer 100% até a barra para ser utilizável. Se cintura/quadril e uma porção significativa das pernas estiverem visíveis, com cor, corte e silhueta suficientemente claros para reconstrução fiel, marque reconstructable=true. O mesmo vale para uma blusa parcialmente coberta por mãos ou celular quando a modelagem principal continua compreensível. Já uma mochila mostrada apenas pelas alças ou quase toda escondida atrás do corpo NÃO deve entrar. Óculos claramente visíveis no rosto podem entrar como acessório, mesmo sendo pequenos.
+FAÇA UMA VARREDURA SISTEMÁTICA da pessoa: cabeça/rosto (óculos e acessórios apenas se claros), tronco (camada externa realmente visível), cintura/quadril, pernas (calça/saia/short), pés (calçados somente se aparecem). Detecte parte de cima e parte de baixo separadamente quando ambas estiverem visíveis. Uma calça pode ser aceita mesmo com a barra fora do quadro se cintura, quadril, duas pernas e modelagem estiverem suficientemente visíveis para reconstrução fiel.
 
-IGNORE SEMPRE: pessoa/corpo, celular, capacete de moto, mochila quase toda escondida, objetos carregados que não são moda, móveis, comida, cenário e outros objetos domésticos. Capacete nunca é peça de closet neste produto.
+INCLUA: roupas realmente visíveis, calçados suficientemente visíveis, bolsas suficientemente expostas e acessórios de moda claramente identificáveis.
+IGNORE SEMPRE: corpo/pessoa, celular, capacete de moto, cenário, móveis e objetos domésticos. Mochila/bolsa quase toda escondida, aparecendo só alças ou pequeno fragmento, deve ser descartada.
 
-VISIBILIDADE: estime visibility de 0 a 1 = quanto da peça e de sua estrutura visual estão utilizáveis. reconstructable=true significa que dá para criar uma versão de catálogo fiel sem inventar design importante; não significa que 100% da peça precisa estar no quadro. Para roupas básicas de silhueta previsível, uma boa visão frontal/parcial pode ser suficiente. Para bolsas e acessórios complexos, seja mais rigoroso.
+Para cada item estime visibility 0..1 e reconstructable. Dê caixa apertada 0..1000 cobrindo apenas pixels da peça. Diferencie nuances de cor. Marca/etiqueta só se realmente legível. Nunca invente texto.`,input:[{role:'user',content:[{type:'input_text',text:'Detecte somente peças fisicamente visíveis nesta foto. Antes de retornar cada item, confirme mentalmente: consigo apontar uma região concreta da imagem que mostra esta peça? Se não, descarte. Não infira camadas ocultas.'},{type:'input_image',image_url:image,detail:'high'}]}],text:{format:{type:'json_schema',name:'closet_multi_scan',strict:true,schema:scanSchema}}})
 
-Para cada item, dê uma caixa apertada em coordenadas 0..1000. Diferencie tons com cuidado: branco puro, off-white, creme, marfim, areia, bege claro, cinza claro etc. Procure marca/logo/etiqueta apenas quando realmente legível; se não conseguir ler, use string vazia. Nunca invente marca ou texto.`,input:[{role:'user',content:[{type:'input_text',text:'Primeira passagem: percorra o look inteiro e liste cada peça utilizável separadamente. Não omita a parte de baixo só porque a foto termina antes dos pés. Não inclua itens ocultos ou objetos como capacete/celular.'},{type:'input_image',image_url:image,detail:'high'}]}],text:{format:{type:'json_schema',name:'closet_multi_scan',strict:true,schema:scanSchema}}})
-
-  let items=Array.isArray(first.parsed.items)?first.parsed.items.filter(keepItem):[]
-  items=items.sort((a,b)=>{
-   const priority=x=>x.category==='Blusas'?5:x.category==='Calças'?5:x.category==='Vestidos'?5:x.category==='Calçados'?4:x.category==='Acessórios'?3:2
+  let candidates=Array.isArray(first.parsed.items)?first.parsed.items.filter(keepItem):[]
+  candidates=candidates.sort((a,b)=>{
+   const priority=x=>['Blusas','Calças','Vestidos','Calçados'].includes(x.category)?2:1
    return priority(b)-priority(a)||(b.visibility||0)-(a.visibility||0)||(b.confidence||0)-(a.confidence||0)
-  }).slice(0,6)
-
-  if(!items.length)return json({ok:true,scan:{valid:false,reason:first.parsed.reason||'Não encontrei peças suficientemente visíveis para cadastrar.',items:[]},model:first.model})
+  }).slice(0,5)
+  if(!candidates.length)return json({ok:true,scan:{valid:false,reason:first.parsed.reason||'Não encontrei peças suficientemente visíveis para cadastrar.',items:[]},model:first.model})
 
   const refined=[]
-  for(let idx=0;idx<items.length;idx++){
-   const item=items[idx],b=item.box
+  for(let idx=0;idx<candidates.length;idx++){
+   const item=candidates[idx],b=item.box
    try{
-    const second=await askVision(env,{model,instructions:`Você é um perito de catalogação de vestuário. Esta é a SEGUNDA PASSAGEM de precisão sobre uma única peça já localizada. Reavalie especialmente COR REAL, subtipo/modelagem, padrão, estilo e leitura de marca/etiqueta. Considere balanço de branco e iluminação: não chame off-white/creme/marfim de branco só porque o tecido é muito claro. Para texto pequeno, só retorne marca ou label_text quando as letras forem realmente sustentadas pela imagem; caso contrário use string vazia. Preserve a interpretação da peça, não invente detalhes invisíveis.`,input:[{role:'user',content:[{type:'input_text',text:`Refine somente a peça ${idx+1}. Caixa normalizada: x=${b.x}, y=${b.y}, width=${b.width}, height=${b.height}. Leitura inicial: ${JSON.stringify({name:item.name,color:item.color,subcategory:item.subcategory,pattern:item.pattern,style:item.style,brand:item.brand,label_text:item.label_text})}. Inspecione com atenção a região delimitada e corrija os metadados se necessário.`},{type:'input_image',image_url:image,detail:'high'}]}],text:{format:{type:'json_schema',name:'closet_item_refine',strict:true,schema:refineSchema}}})
-    refined.push({...item,...second.parsed,box:item.box,category:item.category})
-   }catch{refined.push(item)}
+    const second=await askVision(env,{model,instructions:`Você é o verificador final de UMA peça candidata de um closet virtual. Primeiro responda se a peça candidata realmente está PRESENTE e VISÍVEL dentro/ao redor da caixa indicada. present=false se a candidata foi inferida, estiver escondida por outra roupa, for apenas uma hipótese ou não houver pixels suficientes dela. NÃO valide uma camiseta supostamente sob um suéter. NÃO valide mochila se só alças aparecem. Capacete nunca é item de closet.
+
+Se present=true, refine cor real, subtipo/modelagem, padrão, estilo, marca/etiqueta. Considere iluminação e balanço de branco. reconstructable=true apenas se puder criar versão de catálogo sem inventar características principais.`,input:[{role:'user',content:[{type:'input_text',text:`Candidata ${idx+1}: ${JSON.stringify({name:item.name,category:item.category,color:item.color,box:b})}. Verifique visualmente a EXISTÊNCIA desta peça na foto antes de refinar. Se a região corresponder a outra roupa, pele, cenário, capacete ou peça oculta/inferida, use present=false.`},{type:'input_image',image_url:image,detail:'high'}]}],text:{format:{type:'json_schema',name:'closet_item_refine',strict:true,schema:refineSchema}}})
+    const checked={...item,...second.parsed,box:item.box,category:item.category}
+    if(checked.present===true&&keepItem(checked))refined.push(checked)
+   }catch{if(keepItem(item))refined.push(item)}
   }
-  return json({ok:true,scan:{valid:refined.length>0,reason:'',items:refined},model:first.model,precision_passes:2})
+
+  const unique=[]
+  for(const item of refined){
+   const duplicate=unique.some(x=>x.category===item.category&&Math.abs(x.box.x-item.box.x)<70&&Math.abs(x.box.y-item.box.y)<70)
+   if(!duplicate)unique.push(item)
+  }
+  return json({ok:true,scan:{valid:unique.length>0,reason:unique.length?'':'As candidatas não passaram pela confirmação visual.',items:unique},model:first.model,precision_passes:2})
  }catch(error){return json({ok:false,message:error?.message||'Falha ao analisar a foto.'},500)}
 }
