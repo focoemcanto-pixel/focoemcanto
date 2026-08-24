@@ -2,15 +2,30 @@
 
 import { ChangeEvent, useMemo, useRef, useState } from 'react';
 import styles from './closet.module.css';
+import scanStyles from './scanner.module.css';
 
 type Category = 'Todos' | 'Blusas' | 'Calças' | 'Vestidos' | 'Calçados' | 'Bolsas' | 'Acessórios';
-type Sheet = 'add' | 'edit' | 'occasion' | 'wardrobe' | 'closetStatus' | null;
+type Sheet = 'add' | 'scan' | 'scanReject' | 'edit' | 'occasion' | 'wardrobe' | 'closetStatus' | null;
 type Piece = { id:number; category:Category; name:string; meta:string; tone:string; image?:string };
+type ScanResult = { valid:boolean; reason:string; name:string; category:Exclude<Category,'Todos'>|''; color:string; subcategory:string; pattern:string; style:string; confidence:number };
 
 const categories: Category[] = ['Todos','Blusas','Calças','Vestidos','Calçados','Bolsas','Acessórios'];
 const occasions = [
  ['Igreja','Culto, ensaio ou evento'],['Trabalho','Escritório ou reunião'],['Faculdade','Confortável e estiloso'],['Escola','Prático para o dia'],['Sair','Almoço, shopping ou passeio'],['Encontro','Um pouco mais especial'],['Festa','Aniversário ou comemoração'],['Evento','Ocasião mais arrumada'],['Viagem','Conforto e versatilidade'],['Outro','Conte onde você vai']
 ];
+
+async function imageToDataUrl(file: File) {
+  const original = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.onerror = reject; reader.readAsDataURL(file);
+  });
+  const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+    const el = new Image(); el.onload = () => resolve(el); el.onerror = reject; el.src = original;
+  });
+  const max = 1280; const scale = Math.min(1, max / Math.max(img.width, img.height));
+  const canvas = document.createElement('canvas'); canvas.width = Math.max(1, Math.round(img.width * scale)); canvas.height = Math.max(1, Math.round(img.height * scale));
+  canvas.getContext('2d')?.drawImage(img, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL('image/jpeg', .82);
+}
 
 export default function ClosetPage(){
  const [category,setCategory]=useState<Category>('Todos');
@@ -24,6 +39,8 @@ export default function ClosetPage(){
  const [draftName,setDraftName]=useState('');
  const [draftCategory,setDraftCategory]=useState<Category>('Blusas');
  const [draftColor,setDraftColor]=useState('');
+ const [scanResult,setScanResult]=useState<ScanResult|null>(null);
+ const [scanError,setScanError]=useState('');
  const [selectedOccasion,setSelectedOccasion]=useState('');
  const [selectedSlot,setSelectedSlot]=useState('Peça');
  const cameraRef=useRef<HTMLInputElement>(null); const galleryRef=useRef<HTMLInputElement>(null);
@@ -35,8 +52,23 @@ export default function ClosetPage(){
  const readiness=[hasTop,hasBottom,hasShoes].filter(Boolean).length;
  const lookPieces=pieces.slice(0,4);
  function notify(m:string){setToast(m);window.setTimeout(()=>setToast(''),2200)}
- function receivePhoto(e:ChangeEvent<HTMLInputElement>){const file=e.target.files?.[0];if(!file)return;const url=URL.createObjectURL(file);setDraftImage(url);setDraftName('Nova peça');setDraftCategory('Blusas');setDraftColor('');setSheet('edit');}
- function savePiece(){const item:Piece={id:Date.now(),category:draftCategory,name:draftName||'Minha peça',meta:[draftColor,'Adicionada agora'].filter(Boolean).join(' · '),tone:'#eee7dc',image:draftImage};setPieces(v=>[item,...v]);setSheet(null);setWardrobeOpen(true);notify('Peça guardada no seu closet ✦');}
+ async function scanPhoto(image:string){
+   setSheet('scan'); setScanError(''); setScanResult(null);
+   try {
+     const response=await fetch('/api/closet/scan',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({image})});
+     const data=await response.json();
+     if(!response.ok||!data?.ok) throw new Error(data?.message||'Não consegui analisar esta foto.');
+     const result=data.scan as ScanResult; setScanResult(result);
+     if(!result.valid){setSheet('scanReject');return;}
+     setDraftName(result.name||'Nova peça'); setDraftCategory((result.category||'Blusas') as Category); setDraftColor(result.color||''); setSheet('edit');
+   } catch(error:any){setScanError(error?.message||'Falha no scanner.'); setSheet('scanReject');}
+ }
+ async function receivePhoto(e:ChangeEvent<HTMLInputElement>){
+   const file=e.target.files?.[0]; if(!file)return;
+   try{const image=await imageToDataUrl(file); setDraftImage(image); await scanPhoto(image);}catch{setScanError('Não consegui preparar esta imagem. Tente outra foto.');setSheet('scanReject');}
+   e.target.value='';
+ }
+ function savePiece(){const item:Piece={id:Date.now(),category:draftCategory,name:draftName||'Minha peça',meta:[draftColor,scanResult?.subcategory,scanResult?.pattern].filter(Boolean).join(' · '),tone:'#eee7dc',image:draftImage};setPieces(v=>[item,...v]);setSheet(null);setWardrobeOpen(true);notify('Peça guardada no seu closet ✦');}
  function startLook(){if(!readyForLook){setSheet('closetStatus');return;}setSheet('occasion');}
  function openSwap(label:string){setSelectedSlot(label);setSheet('wardrobe');}
  return <main className={styles.page}><section className={styles.appShell}>
@@ -60,9 +92,11 @@ export default function ClosetPage(){
  </section>
  <input ref={cameraRef} className={styles.hiddenInput} type="file" accept="image/*" capture="environment" onChange={receivePhoto}/><input ref={galleryRef} className={styles.hiddenInput} type="file" accept="image/*" onChange={receivePhoto}/>
  {sheet&&<button className={styles.scrim} aria-label="Fechar" onClick={()=>setSheet(null)}/>}<aside className={`${styles.sheet} ${sheet?styles.sheetOpen:''}`}><div className={styles.sheetHandle}/>
- {sheet==='closetStatus'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Primeiro look</span><h3>{pieces.length?'Seu closet está começando.':'Seu stylist está pronto.'}</h3></div><button onClick={()=>setSheet(null)}>×</button></div><p className={styles.sheetIntro}>{pieces.length?'Faltam só algumas bases para eu montar uma combinação que faça sentido.':'Só faltam suas roupas. Você pode começar com três peças e testar o app sem cadastrar o guarda-roupa inteiro.'}</p><div className={styles.photoTip}><span>✦</span><p><strong>{readiness} de 3 para começar</strong>Precisamos apenas das bases do primeiro look.</p></div><div className={styles.formGrid}><div className={styles.photoTip}><span>{hasTop?'✓':'○'}</span><p><strong>Parte de cima {hasTop?'— pronta':''}</strong>Blusa, camisa, camiseta ou vestido.</p></div><div className={styles.photoTip}><span>{hasBottom?'✓':'○'}</span><p><strong>Parte de baixo {hasBottom?'— pronta':''}</strong>Calça, saia, short ou vestido.</p></div><div className={styles.photoTip}><span>{hasShoes?'✓':'○'}</span><p><strong>Calçado {hasShoes?'— pronto':''}</strong>Tênis, sandália, salto ou sapato.</p></div></div><button className={styles.savePieceButton} onClick={()=>setSheet('add')}>Adicionar próxima peça</button><button className={styles.openClosetButton} onClick={()=>{setSheet(null);setWardrobeOpen(true)}}>Abrir meu guarda-roupa</button></>}
- {sheet==='add'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Nova peça</span><h3>Coloque no seu closet</h3></div><button onClick={()=>setSheet(null)}>×</button></div><p className={styles.sheetIntro}>Fotografe a roupa ou escolha uma imagem da galeria.</p><div className={styles.captureGrid}><button onClick={()=>cameraRef.current?.click()}><span>◎</span><strong>Tirar foto</strong><small>usar a câmera</small></button><button onClick={()=>galleryRef.current?.click()}><span>▧</span><strong>Escolher foto</strong><small>abrir galeria</small></button></div><div className={styles.photoTip}><span>✦</span><p><strong>Uma peça por foto</strong>Depois o processamento recorta e prepara a roupa real para os looks.</p></div></>}
- {sheet==='edit'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Preparar peça</span><h3>Confira antes de guardar</h3></div><button onClick={()=>setSheet(null)}>×</button></div><div className={styles.editorPreview}>{draftImage&&<img src={draftImage} alt="Peça enviada"/>}<span className={styles.processingBadge}>✦ foto recebida</span></div><div className={styles.formGrid}><label>Nome<input value={draftName} onChange={e=>setDraftName(e.target.value)} placeholder="Ex.: Camisa branca"/></label><label>Categoria<select value={draftCategory} onChange={e=>setDraftCategory(e.target.value as Category)}>{categories.filter(c=>c!=='Todos').map(c=><option key={c}>{c}</option>)}</select></label><label>Cor principal<input value={draftColor} onChange={e=>setDraftColor(e.target.value)} placeholder="Ex.: Off-white"/></label></div><button className={styles.savePieceButton} onClick={savePiece}>Guardar no meu closet</button></>}
+ {sheet==='closetStatus'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Primeiro look</span><h3>{pieces.length?'Seu closet está começando.':'Seu stylist está pronto.'}</h3></div><button onClick={()=>setSheet(null)}>×</button></div><p className={styles.sheetIntro}>{pieces.length?'Faltam só algumas bases para eu montar uma combinação que faça sentido.':'Só faltam suas roupas. Você pode começar com três peças e testar o app sem cadastrar o guarda-roupa inteiro.'}</p><div className={`${styles.photoTip} ${scanStyles.contrastCard}`}><span>✦</span><p><strong>{readiness} de 3 para começar</strong>Precisamos apenas das bases do primeiro look.</p></div><div className={styles.formGrid}><div className={`${styles.photoTip} ${scanStyles.contrastCard}`}><span>{hasTop?'✓':'○'}</span><p><strong>Parte de cima {hasTop?'— pronta':''}</strong>Blusa, camisa, camiseta ou vestido.</p></div><div className={`${styles.photoTip} ${scanStyles.contrastCard}`}><span>{hasBottom?'✓':'○'}</span><p><strong>Parte de baixo {hasBottom?'— pronta':''}</strong>Calça, saia, short ou vestido.</p></div><div className={`${styles.photoTip} ${scanStyles.contrastCard}`}><span>{hasShoes?'✓':'○'}</span><p><strong>Calçado {hasShoes?'— pronto':''}</strong>Tênis, sandália, salto ou sapato.</p></div></div><button className={styles.savePieceButton} onClick={()=>setSheet('add')}>Adicionar próxima peça</button><button className={scanStyles.secondaryAction} onClick={()=>{setSheet(null);setWardrobeOpen(true)}}>Abrir meu guarda-roupa</button></>}
+ {sheet==='add'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Nova peça</span><h3>Coloque no seu closet</h3></div><button onClick={()=>setSheet(null)}>×</button></div><p className={styles.sheetIntro}>Fotografe a roupa ou escolha uma imagem da galeria. Antes de guardar, o scanner confirma se existe uma peça válida na foto.</p><div className={styles.captureGrid}><button onClick={()=>cameraRef.current?.click()}><span>◎</span><strong>Tirar foto</strong><small>usar a câmera</small></button><button onClick={()=>galleryRef.current?.click()}><span>▧</span><strong>Escolher foto</strong><small>abrir galeria</small></button></div><div className={`${styles.photoTip} ${scanStyles.contrastCard}`}><span>✦</span><p><strong>Scanner do closet</strong>Comida, objetos e fotos sem uma peça identificável serão recusados.</p></div></>}
+ {sheet==='scan'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Scanner do closet</span><h3>Analisando sua peça...</h3></div></div><div className={scanStyles.scanStage}>{draftImage&&<img src={draftImage} alt="Foto sendo analisada"/>}<div className={scanStyles.scanFrame}><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanCorner}/><i className={scanStyles.scanLine}/></div></div><div className={scanStyles.scanCopy}><strong>Procurando uma peça de roupa</strong><p>Estou identificando o item, a categoria, a cor e se a foto serve para entrar no seu guarda-roupa.</p><div className={scanStyles.scanDots}><i/><i/><i/></div></div></>}
+ {sheet==='scanReject'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Scanner do closet</span><h3>Essa foto não entrou.</h3></div><button onClick={()=>setSheet(null)}>×</button></div><div className={scanStyles.rejectCard}><div className={scanStyles.rejectIcon}>⌁</div><strong>Não encontrei uma peça válida.</strong><p>{scanError||scanResult?.reason||'Tente fotografar uma roupa, calçado, bolsa ou acessório de moda de forma mais clara.'}</p></div><div className={scanStyles.retryGrid}><button onClick={()=>cameraRef.current?.click()}>Tirar outra foto</button><button onClick={()=>galleryRef.current?.click()}>Escolher da galeria</button></div></>}
+ {sheet==='edit'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Peça encontrada</span><h3>Confira antes de guardar</h3></div><button onClick={()=>setSheet(null)}>×</button></div><div className={styles.editorPreview}>{draftImage&&<img src={draftImage} alt="Peça encontrada"/>}<span className={scanStyles.detectedBadge}>✓ peça reconhecida</span></div>{scanResult&&<div className={scanStyles.scanMeta}><div><span>Tipo</span><strong>{scanResult.subcategory||draftName}</strong></div><div><span>Estilo</span><strong>{scanResult.style||'Não definido'}</strong></div></div>}<div className={styles.formGrid}><label>Nome<input value={draftName} onChange={e=>setDraftName(e.target.value)} placeholder="Ex.: Camisa branca"/></label><label>Categoria<select value={draftCategory} onChange={e=>setDraftCategory(e.target.value as Category)}>{categories.filter(c=>c!=='Todos').map(c=><option key={c}>{c}</option>)}</select></label><label>Cor principal<input value={draftColor} onChange={e=>setDraftColor(e.target.value)} placeholder="Ex.: Off-white"/></label></div><button className={styles.savePieceButton} onClick={savePiece}>Guardar no meu closet</button><button className={scanStyles.secondaryAction} onClick={()=>setSheet('add')}>Usar outra foto</button></>}
  {sheet==='occasion'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Montar look</span><h3>Para onde você vai?</h3></div><button onClick={()=>setSheet(null)}>×</button></div><p className={styles.sheetIntro}>A ocasião entra junto com seu estilo e seu histórico de escolhas.</p><div className={styles.occasionGrid}>{occasions.map(([name,desc])=><button key={name} className={selectedOccasion===name?styles.occasionActive:''} onClick={()=>setSelectedOccasion(name)}><strong>{name}</strong><small>{desc}</small></button>)}</div><button className={styles.savePieceButton} disabled={!selectedOccasion} onClick={()=>{setLookReady(true);setSheet(null);notify('Look montado ✦')}}>Montar para {selectedOccasion||'essa ocasião'}</button></>}
  {sheet==='wardrobe'&&<><div className={styles.sheetHeader}><div><span className={styles.kicker}>Trocar no look</span><h3>{selectedSlot}</h3></div><button onClick={()=>setSheet(null)}>×</button></div><p className={styles.sheetIntro}>Primeiro aparecem as opções que combinam melhor. Você também pode abrir o guarda-roupa inteiro.</p><div className={styles.swapGrid}>{pieces.slice(0,6).map(p=><button key={p.id} onClick={()=>{setSheet(null);notify(`${p.name} entrou no look`)}}>{p.image&&<img src={p.image} alt={p.name}/>}<strong>{p.name}</strong><small>{p.meta}</small></button>)}</div><button className={styles.openClosetButton} onClick={()=>{setSheet(null);setWardrobeOpen(true)}}>Abrir meu guarda-roupa</button></>}
  </aside><div className={`${styles.toast} ${toast?styles.toastVisible:''}`}>{toast}</div></main>
