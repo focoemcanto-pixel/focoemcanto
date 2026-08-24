@@ -18,11 +18,13 @@ async function askVision(env,payload){
 }
 
 function keepItem(item){
- if(!item||item.confidence<.68||item.reconstructable!==true)return false
- const visibility=Number(item.visibility||0)
- if(item.category==='Bolsas')return visibility>=.62
- if(item.category==='Acessórios')return visibility>=.72&&item.confidence>=.76
- return visibility>=.55
+ if(!item||item.reconstructable!==true)return false
+ const confidence=Number(item.confidence||0),visibility=Number(item.visibility||0)
+ if(['Blusas','Calças','Vestidos'].includes(item.category))return confidence>=.64&&visibility>=.38
+ if(item.category==='Calçados')return confidence>=.68&&visibility>=.55
+ if(item.category==='Bolsas')return confidence>=.72&&visibility>=.68
+ if(item.category==='Acessórios')return confidence>=.74&&visibility>=.68
+ return confidence>=.68&&visibility>=.55
 }
 
 export async function onRequestPost({request,env}){
@@ -33,23 +35,23 @@ export async function onRequestPost({request,env}){
   if(image.length>8_000_000)return json({ok:false,message:'Imagem muito grande. Tente novamente.'},413)
   const model=env.CLOSET_VISION_MODEL||'gpt-5.6-luna'
 
-  const first=await askVision(env,{model,instructions:`Você é o scanner visual de um guarda-roupa virtual. Sua função NÃO é listar tudo que existe na foto; é selecionar apenas itens que realmente podem virar uma peça confiável do closet.
+  const first=await askVision(env,{model,instructions:`Você é o scanner visual de um guarda-roupa virtual. Sua função é encontrar as peças REAIS que compõem o look da pessoa e selecionar somente as que podem virar assets confiáveis do closet.
 
-INCLUA: roupas vestidas ou isoladas, calçados suficientemente visíveis, bolsas suficientemente visíveis e acessórios pessoais de moda claramente identificáveis (óculos, relógio, cinto, joias, boné etc.).
+FAÇA UMA VARREDURA ESTRUTURADA DO LOOK, nesta ordem: (1) parte de cima; (2) parte de baixo; (3) vestido/macacão se houver; (4) calçados; (5) acessórios pessoais realmente visíveis, como óculos, relógio, cinto, joias e boné; (6) bolsa somente se o corpo da bolsa estiver suficientemente visível. Não pare depois de encontrar a primeira roupa. Parte de cima e parte de baixo são itens independentes e devem ser retornados separadamente quando ambos estiverem visíveis.
 
-IGNORE SEMPRE: pessoa/corpo, celular, capacete de moto, objetos carregados que não são moda, móveis, comida, cenário e outros objetos domésticos.
+IMPORTANTE PARA FOTOS VESTIDAS: uma calça NÃO precisa aparecer 100% até a barra para ser utilizável. Se cintura/quadril e uma porção significativa das pernas estiverem visíveis, com cor, corte e silhueta suficientemente claros para reconstrução fiel, marque reconstructable=true. O mesmo vale para uma blusa parcialmente coberta por mãos ou celular quando a modelagem principal continua compreensível. Já uma mochila mostrada apenas pelas alças ou quase toda escondida atrás do corpo NÃO deve entrar. Óculos claramente visíveis no rosto podem entrar como acessório, mesmo sendo pequenos.
 
-VISIBILIDADE É O CRITÉRIO PRINCIPAL. Para cada item estime visibility de 0 a 1 = quanto da própria peça está realmente visível e compreensível. Só marque reconstructable=true quando houver informação visual suficiente para reconstruir a peça sem inventar partes importantes. Uma mochila quase toda escondida atrás do corpo, aparecendo só pelas alças, deve ser IGNORADA e reconstructable=false. Uma calça visível da cintura até a barra pode entrar. Um sapato cortado fora do quadro não entra. Um relógio claramente visível no pulso pode entrar. Capacete nunca entra, mesmo muito visível.
+IGNORE SEMPRE: pessoa/corpo, celular, capacete de moto, mochila quase toda escondida, objetos carregados que não são moda, móveis, comida, cenário e outros objetos domésticos. Capacete nunca é peça de closet neste produto.
 
-Não confunda objetos próximos com acessórios. Não crie item para algo parcialmente oculto só porque você sabe que provavelmente existe ali.
+VISIBILIDADE: estime visibility de 0 a 1 = quanto da peça e de sua estrutura visual estão utilizáveis. reconstructable=true significa que dá para criar uma versão de catálogo fiel sem inventar design importante; não significa que 100% da peça precisa estar no quadro. Para roupas básicas de silhueta previsível, uma boa visão frontal/parcial pode ser suficiente. Para bolsas e acessórios complexos, seja mais rigoroso.
 
-Para cada item válido, dê uma caixa apertada em coordenadas 0..1000. Diferencie tons com cuidado: branco puro, off-white, creme, marfim, areia, bege claro, cinza claro etc. Procure marca/logo/etiqueta apenas quando realmente legível; se não conseguir ler, use string vazia. Nunca invente marca ou texto.`,input:[{role:'user',content:[{type:'input_text',text:'Primeira passagem: identifique apenas peças realmente utilizáveis no guarda-roupa. Priorize fidelidade, não quantidade. Itens ocultos, ambíguos ou insuficientemente visíveis devem ser descartados.'},{type:'input_image',image_url:image,detail:'high'}]}],text:{format:{type:'json_schema',name:'closet_multi_scan',strict:true,schema:scanSchema}}})
+Para cada item, dê uma caixa apertada em coordenadas 0..1000. Diferencie tons com cuidado: branco puro, off-white, creme, marfim, areia, bege claro, cinza claro etc. Procure marca/logo/etiqueta apenas quando realmente legível; se não conseguir ler, use string vazia. Nunca invente marca ou texto.`,input:[{role:'user',content:[{type:'input_text',text:'Primeira passagem: percorra o look inteiro e liste cada peça utilizável separadamente. Não omita a parte de baixo só porque a foto termina antes dos pés. Não inclua itens ocultos ou objetos como capacete/celular.'},{type:'input_image',image_url:image,detail:'high'}]}],text:{format:{type:'json_schema',name:'closet_multi_scan',strict:true,schema:scanSchema}}})
 
   let items=Array.isArray(first.parsed.items)?first.parsed.items.filter(keepItem):[]
   items=items.sort((a,b)=>{
-   const priority=x=>['Blusas','Calças','Vestidos','Calçados'].includes(x.category)?2:1
+   const priority=x=>x.category==='Blusas'?5:x.category==='Calças'?5:x.category==='Vestidos'?5:x.category==='Calçados'?4:x.category==='Acessórios'?3:2
    return priority(b)-priority(a)||(b.visibility||0)-(a.visibility||0)||(b.confidence||0)-(a.confidence||0)
-  }).slice(0,5)
+  }).slice(0,6)
 
   if(!items.length)return json({ok:true,scan:{valid:false,reason:first.parsed.reason||'Não encontrei peças suficientemente visíveis para cadastrar.',items:[]},model:first.model})
 
