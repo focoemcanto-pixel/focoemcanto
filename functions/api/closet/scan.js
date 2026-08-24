@@ -3,20 +3,36 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
   headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
 })
 
-const scanSchema = {
+const itemSchema = {
   type: 'object',
   additionalProperties: false,
-  required: ['valid', 'reason', 'name', 'category', 'color', 'subcategory', 'pattern', 'style', 'confidence'],
+  required: ['name','category','color','subcategory','pattern','style','confidence','box'],
   properties: {
-    valid: { type: 'boolean' },
-    reason: { type: 'string' },
     name: { type: 'string' },
-    category: { type: 'string', enum: ['Blusas','Calças','Vestidos','Calçados','Bolsas','Acessórios',''] },
+    category: { type: 'string', enum: ['Blusas','Calças','Vestidos','Calçados','Bolsas','Acessórios'] },
     color: { type: 'string' },
     subcategory: { type: 'string' },
     pattern: { type: 'string' },
     style: { type: 'string' },
     confidence: { type: 'number' },
+    box: {
+      type: 'object', additionalProperties: false,
+      required: ['x','y','width','height'],
+      properties: {
+        x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' },
+      },
+    },
+  },
+}
+
+const scanSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['valid','reason','items'],
+  properties: {
+    valid: { type: 'boolean' },
+    reason: { type: 'string' },
+    items: { type: 'array', maxItems: 8, items: itemSchema },
   },
 }
 
@@ -37,12 +53,12 @@ export async function onRequestPost({ request, env }) {
       headers: { Authorization: `Bearer ${env.OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         model: env.CLOSET_VISION_MODEL || 'gpt-5.6-luna',
-        instructions: `Você é o scanner visual de um guarda-roupa virtual. Sua função é aceitar apenas uma peça de vestuário, calçado, bolsa ou acessório de moda claramente identificável na foto. Rejeite comida, móveis, ambientes, pessoas sem uma peça isolável, animais, objetos domésticos, eletrônicos e imagens em que a roupa não possa ser identificada com segurança. Se houver uma peça válida, classifique-a em exatamente uma das categorias permitidas. Dê nomes curtos em português do Brasil e descreva cor principal, subtipo, estampa e estilo aparente. Não invente detalhes invisíveis. confidence vai de 0 a 1. Se confidence < 0.65, valid deve ser false.`,
+        instructions: `Você é o scanner visual de um guarda-roupa virtual. Detecte TODAS as peças de moda utilizáveis visíveis na foto, inclusive quando estiverem vestidas em uma pessoa: blusa/camisa/suéter, calça/saia/short, vestido, calçados, bolsa e acessórios relevantes. Não trate a pessoa como uma peça. Não inclua celular, capacete, móveis, comida ou objetos domésticos. Uma peça deve ter confidence >= 0.65. Para cada peça, forneça uma caixa delimitadora apertada em coordenadas normalizadas de 0 a 1000: x e y são canto superior esquerdo; width e height são dimensões. A caixa deve conter principalmente aquela peça e evitar rosto, mãos e outras roupas quando possível. Se houver duas ou mais roupas, retorne cada uma como item separado. Se não houver nenhuma peça válida, valid=false e items=[]. Nomes curtos em português do Brasil; não invente detalhes invisíveis.`,
         input: [{ role: 'user', content: [
-          { type: 'input_text', text: 'Analise esta foto para cadastro no closet. Existe uma peça válida de moda para ser recortada e usada em composição de looks?' },
-          { type: 'input_image', image_url: image, detail: 'low' },
+          { type: 'input_text', text: 'Analise a foto para cadastro rápido no closet. Quantas peças de roupa/moda existem? Separe cada peça e dê a caixa individual para que o app recorte uma por uma.' },
+          { type: 'input_image', image_url: image, detail: 'high' },
         ]}],
-        text: { format: { type: 'json_schema', name: 'closet_scan', strict: true, schema: scanSchema } },
+        text: { format: { type: 'json_schema', name: 'closet_multi_scan', strict: true, schema: scanSchema } },
       }),
     })
     const data = await response.json()
@@ -50,6 +66,8 @@ export async function onRequestPost({ request, env }) {
     const text = outputText(data)
     if (!text) return json({ ok: false, message: 'O scanner não retornou uma análise.' }, 502)
     const result = JSON.parse(text)
+    result.items = Array.isArray(result.items) ? result.items.filter(i => i.confidence >= .65) : []
+    result.valid = result.items.length > 0
     return json({ ok: true, scan: result, model: data.model || env.CLOSET_VISION_MODEL || 'gpt-5.6-luna' })
   } catch (error) {
     return json({ ok: false, message: error?.message || 'Falha ao analisar a foto.' }, 500)
