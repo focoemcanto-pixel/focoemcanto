@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import styles from './closet.module.css';
 
 type Category = 'Todos' | 'Blusas' | 'Calças' | 'Vestidos' | 'Calçados' | 'Bolsas' | 'Acessórios';
+type Sheet = 'add' | 'wardrobe' | null;
 
 const categories: { label: Category; icon: string; count: number }[] = [
   { label: 'Todos', icon: '✦', count: 24 },
@@ -28,6 +29,8 @@ export default function ClosetPage() {
   const [category, setCategory] = useState<Category>('Todos');
   const [liked, setLiked] = useState(false);
   const [toast, setToast] = useState('');
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [selectedPiece, setSelectedPiece] = useState('Calçado');
 
   const filteredPieces = useMemo(
     () => pieces.filter((piece) => category === 'Todos' || piece.category === category),
@@ -37,6 +40,11 @@ export default function ClosetPage() {
   function notify(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(''), 2200);
+  }
+
+  function openWardrobe(piece: string) {
+    setSelectedPiece(piece);
+    setSheet('wardrobe');
   }
 
   return (
@@ -76,13 +84,18 @@ export default function ClosetPage() {
           </div>
         </section>
 
+        <section className={styles.quickRow} aria-label="Ações rápidas">
+          <button type="button" onClick={() => setSheet('add')}><span>＋</span><strong>Adicionar peça</strong><small>foto ou galeria</small></button>
+          <button type="button" onClick={() => notify('Escolha uma peça para eu completar o look')}><span>⌁</span><strong>Começar por uma peça</strong><small>fixe e complete</small></button>
+        </section>
+
         <section className={styles.section}>
           <div className={styles.sectionHeader}>
             <div>
               <span className={styles.kicker}>Meu guarda-roupa</span>
               <h3>24 peças organizadas</h3>
             </div>
-            <button className={styles.textButton} type="button" onClick={() => notify('Abrindo cadastro de peça…')}>+ Adicionar</button>
+            <button className={styles.textButton} type="button" onClick={() => setSheet('add')}>+ Adicionar</button>
           </div>
 
           <div className={styles.categories} role="tablist" aria-label="Categorias do guarda-roupa">
@@ -128,18 +141,18 @@ export default function ClosetPage() {
 
           <div className={styles.lookCard}>
             <div className={styles.lookCanvas}>
-              <button className={`${styles.lookPiece} ${styles.lookTop}`} type="button" onClick={() => notify('Camisa selecionada · trocar ou fixar')}>👚</button>
-              <button className={`${styles.lookPiece} ${styles.lookBottom}`} type="button" onClick={() => notify('Calça selecionada · trocar ou fixar')}>👖</button>
-              <button className={`${styles.lookPiece} ${styles.lookShoe}`} type="button" onClick={() => notify('Calçado selecionado · trocar ou fixar')}>👡</button>
-              <button className={`${styles.lookPiece} ${styles.lookBag}`} type="button" onClick={() => notify('Bolsa selecionada · trocar ou fixar')}>👜</button>
+              <button className={`${styles.lookPiece} ${styles.lookTop}`} type="button" onClick={() => openWardrobe('Blusa')}>👚</button>
+              <button className={`${styles.lookPiece} ${styles.lookBottom}`} type="button" onClick={() => openWardrobe('Calça')}>👖</button>
+              <button className={`${styles.lookPiece} ${styles.lookShoe}`} type="button" onClick={() => openWardrobe('Calçado')}>👡</button>
+              <button className={`${styles.lookPiece} ${styles.lookBag}`} type="button" onClick={() => openWardrobe('Bolsa')}>👜</button>
               <div className={styles.lookNote}>Toque em uma peça para trocar</div>
             </div>
 
             <div className={styles.lookDetails}>
               <p>Leve, elegante e sem esforço. A alfaiataria clara equilibra a camisa fluida, enquanto o caramelo aquece a composição.</p>
               <div className={styles.lookActions}>
-                <button type="button" onClick={() => notify('Vamos trocar só uma peça')}>↻ <span>Trocar peça</span></button>
-                <button type="button" onClick={() => notify('Abrindo seu guarda-roupa')}>▤ <span>Guarda-roupa</span></button>
+                <button type="button" onClick={() => openWardrobe('Peça')}>↻ <span>Trocar peça</span></button>
+                <button type="button" onClick={() => setSheet('wardrobe')}>▤ <span>Abrir guarda-roupa</span></button>
                 <button
                   type="button"
                   className={liked ? styles.liked : ''}
@@ -173,6 +186,44 @@ export default function ClosetPage() {
           <button type="button" onClick={() => notify('Loja inteligente em breve')}><span>◌</span>Loja</button>
         </nav>
       </section>
+
+      {sheet && <button className={styles.scrim} type="button" aria-label="Fechar" onClick={() => setSheet(null)} />}
+
+      <aside className={`${styles.sheet} ${sheet ? styles.sheetOpen : ''}`} aria-hidden={!sheet}>
+        <div className={styles.sheetHandle} />
+        {sheet === 'add' && (
+          <>
+            <div className={styles.sheetHeader}>
+              <div><span className={styles.kicker}>Nova peça</span><h3>Coloque no seu closet</h3></div>
+              <button type="button" onClick={() => setSheet(null)}>×</button>
+            </div>
+            <p className={styles.sheetIntro}>Você só fotografa. Depois a IA identifica categoria, cor, tipo e estilo para você confirmar.</p>
+            <div className={styles.captureGrid}>
+              <button type="button" onClick={() => notify('A câmera será conectada na próxima etapa')}><span>◎</span><strong>Tirar foto</strong><small>mais rápido</small></button>
+              <button type="button" onClick={() => notify('A galeria será conectada na próxima etapa')}><span>▧</span><strong>Escolher foto</strong><small>da galeria</small></button>
+            </div>
+            <div className={styles.photoTip}><span>✦</span><p><strong>Dica para reconhecer melhor</strong>Fotografe uma peça por vez, com boa luz e fundo simples.</p></div>
+          </>
+        )}
+
+        {sheet === 'wardrobe' && (
+          <>
+            <div className={styles.sheetHeader}>
+              <div><span className={styles.kicker}>Trocar no look</span><h3>{selectedPiece}</h3></div>
+              <button type="button" onClick={() => setSheet(null)}>×</button>
+            </div>
+            <div className={styles.recommendLabel}><span>✦</span> Melhores opções para este look</div>
+            <div className={styles.swapList}>
+              {[['👟','Tênis branco','96%'],['🥿','Mule bege','91%'],['👡','Sandália preta','84%']].map(([emoji,name,score]) => (
+                <button key={name} type="button" onClick={() => { setSheet(null); notify(`${name} entrou no look`); }}>
+                  <span className={styles.swapEmoji}>{emoji}</span><span><strong>{name}</strong><small>Combina com o restante do look</small></span><b>{score}</b>
+                </button>
+              ))}
+            </div>
+            <button className={styles.openClosetButton} type="button" onClick={() => { setSheet(null); notify('Mostrando todas as opções do seu guarda-roupa'); }}>▤ Abrir todo o guarda-roupa</button>
+          </>
+        )}
+      </aside>
 
       <div className={`${styles.toast} ${toast ? styles.toastVisible : ''}`} role="status" aria-live="polite">{toast}</div>
     </main>
