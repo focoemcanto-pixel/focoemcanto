@@ -9,7 +9,8 @@ export type SavedLook={
 const url=(process.env.NEXT_PUBLIC_SUPABASE_URL||'').replace(/\/$/,'');
 const anon=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||'';
 function headers(token:string,extra:Record<string,string>={}){return {apikey:anon,Authorization:`Bearer ${token}`,...extra}}
-async function readJson(r:Response){const t=await r.text();let data:any=null;try{data=t?JSON.parse(t):null}catch{data=t}if(!r.ok)throw new Error(data?.message||data?.error||`Supabase ${r.status}`);return data}
+function friendly(raw:any){const msg=String(raw?.message||raw?.error||raw||'');if(/closet_saved_looks|schema cache|could not find the table/i.test(msg))return 'A biblioteca de looks ainda não foi ativada no Supabase.';return msg||'Não consegui acessar seus looks salvos.'}
+async function readJson(r:Response){const t=await r.text();let data:any=null;try{data=t?JSON.parse(t):null}catch{data=t}if(!r.ok)throw new Error(friendly(data));return data}
 
 export async function saveLook(session:ClosetSession,input:{occasion:string;itemIds:string[];title?:string;rating?:string;notes?:string}){
  const payload={user_id:session.user.id,occasion:input.occasion,title:input.title||`Look para ${input.occasion}`,item_ids:input.itemIds,favorite:true,rating:input.rating||'saved',notes:input.notes||null,worn_count:0};
