@@ -5,6 +5,7 @@ import type { ClosetSession } from './supabase';
 export type SavedLook={
  id:string;user_id:string;occasion:string;title?:string|null;item_ids:string[];favorite:boolean;rating?:string|null;worn_count:number;last_worn_at?:string|null;notes?:string|null;created_at?:string;updated_at?:string;
 };
+export type WearHistory={lastWornByItem:Record<string,string>;wearCountByItem:Record<string,number>;recentLookSignatures:string[]};
 
 const url=(process.env.NEXT_PUBLIC_SUPABASE_URL||'').replace(/\/$/,'');
 const anon=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||'';
@@ -21,6 +22,20 @@ export async function saveLook(session:ClosetSession,input:{occasion:string;item
 export async function loadSavedLooks(session:ClosetSession){
  const r=await fetch(`${url}/rest/v1/closet_saved_looks?select=*&order=created_at.desc`,{headers:headers(session.access_token)});
  return await readJson(r) as SavedLook[];
+}
+
+export function buildWearHistory(looks:SavedLook[]):WearHistory{
+ const lastWornByItem:Record<string,string>={},wearCountByItem:Record<string,number>={},recentLookSignatures:string[]=[];
+ const worn=looks.filter(x=>x.last_worn_at||Number(x.worn_count||0)>0).sort((a,b)=>new Date(b.last_worn_at||b.updated_at||0).getTime()-new Date(a.last_worn_at||a.updated_at||0).getTime());
+ for(const look of worn){
+  const ids=(look.item_ids||[]).map(String);
+  if(ids.length&&recentLookSignatures.length<12)recentLookSignatures.push([...ids].sort().join('|'));
+  for(const id of ids){
+   wearCountByItem[id]=(wearCountByItem[id]||0)+Math.max(1,Number(look.worn_count||1));
+   if(look.last_worn_at&&(!lastWornByItem[id]||new Date(look.last_worn_at)>new Date(lastWornByItem[id])))lastWornByItem[id]=look.last_worn_at;
+  }
+ }
+ return {lastWornByItem,wearCountByItem,recentLookSignatures};
 }
 
 export async function markLookWorn(session:ClosetSession,look:SavedLook){
