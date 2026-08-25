@@ -4,7 +4,9 @@ import { usePathname } from 'next/navigation';
 
 export default function ClosetShellNav(){
  const pathname=usePathname();
- if(pathname==='/closet/look')return null;
+ // A home do Closet já possui a navegação principal própria.
+ // O provador também deve ficar totalmente focado no look.
+ if(pathname==='/closet'||pathname==='/closet/look')return null;
  const items=[
   {href:'/closet',icon:'⌂',label:'Closet'},
   {href:'/closet/looks',icon:'♡',label:'Meus looks'},
