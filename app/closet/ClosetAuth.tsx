@@ -28,6 +28,7 @@ export default function ClosetAuth({session,intent,onClose,onSessionChange}:Prop
   <nav className={styles.accountMenu} aria-label="Menu do Closet">
    <a href="/closet"><span>⌂</span><div><strong>Meu closet</strong><small>Peças e guarda-roupa</small></div><b>›</b></a>
    <a href="/closet/looks"><span>♡</span><div><strong>Meus looks</strong><small>Favoritos e usados</small></div><b>›</b></a>
+   <a href="/closet/rediscover"><span>↺</span><div><strong>Redescobrir peças</strong><small>O que está parado no guarda-roupa</small></div><b>›</b></a>
    <a href="/closet/style"><span>✦</span><div><strong>Meu estilo</strong><small>Preferências do stylist</small></div><b>›</b></a>
   </nav>
   <div className={styles.cloudCard}><span>✓</span><div><strong>Seu closet está na nuvem</strong><p>Suas peças ficam vinculadas a esta conta e podem ser acessadas em outros dispositivos.</p></div></div>
