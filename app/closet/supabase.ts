@@ -37,5 +37,50 @@ export async function updateClosetItemPreference(session:ClosetSession,itemId:st
 function dataUrlToBlob(dataUrl:string){const [head,b64]=dataUrl.split(',');const mime=head.match(/data:([^;]+)/)?.[1]||'image/png';const bin=atob(b64||'');const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new Blob([bytes],{type:mime})}
 function extFromDataUrl(dataUrl:string,fallback='png'){const mime=dataUrl.match(/^data:image\/([^;]+)/i)?.[1]?.toLowerCase();return mime==='jpeg'||mime==='jpg'?'jpg':mime==='webp'?'webp':fallback}
 async function upload(token:string,userId:string,folder:string,dataUrl:string){const ext=extFromDataUrl(dataUrl),path=`${userId}/${folder}/${crypto.randomUUID()}.${ext}`,blob=dataUrlToBlob(dataUrl);const r=await authed(token,`/storage/v1/object/closet/${path}`,{method:'POST',headers:{'Content-Type':blob.type,'x-upsert':'false'},body:blob});await readJson(r);return path}
-export async function saveClosetItem(session:ClosetSession,input:{name:string;category:string;color:string;source:any;catalogImage:string;originalImage?:string}){const token=session.access_token,userId=session.user.id;const catalogPath=await upload(token,userId,'catalog',input.catalogImage);let originalPath:string|null=null;try{if(input.originalImage)originalPath=await upload(token,userId,'original',input.originalImage)}catch{}const s=input.source||{};const payload={user_id:userId,name:input.name,category:input.category,subcategory:s.subcategory||null,color:input.color||s.color||null,pattern:s.pattern||null,style:s.style||null,brand:s.brand||null,label_text:s.label_text||null,original_image_path:originalPath,catalog_image_path:catalogPath,confidence:s.confidence??null,visibility:s.visibility??null,metadata:{scanner_box:s.box||null},is_active:true};const r=await authed(token,'/rest/v1/closet_items',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)});const rows=await readJson(r) as ClosetDbItem[];const row=rows[0];return {...row,image:await signedImageUrl(token,row.catalog_image_path)}}
-export async function saveClosetItems(session:ClosetSession,inputs:{name:string;category:string;color:string;source:any;catalogImage:string;originalImage?:string}[]){if(!inputs.length)return [];const token=session.access_token,userId=session.user.id;let originalPath:string|null=null;try{const original=inputs.find(x=>x.originalImage)?.originalImage;if(original)originalPath=await upload(token,userId,'original',original)}catch{}const catalogPaths=await Promise.all(inputs.map(input=>upload(token,userId,'catalog',input.catalogImage)));const payloads=inputs.map((input,i)=>{const s=input.source||{};return {user_id:userId,name:input.name,category:input.category,subcategory:s.subcategory||null,color:input.color||s.color||null,pattern:s.pattern||null,style:s.style||null,brand:s.brand||null,label_text:s.label_text||null,original_image_path:originalPath,catalog_image_path:catalogPaths[i],confidence:s.confidence??null,visibility:s.visibility??null,metadata:{scanner_box:s.box||null,batch:true},is_active:true}});const r=await authed(token,'/rest/v1/closet_items',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payloads)});const rows=await readJson(r) as ClosetDbItem[];return Promise.all(rows.map(async row=>({...row,image:await signedImageUrl(token,row.catalog_image_path)}))}
+
+export async function saveClosetItem(session:ClosetSession,input:{name:string;category:string;color:string;source:any;catalogImage:string;originalImage?:string}){
+ const token=session.access_token,userId=session.user.id;
+ const catalogPath=await upload(token,userId,'catalog',input.catalogImage);
+ let originalPath:string|null=null;
+ try{if(input.originalImage)originalPath=await upload(token,userId,'original',input.originalImage)}catch{}
+ const s=input.source||{};
+ const payload={user_id:userId,name:input.name,category:input.category,subcategory:s.subcategory||null,color:input.color||s.color||null,pattern:s.pattern||null,style:s.style||null,brand:s.brand||null,label_text:s.label_text||null,original_image_path:originalPath,catalog_image_path:catalogPath,confidence:s.confidence??null,visibility:s.visibility??null,metadata:{scanner_box:s.box||null},is_active:true};
+ const r=await authed(token,'/rest/v1/closet_items',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)});
+ const rows=await readJson(r) as ClosetDbItem[];
+ const row=rows[0];
+ return {...row,image:await signedImageUrl(token,row.catalog_image_path)};
+}
+
+export async function saveClosetItems(session:ClosetSession,inputs:{name:string;category:string;color:string;source:any;catalogImage:string;originalImage?:string}[]){
+ if(!inputs.length)return [];
+ const token=session.access_token,userId=session.user.id;
+ let originalPath:string|null=null;
+ try{
+  const original=inputs.find(x=>x.originalImage)?.originalImage;
+  if(original)originalPath=await upload(token,userId,'original',original);
+ }catch{}
+ const catalogPaths=await Promise.all(inputs.map(input=>upload(token,userId,'catalog',input.catalogImage)));
+ const payloads=inputs.map((input,i)=>{
+  const s=input.source||{};
+  return {
+   user_id:userId,
+   name:input.name,
+   category:input.category,
+   subcategory:s.subcategory||null,
+   color:input.color||s.color||null,
+   pattern:s.pattern||null,
+   style:s.style||null,
+   brand:s.brand||null,
+   label_text:s.label_text||null,
+   original_image_path:originalPath,
+   catalog_image_path:catalogPaths[i],
+   confidence:s.confidence??null,
+   visibility:s.visibility??null,
+   metadata:{scanner_box:s.box||null,batch:true},
+   is_active:true
+  };
+ });
+ const r=await authed(token,'/rest/v1/closet_items',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payloads)});
+ const rows=await readJson(r) as ClosetDbItem[];
+ return Promise.all(rows.map(async row=>({...row,image:await signedImageUrl(token,row.catalog_image_path)})));
+}
