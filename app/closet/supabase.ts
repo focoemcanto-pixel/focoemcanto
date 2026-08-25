@@ -34,9 +34,17 @@ export async function updateClosetItemPreference(session:ClosetSession,itemId:st
  const rows=await readJson(r) as ClosetDbItem[];return rows[0]||null;
 }
 
+export async function updateClosetItemStatus(session:ClosetSession,itemId:string|number,currentMetadata:Record<string,any>|undefined,status:'available'|'laundry'|'repair'|'loaned'|'archived'){
+ const metadata={...(currentMetadata||{}),wardrobe_status:status,status_updated_at:new Date().toISOString()};
+ const r=await authed(session.access_token,`/rest/v1/closet_items?id=eq.${encodeURIComponent(String(itemId))}`,{method:'PATCH',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify({metadata,updated_at:new Date().toISOString()})});
+ const rows=await readJson(r) as ClosetDbItem[];return rows[0]||null;
+}
+
 function dataUrlToBlob(dataUrl:string){const [head,b64]=dataUrl.split(',');const mime=head.match(/data:([^;]+)/)?.[1]||'image/png';const bin=atob(b64||'');const bytes=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);return new Blob([bytes],{type:mime})}
 function extFromDataUrl(dataUrl:string,fallback='png'){const mime=dataUrl.match(/^data:image\/([^;]+)/i)?.[1]?.toLowerCase();return mime==='jpeg'||mime==='jpg'?'jpg':mime==='webp'?'webp':fallback}
 async function upload(token:string,userId:string,folder:string,dataUrl:string){const ext=extFromDataUrl(dataUrl),path=`${userId}/${folder}/${crypto.randomUUID()}.${ext}`,blob=dataUrlToBlob(dataUrl);const r=await authed(token,`/storage/v1/object/closet/${path}`,{method:'POST',headers:{'Content-Type':blob.type,'x-upsert':'false'},body:blob});await readJson(r);return path}
+
+function scannerMetadata(s:any,extra:Record<string,any>={}){return {scanner_box:s.box||null,wardrobe_status:'available',season:s.season||null,material:s.material||null,usage_type:s.usage_type||null,...extra}}
 
 export async function saveClosetItem(session:ClosetSession,input:{name:string;category:string;color:string;source:any;catalogImage:string;originalImage?:string}){
  const token=session.access_token,userId=session.user.id;
@@ -44,7 +52,7 @@ export async function saveClosetItem(session:ClosetSession,input:{name:string;ca
  let originalPath:string|null=null;
  try{if(input.originalImage)originalPath=await upload(token,userId,'original',input.originalImage)}catch{}
  const s=input.source||{};
- const payload={user_id:userId,name:input.name,category:input.category,subcategory:s.subcategory||null,color:input.color||s.color||null,pattern:s.pattern||null,style:s.style||null,brand:s.brand||null,label_text:s.label_text||null,original_image_path:originalPath,catalog_image_path:catalogPath,confidence:s.confidence??null,visibility:s.visibility??null,metadata:{scanner_box:s.box||null},is_active:true};
+ const payload={user_id:userId,name:input.name,category:input.category,subcategory:s.subcategory||null,color:input.color||s.color||null,pattern:s.pattern||null,style:s.style||null,brand:s.brand||null,label_text:s.label_text||null,original_image_path:originalPath,catalog_image_path:catalogPath,confidence:s.confidence??null,visibility:s.visibility??null,metadata:scannerMetadata(s),is_active:true};
  const r=await authed(token,'/rest/v1/closet_items',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)});
  const rows=await readJson(r) as ClosetDbItem[];
  const row=rows[0];
@@ -55,31 +63,9 @@ export async function saveClosetItems(session:ClosetSession,inputs:{name:string;
  if(!inputs.length)return [];
  const token=session.access_token,userId=session.user.id;
  let originalPath:string|null=null;
- try{
-  const original=inputs.find(x=>x.originalImage)?.originalImage;
-  if(original)originalPath=await upload(token,userId,'original',original);
- }catch{}
+ try{const original=inputs.find(x=>x.originalImage)?.originalImage;if(original)originalPath=await upload(token,userId,'original',original)}catch{}
  const catalogPaths=await Promise.all(inputs.map(input=>upload(token,userId,'catalog',input.catalogImage)));
- const payloads=inputs.map((input,i)=>{
-  const s=input.source||{};
-  return {
-   user_id:userId,
-   name:input.name,
-   category:input.category,
-   subcategory:s.subcategory||null,
-   color:input.color||s.color||null,
-   pattern:s.pattern||null,
-   style:s.style||null,
-   brand:s.brand||null,
-   label_text:s.label_text||null,
-   original_image_path:originalPath,
-   catalog_image_path:catalogPaths[i],
-   confidence:s.confidence??null,
-   visibility:s.visibility??null,
-   metadata:{scanner_box:s.box||null,batch:true},
-   is_active:true
-  };
- });
+ const payloads=inputs.map((input,i)=>{const s=input.source||{};return {user_id:userId,name:input.name,category:input.category,subcategory:s.subcategory||null,color:input.color||s.color||null,pattern:s.pattern||null,style:s.style||null,brand:s.brand||null,label_text:s.label_text||null,original_image_path:originalPath,catalog_image_path:catalogPaths[i],confidence:s.confidence??null,visibility:s.visibility??null,metadata:scannerMetadata(s,{batch:true}),is_active:true}});
  const r=await authed(token,'/rest/v1/closet_items',{method:'POST',headers:{'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payloads)});
  const rows=await readJson(r) as ClosetDbItem[];
  return Promise.all(rows.map(async row=>({...row,image:await signedImageUrl(token,row.catalog_image_path)})));
