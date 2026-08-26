@@ -1,0 +1,3 @@
+'use client';
+import {useEffect} from 'react';
+export default function ClosetAddRedirect(){useEffect(()=>{function onClick(e:MouseEvent){if(window.location.pathname!=='/closet')return;const target=e.target as HTMLElement|null;const button=target?.closest('button');if(!button)return;const text=(button.textContent||'').trim().toLowerCase();if(text.includes('adicionar peça')||text==='+ adicionar'||text.includes('adicionar peças')){e.preventDefault();e.stopPropagation();window.location.href='/closet/add'}}document.addEventListener('click',onClick,true);return()=>document.removeEventListener('click',onClick,true)},[]);return null}
