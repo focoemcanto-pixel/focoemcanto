@@ -19,10 +19,10 @@ export async function deleteMoment(s:ClosetSession,id:string){await json(await f
 export async function loadTripMomentItems(s:ClosetSession,tripId:string):Promise<TripMomentItem[]>{const moments=await loadTripMoments(s,tripId);if(!moments.length)return[];const ids=moments.map(m=>m.id).join(',');return json(await fetch(`${url}/rest/v1/closet_trip_moment_items?moment_id=in.(${encodeURIComponent(ids)})&user_id=eq.${s.user.id}&select=*&order=created_at.asc`,{headers:headers(s.access_token)}))}
 export async function loadTripPacking(s:ClosetSession,tripId:string):Promise<TripPackingItem[]>{return json(await fetch(`${url}/rest/v1/closet_trip_packing?trip_id=eq.${encodeURIComponent(tripId)}&user_id=eq.${s.user.id}&select=*&order=created_at.asc`,{headers:headers(s.access_token)}))}
 export async function setTripPackingState(s:ClosetSession,tripId:string,itemId:string,packed:boolean){await json(await fetch(`${url}/rest/v1/closet_trip_packing?trip_id=eq.${encodeURIComponent(tripId)}&item_id=eq.${encodeURIComponent(itemId)}&user_id=eq.${s.user.id}`,{method:'PATCH',headers:headers(s.access_token,{'Content-Type':'application/json'}),body:JSON.stringify({packed})}))}
-export async function saveTripMomentLook(s:ClosetSession,momentId:string,itemIds:string[],source:'manual'|'stylist'='stylist'){
+export async function saveTripMomentLook(s:ClosetSession,momentId:string,itemIds:string[],source:'manual'|'stylist'='stylist',lockedItemId?:string|null){
  await json(await fetch(`${url}/rest/v1/closet_trip_moment_items?moment_id=eq.${encodeURIComponent(momentId)}&user_id=eq.${s.user.id}`,{method:'DELETE',headers:headers(s.access_token)}));
  if(!itemIds.length)return;
- const rows=itemIds.map(item_id=>({moment_id:momentId,item_id,user_id:s.user.id,locked:false,source}));
+ const rows=itemIds.map(item_id=>({moment_id:momentId,item_id,user_id:s.user.id,locked:Boolean(lockedItemId&&String(lockedItemId)===String(item_id)),source}));
  await json(await fetch(`${url}/rest/v1/closet_trip_moment_items`,{method:'POST',headers:headers(s.access_token,{'Content-Type':'application/json'}),body:JSON.stringify(rows)}));
  const moment=await loadTripMoment(s,momentId);if(!moment)return;
  for(const item_id of itemIds){await fetch(`${url}/rest/v1/closet_trip_packing`,{method:'POST',headers:headers(s.access_token,{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'}),body:JSON.stringify({trip_id:moment.trip_id,item_id,user_id:s.user.id,packed:false,purchased_for_trip:false})})}
