@@ -25,5 +25,5 @@ export async function saveTripMomentLook(s:ClosetSession,momentId:string,itemIds
  const rows=itemIds.map(item_id=>({moment_id:momentId,item_id,user_id:s.user.id,locked:Boolean(lockedItemId&&String(lockedItemId)===String(item_id)),source}));
  await json(await fetch(`${url}/rest/v1/closet_trip_moment_items`,{method:'POST',headers:headers(s.access_token,{'Content-Type':'application/json'}),body:JSON.stringify(rows)}));
  const moment=await loadTripMoment(s,momentId);if(!moment)return;
- for(const item_id of itemIds){await fetch(`${url}/rest/v1/closet_trip_packing`,{method:'POST',headers:headers(s.access_token,{'Content-Type':'application/json','Prefer':'resolution=merge-duplicates'}),body:JSON.stringify({trip_id:moment.trip_id,item_id,user_id:s.user.id,packed:false,purchased_for_trip:false})})}
+ for(const item_id of itemIds){await fetch(`${url}/rest/v1/closet_trip_packing`,{method:'POST',headers:headers(s.access_token,{'Content-Type':'application/json','Prefer':'resolution=ignore-duplicates'}),body:JSON.stringify({trip_id:moment.trip_id,item_id,user_id:s.user.id,packed:false,purchased_for_trip:false})})}
 }
