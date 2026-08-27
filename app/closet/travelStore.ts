@@ -1,7 +1,7 @@
 'use client';
 import type {ClosetSession} from './supabase';
 export type Trip={id:string;user_id:string;name:string;destination:string;start_date:string;end_date:string;latitude?:number|null;longitude?:number|null;thermal_preference:number;packing_mode:'compact'|'balanced'|'variety';notes?:string|null;metadata?:Record<string,any>|null;created_at?:string};
-export type TripMoment={id:string;trip_id:string;user_id:string;title:string;starts_at?:string|null;location_name?:string|null;activity_type?:string|null;environment?:'indoor'|'outdoor'|'mixed'|null;expected_temp_min?:number|null;expected_temp_max?:number|null;rain_probability?:number|null;thermal_need?:number|null;notes?:string|null;metadata?:Record<string,any>|null};
+export type TripMoment={id:string;trip_id:string;user_id:string;title:string;starts_at?:string|null;location_name?:string|null;activity_type?:string|null;environment?:'indoor'|'outdoor'|'mixed'|null;expected_temp_min?:number|null;expected_temp_max?:number|null;rain_probability?:number|null;weather_source?:string|null;thermal_need?:number|null;notes?:string|null;metadata?:Record<string,any>|null;created_at?:string;updated_at?:string};
 export type TripMomentItem={moment_id:string;item_id:string;user_id:string;locked:boolean;source:'manual'|'stylist';created_at?:string};
 export type TripPackingItem={trip_id:string;item_id:string;user_id:string;packed:boolean;purchased_for_trip:boolean;created_at?:string};
 const url=(process.env.NEXT_PUBLIC_SUPABASE_URL||'').replace(/\/$/,'');const anon=process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY||'';
