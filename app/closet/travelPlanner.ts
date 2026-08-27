@@ -8,7 +8,7 @@ const id=(v:any)=>String(v??'');
 
 export function buildSmartPacking(moments:TripMoment[],links:TripMomentItem[],packing:TripPackingItem[],closet:Piece[],packingMode:'compact'|'balanced'|'variety'='balanced'):PackingInsight[]{
  const itemMap=new Map(closet.map(x=>[id(x.id),x]));
- const packed=new Map(packing.map(x=>[id(x.item_id),Boolean(x.packed)]));
+ const packedRows=new Map(packing.map(x=>[id(x.item_id),x]));
  const momentMap=new Map(moments.map(x=>[id(x.id),x]));
  const use=new Map<string,{uses:number;moments:string[]}>();
  for(const l of links){
@@ -17,19 +17,22 @@ export function buildSmartPacking(moments:TripMoment[],links:TripMomentItem[],pa
   if(m&&!p.moments.includes(m.title))p.moments.push(m.title);
   use.set(k,p);
  }
+ for(const row of packing){const k=id(row.item_id);if(!use.has(k))use.set(k,{uses:0,moments:[]})}
  return [...use.entries()].map(([itemId,u])=>{
   const item=itemMap.get(itemId);
   if(!item)return null;
+  const row=packedRows.get(itemId);
   const category=`${item.category} ${item.subcategory||''}`.toLowerCase();
   const outer=/casaco|jaqueta|sobretudo|puffer|parka/.test(category);
   const shoe=/calçado|sapato|tênis|bota/.test(category);
   const multi=u.uses>1;
   const compactBoost=packingMode==='compact'&&multi;
-  const essential=((outer||shoe)&&multi)||u.uses>=3||compactBoost;
+  const purchased=Boolean(row?.purchased_for_trip);
+  const essential=purchased||((outer||shoe)&&multi)||u.uses>=3||compactBoost;
   const priority:PackingInsight['priority']=essential?'essential':u.uses===2?'high':'normal';
-  const reason=u.uses>1?`${u.uses} momentos usam esta peça${packingMode==='compact'?' · ótima para mala compacta':''}`:'Peça dedicada a um momento';
-  return {item,uses:u.uses,moments:u.moments,priority,packed:packed.get(itemId)||false,reason};
- }).filter((x):x is PackingInsight=>Boolean(x)).sort((a,b)=>({essential:3,high:2,normal:1}[b.priority]-{essential:3,high:2,normal:1}[a.priority])||b.uses-a.uses);
+  const reason=purchased&&u.uses===0?'Compra para esta viagem · pronta para entrar em um look':u.uses>1?`${u.uses} momentos usam esta peça${packingMode==='compact'?' · ótima para mala compacta':''}`:u.uses===1?'Peça dedicada a um momento':'Peça adicionada ao planejamento da mala';
+  return {item,uses:u.uses,moments:u.moments,priority,packed:Boolean(row?.packed),reason};
+ }).filter((x):x is PackingInsight=>Boolean(x)).sort((a,b)=>({essential:3,high:2,normal:1}[b.priority]-{essential:3,high:2,normal:1}[a.priority])||b.uses-a.uses||a.item.name.localeCompare(b.item.name));
 }
 
 export function buildTripRadar(trip:Trip,moments:TripMoment[],links:TripMomentItem[],packing:TripPackingItem[],thermalProblemMomentIds:string[]=[],weatherReviewIds:string[]=[]):TripRadar{
