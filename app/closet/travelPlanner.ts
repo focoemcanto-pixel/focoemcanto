@@ -1,7 +1,7 @@
 'use client';
 import type {Trip,TripMoment,TripMomentItem,TripPackingItem} from './travelStore';
 
-type Piece={id:string;name:string;category:string;color?:string|null;subcategory?:string|null;metadata?:Record<string,any>};
+type Piece={id:string;name:string;category:string;color?:string|null;subcategory?:string|null;image?:string;metadata?:Record<string,any>};
 export type PackingInsight={item:Piece;uses:number;moments:string[];priority:'essential'|'high'|'normal';packed:boolean;reason:string};
 export type TripRadar={score:number;label:string;readyLooks:number;totalMoments:number;packed:number;packingTotal:number;weatherKnown:number;weatherReview:number;alerts:{tone:'critical'|'attention'|'ok';title:string;detail:string;action?:'route'|'looks'|'packing'|'market'}[]};
 const id=(v:any)=>String(v??'');
