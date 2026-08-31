@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { loadClosetItems, restoreClosetSession, type ClosetSession } from '../supabase';
 import { deleteWardrobeItem, setWardrobeStatus, type WardrobeStatus } from '../wardrobeActions';
+import ClosetImage from '../ClosetImage';
 import styles from './wardrobe.module.css';
 
 type Piece = {
@@ -51,6 +52,7 @@ export default function WardrobePage() {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Piece | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState('');
   const [dragY, setDragY] = useState(0);
@@ -77,8 +79,13 @@ export default function WardrobePage() {
       const rows = await loadClosetItems(s);
       if (!alive) return;
       setPieces(mapRows(rows));
+      setLoadError('');
       setLoading(false);
-    })().catch(() => setLoading(false));
+    })().catch((e:any) => {
+      if(!alive)return;
+      setLoadError(e?.message || 'Não consegui carregar suas peças agora.');
+      setLoading(false);
+    });
     return () => {
       alive = false;
     };
@@ -214,6 +221,10 @@ export default function WardrobePage() {
     );
   }
 
+  if(loadError && !loading){
+    return <main className={styles.page}><header className={styles.header}><button onClick={()=>history.back()}>‹</button><div><span>MEU CLOSET</span><strong>Guarda-roupa</strong></div><button onClick={()=>location.href='/closet'}>⌂</button></header><div className={styles.empty}><h1>Não consegui abrir seu guarda-roupa.</h1><p>{loadError}</p><button onClick={()=>location.reload()}>Tentar novamente</button></div></main>;
+  }
+
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -264,7 +275,7 @@ export default function WardrobePage() {
                 onClick={() => setSelected(piece)}
               >
                 <div className={styles.visual}>
-                  <img src={piece.image} alt={piece.name} />
+                  <ClosetImage src={piece.image} alt={piece.name} style={{width:'100%',height:'100%',objectFit:'contain'}} />
                   {piece.status !== 'available' && <span className={`${styles.status} ${styles[piece.status]}`}>{statusLabel[piece.status]}</span>}
                 </div>
                 <strong>{piece.name}</strong>
@@ -294,7 +305,7 @@ export default function WardrobePage() {
             onTouchEnd={dragEnd}
           >
             <div className={styles.handle} onTouchStart={dragBegin} onTouchMove={dragMove} onTouchEnd={dragEnd} />
-            <div className={styles.preview}><img src={selected.image} alt={selected.name} /></div>
+            <div className={styles.preview}><ClosetImage src={selected.image} alt={selected.name} style={{width:'100%',height:'100%',objectFit:'contain'}} /></div>
             <div className={styles.copy}>
               <span>{selected.category} · {statusLabel[selected.status]}</span>
               <h2>{selected.name}</h2>
