@@ -21,9 +21,25 @@ export async function onRequestPost({request,env}){
  try{
   const extension=(record.fileName.split('.').pop()||'arquivo').toLowerCase(),name=`${new Date().toISOString().slice(0,10)} - ${safe(record.name)} - ${safe(record.song)} - ${id}.${safe(extension)}`
   const session=await driveUploadSession(env,{type:record.fileType,length:record.fileSize,name})
-  await env.FOCO_LINKS.put(`divisoes:submission:${id}`,JSON.stringify({...record,driveTargetName:name,driveTargetFolder:session.folder,uploadSessionCreatedAt:new Date().toISOString()}),{expirationTtl:86400})
-  return json({ok:true,uploadUrl:session.uploadUrl},201)
+  await env.FOCO_LINKS.put(`divisoes:submission:${id}`,JSON.stringify({...record,driveUploadUrl:session.uploadUrl,driveTargetName:name,driveTargetFolder:session.folder,uploadSessionCreatedAt:new Date().toISOString()}),{expirationTtl:86400})
+  return json({ok:true},201)
  }catch(error){console.error(error);return json({message:'Não foi possível preparar o Google Drive. Tente novamente.'},500)}
+}
+
+export async function onRequestPut({request,env}){
+ if(!env.FOCO_LINKS)return json({message:'Base indisponível.'},503)
+ const found=await submission(request,env);if(found.error)return found.error
+ const {record}=found,range=request.headers.get('Content-Range')||'',match=range.match(/^bytes (\d+)-(\d+)\/(\d+)$/)
+ if(!record.driveUploadUrl||!match)return json({message:'Etapa de envio inválida.'},422)
+ const start=Number(match[1]),end=Number(match[2]),total=Number(match[3]),length=end-start+1,declaredLength=Number(request.headers.get('Content-Length')||length)
+ if(total!==Number(record.fileSize)||end<start||end>=total||declaredLength!==length||length>8*1024*1024)return json({message:'Parte do arquivo inválida.'},422)
+ try{
+  const sent=await fetch(record.driveUploadUrl,{method:'PUT',headers:{'Content-Type':record.fileType,'Content-Length':String(length),'Content-Range':range},body:request.body})
+  if(sent.status===308)return json({ok:true,done:false},200)
+  const file=await sent.json().catch(()=>({}))
+  if(!sent.ok||!file.id)throw new Error(file.error?.message||`Drive ${sent.status}`)
+  return json({ok:true,done:true,fileId:file.id},200)
+ }catch(error){console.error(error);return json({message:'Não foi possível enviar esta parte ao Google Drive. Tente novamente.'},502)}
 }
 
 export async function onRequestPatch({request,env}){
@@ -37,7 +53,7 @@ export async function onRequestPatch({request,env}){
   const file=await driveFile(env,fileId),validName=file.name===record.driveTargetName,validSize=Number(file.size)===Number(record.fileSize),validType=file.mimeType===record.fileType,validFolder=(file.parents||[]).includes(record.driveTargetFolder)
   if(!validName||!validSize||!validType||!validFolder)return json({message:'O arquivo recebido não corresponde ao envio iniciado.'},422)
   const saved={...record,status:'received',driveFileId:file.id,driveWebViewLink:file.webViewLink||'',updatedAt:new Date().toISOString()}
-  delete saved.uploadToken;delete saved.driveTargetName;delete saved.driveTargetFolder;delete saved.uploadSessionCreatedAt
+  delete saved.uploadToken;delete saved.driveUploadUrl;delete saved.driveTargetName;delete saved.driveTargetFolder;delete saved.uploadSessionCreatedAt
   await env.FOCO_LINKS.put(`divisoes:submission:${id}`,JSON.stringify(saved))
   return json({ok:true,id},201)
  }catch(error){console.error(error);return json({message:'Não foi possível confirmar o arquivo no Google Drive.'},500)}

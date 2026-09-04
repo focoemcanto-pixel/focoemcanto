@@ -6,7 +6,7 @@ const appearances=[['video','Vídeo e áudio','Meu rosto pode aparecer.'],['blur
 const MAX_FILE_SIZE=1024*1024*1024,CHUNK_SIZE=8*1024*1024
 const DRAFT_KEY='focoemcanto:mande-sua-divisao:draft:v2'
 
-function sendChunk(url:string,file:File,start:number){return new Promise<{done:boolean,fileId?:string}>((resolve,reject)=>{const end=Math.min(start+CHUNK_SIZE,file.size),x=new XMLHttpRequest();x.open('PUT',url);x.setRequestHeader('Content-Type',file.type);x.setRequestHeader('Content-Range',`bytes ${start}-${end-1}/${file.size}`);x.onerror=()=>reject(new Error('A conexão foi interrompida. Tente novamente.'));x.onload=()=>{if(x.status===308)return resolve({done:false});let data:any={};try{data=JSON.parse(x.responseText)}catch{};if(x.status>=200&&x.status<300&&data.id)return resolve({done:true,fileId:data.id});reject(new Error(data?.error?.message||'O Google Drive recusou o arquivo.'))};x.send(file.slice(start,end))})}
+function sendChunk(url:string,file:File,start:number){return new Promise<{done:boolean,fileId?:string}>((resolve,reject)=>{const end=Math.min(start+CHUNK_SIZE,file.size),x=new XMLHttpRequest();x.open('PUT',url);x.setRequestHeader('Content-Type',file.type);x.setRequestHeader('Content-Range',`bytes ${start}-${end-1}/${file.size}`);x.onerror=()=>reject(new Error('A conexão foi interrompida. Tente novamente.'));x.onload=()=>{let data:any={};try{data=JSON.parse(x.responseText)}catch{};if(x.status>=200&&x.status<300&&data.ok)return resolve({done:Boolean(data.done),fileId:data.fileId});reject(new Error(data.message||'O Google Drive recusou o arquivo.'))};x.send(file.slice(start,end))})}
 
 export default function Formulario(){
  const formRef=useRef<HTMLFormElement>(null)
@@ -17,9 +17,9 @@ export default function Formulario(){
   try{
    const r=await fetch('/api/divisoes/submissions',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,materialType,category,appearance,fileName:file?.name||'',fileType:file?.type||'',fileSize:file?.size||0})}),created=await r.json();if(!r.ok)throw new Error(created.message||'Não foi possível iniciar o envio.')
    if(created.requiresUpload){
-    const prep=await fetch(`/api/divisoes/upload?id=${encodeURIComponent(created.id)}&token=${encodeURIComponent(created.uploadToken)}`,{method:'POST'}),session=await prep.json();if(!prep.ok||!session.uploadUrl)throw new Error(session.message||'Não foi possível preparar o envio.')
+    const uploadEndpoint=`/api/divisoes/upload?id=${encodeURIComponent(created.id)}&token=${encodeURIComponent(created.uploadToken)}`,prep=await fetch(uploadEndpoint,{method:'POST'}),session=await prep.json();if(!prep.ok||!session.ok)throw new Error(session.message||'Não foi possível preparar o envio.')
     setMessage('Enviando direto ao Google Drive… não feche a página.');let start=0,fileId=''
-    while(file&&start<file.size){const result=await sendChunk(session.uploadUrl,file,start);start=Math.min(start+CHUNK_SIZE,file.size);setProgress(Math.max(3,Math.round(start/file.size*96)));if(result.done){fileId=result.fileId||'';break}}
+    while(file&&start<file.size){const result=await sendChunk(uploadEndpoint,file,start);start=Math.min(start+CHUNK_SIZE,file.size);setProgress(Math.max(3,Math.round(start/file.size*96)));if(result.done){fileId=result.fileId||'';break}}
     if(!fileId)throw new Error('O Drive não confirmou a conclusão do envio.')
     const confirm=await fetch(`/api/divisoes/upload?id=${encodeURIComponent(created.id)}&token=${encodeURIComponent(created.uploadToken)}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId})}),confirmed=await confirm.json();if(!confirm.ok)throw new Error(confirmed.message||'Não foi possível confirmar o arquivo.')
    }
