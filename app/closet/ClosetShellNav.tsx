@@ -1,11 +1,20 @@
 'use client';
-
 import {usePathname} from 'next/navigation';
+import styles from './closetShell.module.css';
 
-const card={display:'grid',gap:4,padding:'14px 15px',border:'1px solid #ded1c1',borderRadius:16,background:'#fffaf3',color:'#2b211b',textDecoration:'none'} as const;
+type NavItem={href:string;label:string;match:(p:string)=>boolean;icon:React.ReactNode};
+const icon=(d:string)=><svg viewBox="0 0 24 24" aria-hidden="true"><path d={d}/></svg>;
+const items:NavItem[]=[
+ {href:'/closet',label:'Início',match:p=>p==='/closet'||p==='/closet/',icon:icon('M3 10.5 12 3l9 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5z M9 21v-7h6v7')},
+ {href:'/closet/look',label:'Stylist',match:p=>p.startsWith('/closet/look'),icon:icon('M12 3v18 M5 8c2.5 0 4-1.8 4-4 M19 8c-2.5 0-4-1.8-4-4 M5 16c2.5 0 4 1.8 4 4 M19 16c-2.5 0-4 1.8-4 4')},
+ {href:'/closet/wardrobe',label:'Closet',match:p=>p.startsWith('/closet/wardrobe')||p.startsWith('/closet/add')||p.startsWith('/closet/looks'),icon:icon('M5 4h14v17H5z M9 4V2h6v2 M12 8v9 M9 11h.01 M15 11h.01')},
+ {href:'/closet/travel',label:'Viagem',match:p=>p.startsWith('/closet/travel')||p.startsWith('/closet/planner'),icon:icon('M4 7h16l-1 13H5z M9 7V4a3 3 0 0 1 6 0v3 M9 12h6')},
+ {href:'/closet/marketplace',label:'Loja',match:p=>p.startsWith('/closet/marketplace')||p.startsWith('/closet/orders')||p.startsWith('/closet/protection'),icon:icon('M4 8h16l-1 12H5z M8 8a4 4 0 0 1 8 0')}
+];
 export default function ClosetShellNav(){
  const pathname=usePathname();
- if(pathname==='/closet'||pathname==='/closet/')return <section style={{maxWidth:760,margin:'0 auto 28px',padding:'0 14px'}} aria-label="Marketplace Closet"><div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))',gap:9}}><a href="/closet/marketplace" style={card}><small style={{fontSize:9,letterSpacing:'.13em',fontWeight:900,color:'#96795b'}}>LOJA CLOSET</small><strong>Marketplace</strong><span style={{fontSize:11,color:'#75685d'}}>Sellers, reputação e compra protegida</span></a><a href="/closet/orders" style={card}><small style={{fontSize:9,letterSpacing:'.13em',fontWeight:900,color:'#96795b'}}>COMPRAS</small><strong>Meus pedidos</strong><span style={{fontSize:11,color:'#75685d'}}>Rastreio e Proteção Closet</span></a><a href="/closet/seller" style={card}><small style={{fontSize:9,letterSpacing:'.13em',fontWeight:900,color:'#96795b'}}>SELLER</small><strong>Vender no Closet</strong><span style={{fontSize:11,color:'#75685d'}}>Loja, produtos e reputação</span></a></div></section>;
- if(pathname==='/closet/seller'||pathname==='/closet/seller/')return <section style={{maxWidth:760,margin:'0 auto 28px',padding:'0 14px'}}><a href="/closet/seller/payments" style={card}><small style={{fontSize:9,letterSpacing:'.13em',fontWeight:900,color:'#96795b'}}>FINANCEIRO</small><strong>Conectar Mercado Pago</strong><span style={{fontSize:11,color:'#75685d'}}>Conta de pagamento e repasses protegidos</span></a></section>;
- return null;
+ if(pathname.startsWith('/closet/seller'))return null;
+ const nav=<>{items.map(i=>{const active=i.match(pathname);return <a key={i.href} href={i.href} className={`${styles.navItem} ${active?styles.navItemActive:''}`}>{i.icon}<span>{i.label}</span></a>})}</>;
+ if(pathname==='/closet'||pathname==='/closet/')return <><section className={styles.homeQuick} aria-label="Atalhos do Closet"><div className={styles.quickGrid}><a href="/closet/orders" className={styles.quickCard}><small>COMPRAS</small><strong>Meus pedidos</strong><span>Rastreio, devoluções e Proteção Closet</span></a><a href="/closet/insights" className={styles.quickCard}><small>INTELIGÊNCIA</small><strong>Meu uso</strong><span>Rotação, combinações e peças pouco usadas</span></a><a href="/closet/seller" className={styles.quickCard}><small>PARA LOJAS</small><strong>Vender no Closet</strong><span>Produtos, pedidos e reputação</span></a></div></section><nav className={styles.mobileNav} aria-label="Navegação principal">{nav}</nav><aside className={styles.desktopRail}><div className={styles.brand}>C</div><div className={styles.railItems}>{items.map(i=>{const active=i.match(pathname);return <a key={i.href} href={i.href} className={`${styles.railItem} ${active?styles.railActive:''}`}>{i.icon}<span>{i.label}</span></a>})}</div><div className={styles.railSpacer}/><a className={styles.sellerLink} href="/closet/seller">Seller</a></aside></>;
+ return <><nav className={styles.mobileNav} aria-label="Navegação principal">{nav}</nav><aside className={styles.desktopRail}><div className={styles.brand}>C</div><div className={styles.railItems}>{items.map(i=>{const active=i.match(pathname);return <a key={i.href} href={i.href} className={`${styles.railItem} ${active?styles.railActive:''}`}>{i.icon}<span>{i.label}</span></a>})}</div><div className={styles.railSpacer}/><a className={styles.sellerLink} href="/closet/seller">Seller</a></aside></>;
 }
