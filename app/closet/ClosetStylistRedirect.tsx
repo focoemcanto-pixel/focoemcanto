@@ -18,8 +18,14 @@ export default function ClosetStylistRedirect(){
    const anchor=href.match(/[?&]anchor=([^&]+)/)?.[1];
    e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();go(anchor?decodeURIComponent(anchor):undefined);
   }
+  const observer=new MutationObserver(()=>{
+   if(normalize(location.pathname)!=='/closet')return;
+   const body=(document.body.textContent||'').toLowerCase();
+   if(body.includes('escolha uma ocasião')||body.includes('onde você vai?'))go();
+  });
   document.addEventListener('click',onClick,true);
-  return()=>document.removeEventListener('click',onClick,true);
+  observer.observe(document.body,{childList:true,subtree:true,characterData:true});
+  return()=>{document.removeEventListener('click',onClick,true);observer.disconnect()};
  },[]);
  return null;
 }
