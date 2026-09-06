@@ -183,10 +183,10 @@ export default function AddPiecePage(){
       <div style={{display:'grid',gap:12,marginTop:14}}>{detected.map((item,index)=><article key={`${item.name}-${index}`} style={{display:'grid',gridTemplateColumns:'88px 1fr',gap:12,alignItems:'start',padding:12,border:'1px solid #e4d8ca',borderRadius:16,background:'#fff'}}><img src={item.catalog||item.crop} alt={item.name} style={{width:88,height:104,objectFit:'cover',borderRadius:12}}/><div style={{display:'grid',gap:6}}><strong>{item.name}</strong><small>{item.category} · {item.color}</small>{item.selected?<><button disabled={busy} onClick={()=>saveDetected(item,index,false)}>Salvar recorte · grátis</button><button disabled={busy} onClick={()=>saveDetected(item,index,true)}>Melhorar e salvar · 1 crédito</button></>:<small>Guardado</small>}</div></article>)}</div>
     </section>}
     {message&&<p>{message}</p>}
+    {authOpen&&<div role="dialog" aria-modal="true" style={{position:'fixed',inset:0,zIndex:1000,background:'rgba(29,23,18,.58)',display:'flex',alignItems:'flex-end',justifyContent:'center',padding:'16px 12px'}} onClick={()=>setAuthOpen(false)}><section style={{width:'min(100%,520px)',maxHeight:'92vh',overflowY:'auto',background:'#fbf8f2',borderRadius:'26px 26px 18px 18px',boxShadow:'0 -18px 50px rgba(0,0,0,.18)'}} onClick={e=>e.stopPropagation()}><div style={{display:'flex',justifyContent:'flex-end',padding:'10px 12px 0'}}><button aria-label="Fechar" onClick={()=>setAuthOpen(false)} style={{border:0,background:'transparent',fontSize:26,color:'#493d33'}}>×</button></div><ClosetAuth session={session} intent="save" onClose={()=>setAuthOpen(false)} onSessionChange={handleSessionChange}/></section></div>}
     <input ref={camera} type="file" accept="image/*" capture="environment" hidden onChange={receiveManual}/>
     <input ref={gallery} type="file" accept="image/*" multiple hidden onChange={receiveManual}/>
     <input ref={aiCamera} type="file" accept="image/*" capture="environment" hidden onChange={receiveAi}/>
     <input ref={aiGallery} type="file" accept="image/*" hidden onChange={receiveAi}/>
-    <ClosetAuth open={authOpen} onClose={()=>setAuthOpen(false)} session={session} onSessionChange={handleSessionChange}/>
   </main>
 }
