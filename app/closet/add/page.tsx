@@ -9,7 +9,7 @@ type Category='Blusas'|'Calças'|'Vestidos'|'Calçados'|'Bolsas'|'Acessórios';
 type Box={x:number;y:number;width:number;height:number};
 type ScanItem={name:string;category:Category;color:string;subcategory:string;pattern?:string;style?:string;brand?:string;label_text?:string;confidence?:number;visibility?:number;box:Box};
 type Detected=ScanItem&{crop:string;selected:boolean;catalog?:string};
-type ManualDraft={id:string;image:string;name:string;category:Category;color:string;subcategory:string;colorAuto?:boolean};
+type ManualDraft={id:string;image:string;category:Category;color:string;subcategory:string;colorAuto?:boolean};
 
 const categories:Category[]=['Blusas','Calças','Vestidos','Calçados','Bolsas','Acessórios'];
 const typeSuggestions:Record<Category,string[]>={
@@ -72,6 +72,11 @@ async function apiJson(path:string,session:ClosetSession,body:any){
   if(!r.ok)throw Object.assign(new Error(data?.message||'Não consegui concluir esta ação.'),{code:data?.code,status:r.status,cost:data?.cost});
   return data;
 }
+function manualTitle(draft:ManualDraft){
+  const type=draft.subcategory.trim();
+  const color=draft.color.trim();
+  return [type,color?color.toLowerCase():''].filter(Boolean).join(' ');
+}
 
 export default function AddPiecePage(){
   const [session,setSession]=useState<ClosetSession|null>(null),[wallet,setWallet]=useState<AiWallet|null>(null),[mode,setMode]=useState<'choose'|'manual'|'ai-photo'|'ai-confirm'|'ai-results'>('choose'),[image,setImage]=useState(''),[manualDrafts,setManualDrafts]=useState<ManualDraft[]>([]),[activeDraftId,setActiveDraftId]=useState(''),[saving,setSaving]=useState(false),[busy,setBusy]=useState(false),[message,setMessage]=useState(''),[detected,setDetected]=useState<Detected[]>([]),[authOpen,setAuthOpen]=useState(false),[afterAuth,setAfterAuth]=useState<'save'|'ai'|null>(null);
@@ -79,6 +84,7 @@ export default function AddPiecePage(){
   const activeDraft=useMemo(()=>manualDrafts.find(x=>x.id===activeDraftId)||manualDrafts[0]||null,[manualDrafts,activeDraftId]);
   const activeIndex=useMemo(()=>activeDraft?manualDrafts.findIndex(x=>x.id===activeDraft.id):-1,[manualDrafts,activeDraft]);
   const suggestedTypes=activeDraft?typeSuggestions[activeDraft.category]:[];
+  const generatedTitle=activeDraft?manualTitle(activeDraft):'';
 
   useEffect(()=>{(async()=>{const s=await restoreClosetSession();setSession(s);if(s)setWallet(await loadAiWallet(s))})()},[]);
   async function refreshWallet(s=session){if(s)setWallet(await loadAiWallet(s))}
@@ -86,11 +92,11 @@ export default function AddPiecePage(){
   function requireAuth(intent:'save'|'ai'){setAfterAuth(intent);setAuthOpen(true)}
   function patchDraft(patch:Partial<ManualDraft>){if(!activeDraft)return;setManualDrafts(v=>v.map(x=>x.id===activeDraft.id?{...x,...patch}:x))}
   function removeDraft(id:string){setManualDrafts(v=>{const next=v.filter(x=>x.id!==id);if(activeDraftId===id)setActiveDraftId(next[0]?.id||'');return next})}
-  function chooseType(type:string){if(!activeDraft)return;const autoName=!activeDraft.name.trim()?[type,activeDraft.color?activeDraft.color.toLowerCase():''].filter(Boolean).join(' '):activeDraft.name;patchDraft({subcategory:type,name:autoName})}
+  function chooseType(type:string){patchDraft({subcategory:type})}
 
   async function filesToDrafts(files:File[]){
     const images=await Promise.all(files.map(imageToDataUrl)),colors=await Promise.all(images.map(estimateDominantColor));
-    return images.map((photo,i)=>({id:crypto.randomUUID(),image:photo,name:'',category:'Blusas' as Category,color:colors[i]||'',subcategory:'',colorAuto:Boolean(colors[i])}));
+    return images.map((photo,i)=>({id:crypto.randomUUID(),image:photo,category:'Blusas' as Category,color:colors[i]||'',subcategory:'',colorAuto:Boolean(colors[i])}));
   }
   async function receiveManual(e:ChangeEvent<HTMLInputElement>){
     const files=Array.from(e.target.files||[]).filter(f=>f.type.startsWith('image/'));e.target.value='';if(!files.length)return;setBusy(true);setMessage('');
@@ -99,13 +105,15 @@ export default function AddPiecePage(){
   async function receiveAi(e:ChangeEvent<HTMLInputElement>){const f=e.target.files?.[0];e.target.value='';if(!f)return;try{const photo=await imageToDataUrl(f);setImage(photo);setDetected([]);setMode('ai-confirm');setMessage('Foto pronta. O scanner só será executado se você confirmar o uso de 1 crédito.');}catch{setMessage('Não consegui abrir esta foto.')}}
   async function runAiScan(){
     if(!image)return;if(!session){requireAuth('ai');return}
-    if((wallet?.balance||0)<1){const color=await estimateDominantColor(image),draft:ManualDraft={id:crypto.randomUUID(),image,name:'',category:'Blusas',color,subcategory:'',colorAuto:Boolean(color)};setManualDrafts(v=>[...v,draft]);setActiveDraftId(draft.id);setMode('manual');setMessage('Seu saldo está zerado. Mantive a foto no cadastro gratuito e sugeri a cor localmente — nenhum crédito foi usado.');return}
+    if((wallet?.balance||0)<1){const color=await estimateDominantColor(image),draft:ManualDraft={id:crypto.randomUUID(),image,category:'Blusas',color,subcategory:'',colorAuto:Boolean(color)};setManualDrafts(v=>[...v,draft]);setActiveDraftId(draft.id);setMode('manual');setMessage('Seu saldo está zerado. Mantive a foto no cadastro gratuito e sugeri a cor localmente — nenhum crédito foi usado.');return}
     setBusy(true);setMessage('');
     try{const data=await apiJson('/api/closet/scan',session,{image}),items=(data?.scan?.items||[]) as ScanItem[];if(!items.length)throw new Error(data?.scan?.reason||'Não encontrei peças suficientemente visíveis.');const ready=await Promise.all(items.map(async item=>({...item,crop:await cropByBox(image,item.box),selected:true})));setDetected(ready);await refreshWallet();setMode('ai-results');}catch(e:any){setMessage(e?.code==='closet_ai_locked'?'O Closet AI está temporariamente indisponível. Nenhum crédito foi gasto.':e?.message||'Não consegui analisar a foto.')}finally{setBusy(false)}
   }
   async function saveManual(){
-    const draft=activeDraft;if(!draft)return;if(!session){requireAuth('save');return}if(!draft.name.trim()){setMessage('Dê um nome para esta peça antes de guardar.');return}setSaving(true);setMessage('');
-    try{await saveClosetItem(session,{name:draft.name.trim(),category:draft.category,color:draft.color.trim(),source:{subcategory:draft.subcategory.trim(),pattern:null,style:null,confidence:1,visibility:1,manual:true,batch_free:manualDrafts.length>1,color_detected_locally:Boolean(draft.colorAuto)},catalogImage:draft.image,originalImage:draft.image});const remaining=manualDrafts.filter(x=>x.id!==draft.id);if(!remaining.length){location.href='/closet/wardrobe';return}const next=remaining[Math.min(activeIndex,remaining.length-1)]||remaining[0];setManualDrafts(remaining);setActiveDraftId(next.id);setMessage(`Peça guardada. Faltam ${remaining.length} ${remaining.length===1?'foto':'fotos'} para cadastrar.`);}catch(e:any){setMessage(e?.message||'Não consegui guardar a peça.')}finally{setSaving(false)}
+    const draft=activeDraft;if(!draft)return;if(!session){requireAuth('save');return}
+    if(!draft.subcategory.trim()){setMessage('Escolha ou escreva o tipo da peça antes de guardar.');return}
+    const title=manualTitle(draft);setSaving(true);setMessage('');
+    try{await saveClosetItem(session,{name:title,category:draft.category,color:draft.color.trim(),source:{subcategory:draft.subcategory.trim(),pattern:null,style:null,confidence:1,visibility:1,manual:true,batch_free:manualDrafts.length>1,color_detected_locally:Boolean(draft.colorAuto)},catalogImage:draft.image,originalImage:draft.image});const remaining=manualDrafts.filter(x=>x.id!==draft.id);if(!remaining.length){location.href='/closet/wardrobe';return}const next=remaining[Math.min(activeIndex,remaining.length-1)]||remaining[0];setManualDrafts(remaining);setActiveDraftId(next.id);setMessage(`Peça guardada. Faltam ${remaining.length} ${remaining.length===1?'foto':'fotos'} para cadastrar.`);}catch(e:any){setMessage(e?.message||'Não consegui guardar a peça.')}finally{setSaving(false)}
   }
   async function saveDetected(item:Detected,index:number,useAi:boolean){if(!session){requireAuth(useAi?'ai':'save');return}setBusy(true);setMessage('');try{let asset=item.crop;if(useAi){if((wallet?.balance||0)<1)throw Object.assign(new Error('Você precisa de 1 crédito para melhorar esta peça.'),{code:'insufficient_ai_credits'});const data=await apiJson('/api/closet/catalogize',session,{image:item.crop,item});asset=String(data.image);setDetected(v=>v.map((x,i)=>i===index?{...x,catalog:asset}:x));await refreshWallet()}await saveClosetItem(session,{name:item.name,category:item.category,color:item.color,source:{...item,ai_catalog:Boolean(useAi)},catalogImage:asset,originalImage:image});setDetected(v=>v.map((x,i)=>i===index?{...x,selected:false}:x));setMessage(`${item.name} guardado${useAi?' com versão de catálogo':''}.`);}catch(e:any){setMessage(e?.code==='closet_ai_locked'?'O Closet AI está temporariamente indisponível. Nenhum crédito foi gasto.':e?.message||'Não consegui guardar esta peça.')}finally{setBusy(false)}}
   async function saveAllFree(){if(!session){requireAuth('save');return}const pending=detected.filter(x=>x.selected);if(!pending.length)return;setBusy(true);setMessage('');try{await saveClosetItems(session,pending.map(item=>({name:item.name,category:item.category,color:item.color,source:{...item,ai_catalog:false,batch_free:true},catalogImage:item.crop,originalImage:image})));setDetected(v=>v.map(x=>({...x,selected:false})));setMessage(`${pending.length} ${pending.length===1?'peça guardada':'peças guardadas'} sem gastar créditos.`)}catch(e:any){setMessage(e?.message||'Não consegui guardar todas as peças.')}finally{setBusy(false)}}
@@ -124,13 +132,13 @@ export default function AddPiecePage(){
         <div className={styles.preview}><img src={activeDraft.image} alt="Peça escolhida"/><div><button onClick={()=>gallery.current?.click()}>Adicionar fotos</button><button onClick={()=>removeDraft(activeDraft.id)}>Remover esta</button></div></div>
         <div className={styles.assist}><div><span>AUXÍLIO GRATUITO</span><strong>{activeDraft.color?`Cor sugerida: ${activeDraft.color}`:'Não consegui sugerir a cor'}</strong><small>Feito no seu aparelho. Sem IA e sem gastar crédito.</small></div></div>
         <div className={styles.form}>
-          <label>Nome<input value={activeDraft.name} onChange={e=>patchDraft({name:e.target.value})} placeholder="Ex.: Camisa social azul-marinho"/></label>
+          <label className={styles.typeField}>Tipo da peça<input value={activeDraft.subcategory} onChange={e=>patchDraft({subcategory:e.target.value})} placeholder="Ex.: Camisa social"/></label>
           <label>Categoria<select value={activeDraft.category} onChange={e=>patchDraft({category:e.target.value as Category,subcategory:''})}>{categories.map(c=><option key={c}>{c}</option>)}</select></label>
           <label>Cor <small>{activeDraft.colorAuto?'· sugerida automaticamente':''}</small><input value={activeDraft.color} onChange={e=>patchDraft({color:e.target.value,colorAuto:false})} placeholder="Ex.: Azul-marinho"/></label>
-          <label>Tipo<input value={activeDraft.subcategory} onChange={e=>patchDraft({subcategory:e.target.value})} placeholder="Ex.: Camisa social"/></label>
         </div>
-        <div className={styles.quickTypes}><span>Sugestões rápidas de tipo</span><div>{suggestedTypes.map(type=><button key={type} className={activeDraft.subcategory===type?styles.chipActive:''} onClick={()=>chooseType(type)}>{type}</button>)}</div><small>O tipo é uma sugestão manual. Reconhecimento automático de “camisa social”, “manga longa” e outros detalhes fica no Scanner AI.</small></div>
-        <button className={styles.primaryAction} disabled={saving} onClick={saveManual}>{saving?'Guardando…':'Guardar peça'}</button>
+        <div className={styles.quickTypes}><span>Sugestões rápidas</span><div>{suggestedTypes.map(type=><button key={type} className={activeDraft.subcategory===type?styles.chipActive:''} onClick={()=>chooseType(type)}>{type}</button>)}</div><small>Detalhes como manga longa, estampa e modelagem entram automaticamente pelo Scanner AI.</small></div>
+        {generatedTitle&&<div className={styles.generatedName}><span>COMO VAI APARECER NO CLOSET</span><strong>{generatedTitle}</strong></div>}
+        <button className={styles.primaryAction} disabled={saving} onClick={saveManual}>{saving?'Guardando…':generatedTitle?`Guardar ${generatedTitle}`:'Guardar peça'}</button>
       </>}
     </section>:mode==='ai-photo'?<section className={styles.manual}>
       <div className={styles.title}><span>CLOSET AI</span><h1>Escolha uma foto para o scanner.</h1><p>Uma foto pode conter várias peças. Tirar ou selecionar a foto é grátis; nenhum crédito é usado até você confirmar a análise.</p></div><div className={styles.capture}><button disabled={busy} onClick={()=>aiCamera.current?.click()}><span>◎</span><strong>Tirar foto</strong><small>nenhum crédito ainda</small></button><button disabled={busy} onClick={()=>aiGallery.current?.click()}><span>▧</span><strong>Escolher da galeria</strong><small>nenhum crédito ainda</small></button></div><button className={styles.secondaryAction} onClick={()=>setMode('choose')}>Voltar</button>
