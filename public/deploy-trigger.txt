@@ -1,1 +1,2 @@
-deploy trigger 2026-05-14
+deploy trigger 2026-09-05 22:50 BRT
+force closet free-first flow publish
