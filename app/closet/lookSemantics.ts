@@ -4,6 +4,7 @@ export type LookLayer='base-top'|'outerwear'|'dress'|'bottom'|'shoes'|'mandatory
 
 function norm(v:string){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/-/g,' ').replace(/\s+/g,' ').trim()}
 function text(p:StylistPiece){return norm(`${p.name||''} ${p.meta||''}`)}
+function readContext(){if(typeof window==='undefined')return{} as any;try{return JSON.parse(sessionStorage.getItem('closet_stylist_context')||'{}')||{}}catch{return{} as any}}
 
 export function isOuterwear(p:StylistPiece){
  const t=text(p);
@@ -40,6 +41,18 @@ export function thermalLevel(p:StylistPiece){
  return 1;
 }
 
+function outerwearTooWarm(p:StylistPiece){
+ if(!isOuterwear(p))return false;
+ const c=readContext(),w=c?.weather||{},max=Number(w.feelsMax??w.tempMax),period=norm(c?.period||''),sensitivity=Math.min(5,Math.max(1,Number(c?.thermal_sensitivity??3))),level=thermalLevel(p);
+ if(!Number.isFinite(max))return false;
+ const adjustment=(sensitivity-3)*1.5;
+ const effective=max-adjustment-(period==='noite'?1.5:0);
+ if(effective>=30)return level>=3;
+ if(effective>=27)return level>=4;
+ if(effective>=24)return level>=5;
+ return false;
+}
+
 export function ensureMandatoryAccessories<T extends StylistPiece>(look:T[],all:T[],occasion:string){
  const ids=new Set(look.map(x=>String(x.id)));
  const required=all.filter(p=>mandatoryForOccasion(p,occasion)&&!ids.has(String(p.id))&&(p.category==='Acessórios'||p.category==='Bolsas'));
@@ -47,11 +60,12 @@ export function ensureMandatoryAccessories<T extends StylistPiece>(look:T[],all:
 }
 
 export function ensureBaseUnderOuterwear<T extends StylistPiece>(look:T[],all:T[],occasion:string){
- if(!hasOuterwear(look)||hasSemanticBase(look))return look;
- const current=new Set(look.map(x=>String(x.id)));
+ let next=look.filter(p=>!outerwearTooWarm(p));
+ if(!hasOuterwear(next)||hasSemanticBase(next))return next;
+ const current=new Set(next.map(x=>String(x.id)));
  const pool=all.filter(p=>isBaseTop(p)&&!current.has(String(p.id))&&(!p.wardrobeStatus||p.wardrobeStatus==='available')&&p.stylistPreference?.frequency!=='never');
- if(!pool.length)return look;
+ if(!pool.length)return next;
  const preferred=pool.find(p=>/branco|preto|off white|off-white|bege|cinza|azul marinho/.test(text(p)))||pool[0];
- const outerIndex=look.findIndex(isOuterwear);
- const next=[...look];next.splice(Math.max(0,outerIndex),0,preferred);return next;
+ const outerIndex=next.findIndex(isOuterwear);
+ next=[...next];next.splice(Math.max(0,outerIndex),0,preferred);return next;
 }
