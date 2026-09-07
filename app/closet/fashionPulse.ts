@@ -19,6 +19,14 @@ export function fashionPulseScore(piece:StylistPiece,profile:StyleProfile={}){
  return Math.max(-2,Math.min(4,raw*interest));
 }
 
+export function applyFashionPulseToProfile<T extends Record<string,any>>(profile:T):T{
+ const interest=Math.max(0,Math.min(1,Number(profile?.trend_interest??.35)));
+ if(interest<.7)return profile;
+ const original=Array.isArray(profile.preferred_styles)?profile.preferred_styles:Array.isArray(profile.styles)?profile.styles:[];
+ const trendHints=interest>=.9?['alfaiataria','relaxed','workwear']:['alfaiataria'];
+ return {...profile,preferred_styles:[...new Set([...original,...trendHints])],fashion_pulse:FASHION_PULSE_VERSION} as T;
+}
+
 export function fashionPulseLabel(profile:StyleProfile={}){
  const interest=Number((profile as any).trend_interest??.35);
  if(interest<=.15)return'Tendências quase não influenciam seu Stylist.';
