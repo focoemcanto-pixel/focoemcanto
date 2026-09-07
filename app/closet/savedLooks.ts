@@ -33,6 +33,13 @@ export async function loadSavedLooks(session:ClosetSession){
  const rows=await readJson(r) as any[];return (rows||[]).map(hydrate);
 }
 
+export async function updateLookTags(session:ClosetSession,look:SavedLook,tags:string[]){
+ const context={...(look.stylist_context||{occasion:look.occasion,engine:'stylist-v3'}),tags:[...new Set([look.occasion,...tags].filter(Boolean))],updated_at:new Date().toISOString()};
+ const body={notes:encodeNotes(look.notes||undefined,context),updated_at:new Date().toISOString()};
+ const r=await fetch(`${url}/rest/v1/closet_saved_looks?id=eq.${encodeURIComponent(look.id)}`,{method:'PATCH',headers:headers(session.access_token,{'Content-Type':'application/json','Prefer':'return=representation'}),body:JSON.stringify(body)});
+ const rows=await readJson(r);return hydrate(rows?.[0]);
+}
+
 export function buildWearHistory(looks:SavedLook[]):WearHistory{
  const lastWornByItem:Record<string,string>={},wearCountByItem:Record<string,number>={},recentLookSignatures:string[]=[];
  const worn=looks.filter(x=>x.last_worn_at||Number(x.worn_count||0)>0).sort((a,b)=>new Date(b.last_worn_at||b.updated_at||0).getTime()-new Date(a.last_worn_at||a.updated_at||0).getTime());
