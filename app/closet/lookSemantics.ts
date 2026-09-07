@@ -41,17 +41,26 @@ export function thermalLevel(p:StylistPiece){
  return 1;
 }
 
+function thermalContext(){
+ const c=readContext(),w=c?.weather||{},max=Number(w.feelsMax??w.tempMax),min=Number(w.feelsMin??w.tempMin),period=norm(c?.period||''),sensitivity=Math.min(5,Math.max(1,Number(c?.thermal_sensitivity??3)));
+ if(!Number.isFinite(max)&&!Number.isFinite(min))return null;
+ const base=period==='noite'&&Number.isFinite(min)?min:Number.isFinite(max)?max:min;
+ const adjustment=(sensitivity-3)*1.5;
+ return {effective:Number(base)-adjustment,period,sensitivity,rain:Number(w.rainChance)};
+}
+
 function outerwearTooWarm(p:StylistPiece){
  if(!isOuterwear(p))return false;
- const c=readContext(),w=c?.weather||{},max=Number(w.feelsMax??w.tempMax),period=norm(c?.period||''),sensitivity=Math.min(5,Math.max(1,Number(c?.thermal_sensitivity??3))),level=thermalLevel(p);
- if(!Number.isFinite(max))return false;
- const adjustment=(sensitivity-3)*1.5;
- const effective=max-adjustment-(period==='noite'?1.5:0);
+ const tc=thermalContext();if(!tc)return false;
+ const level=thermalLevel(p),effective=tc.effective;
  if(effective>=30)return level>=3;
  if(effective>=27)return level>=4;
  if(effective>=24)return level>=5;
  return false;
 }
+
+function desiredOuterwearLevel(){const tc=thermalContext();if(!tc)return 0;const t=tc.effective;if(t<=10)return 5;if(t<=14)return 4;if(t<=18)return 3;if(t<=21)return 2;return 0}
+function occasionOuterwearFit(p:StylistPiece,occasion:string){const t=text(p),o=norm(occasion);let s=0;if(['trabalho','igreja','evento'].includes(o)){if(/blazer|trench|casaco|cardigan/.test(t))s+=4;if(/puffer|parka|bomber/.test(t))s-=1}else if(['passeio','sair','viagem','aula'].includes(o)){if(/jaqueta|bomber|cardigan|corta vento|corta-vento/.test(t))s+=3}if(/preto|azul marinho|cinza|bege|marrom|off white|off-white/.test(t))s+=2;return s}
 
 export function ensureMandatoryAccessories<T extends StylistPiece>(look:T[],all:T[],occasion:string){
  const ids=new Set(look.map(x=>String(x.id)));
@@ -61,6 +70,16 @@ export function ensureMandatoryAccessories<T extends StylistPiece>(look:T[],all:
 
 export function ensureBaseUnderOuterwear<T extends StylistPiece>(look:T[],all:T[],occasion:string){
  let next=look.filter(p=>!outerwearTooWarm(p));
+ if(!hasOuterwear(next)){
+  const wanted=desiredOuterwearLevel();
+  if(wanted>0){
+   const used=new Set(next.map(x=>String(x.id)));
+   const candidates=all.filter(p=>isOuterwear(p)&&!used.has(String(p.id))&&(!p.wardrobeStatus||p.wardrobeStatus==='available')&&p.stylistPreference?.frequency!=='never'&&!outerwearTooWarm(p)).sort((a,b)=>{
+    const da=Math.abs(thermalLevel(a)-wanted),db=Math.abs(thermalLevel(b)-wanted);if(da!==db)return da-db;return occasionOuterwearFit(b,occasion)-occasionOuterwearFit(a,occasion);
+   });
+   if(candidates[0])next=[...next,candidates[0]];
+  }
+ }
  if(!hasOuterwear(next)||hasSemanticBase(next))return next;
  const current=new Set(next.map(x=>String(x.id)));
  const pool=all.filter(p=>isBaseTop(p)&&!current.has(String(p.id))&&(!p.wardrobeStatus||p.wardrobeStatus==='available')&&p.stylistPreference?.frequency!=='never');
