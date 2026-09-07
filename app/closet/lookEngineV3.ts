@@ -6,9 +6,9 @@ import {fashionPulseScore,FASHION_PULSE_VERSION} from './fashionPulse';
 import {hasSemanticBase} from './lookSemantics';
 import type {StylistPiece,StyleProfile} from './lookEngine';
 
-type Ctx={occasion?:string;detail?:string;period?:string;work_profile?:{dress_code?:string}|null};
+type Ctx={occasion?:string;detail?:string;period?:string;colors?:string[];paletteMode?:string;work_profile?:{dress_code?:string}|null};
 function readContext():Ctx{if(typeof window==='undefined')return{};try{return JSON.parse(sessionStorage.getItem('closet_stylist_context')||'{}')||{}}catch{return{}}}
-function norm(v:string){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim()}
+function norm(v:string){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/-/g,' ').replace(/\s+/g,' ').trim()}
 function signature(items:StylistPiece[]){return items.map(x=>String(x.id)).sort().join('|')}
 function complete(items:StylistPiece[]){const dress=items.some(p=>p.category==='Vestidos'),bottom=items.some(p=>p.category==='Calças'),shoe=items.some(p=>p.category==='Calçados');return shoe&&(dress||(hasSemanticBase(items)&&bottom))}
 function allowedForOccasion(p:StylistPiece,occasion:string){const pref:any=p.stylistPreference||{};if(pref.frequency==='never')return false;const only=Array.isArray(pref.only_occasions)?pref.only_occasions.map((x:any)=>norm(String(x))):[];if(only.length&&!only.includes(norm(occasion)))return false;return true}
@@ -16,7 +16,9 @@ function usableWardrobe(all:StylistPiece[],occasion:string){return all.filter(p=
 function contextMemoryScore(items:StylistPiece[],occasion:string,profile:StyleProfile){const m=(profile as any).stylist_memory as StylistMemory|undefined;if(!m)return 0;const c=readContext(),ids=items.map(x=>String(x.id));let s=0;for(const p of items)s+=memoryScore(m,String(p.id),occasion,ids.filter(id=>id!==String(p.id)),{detail:c.detail,period:c.period,dress_code:c.work_profile?.dress_code})*.55;return Math.max(-45,Math.min(45,s))}
 function trendScore(items:StylistPiece[],profile:StyleProfile){return Math.max(-6,Math.min(10,items.reduce((n,p)=>n+fashionPulseScore(p,profile),0)))}
 function rotationScore(items:StylistPiece[]){return -Math.min(18,items.reduce((n,p)=>n+Number(p.rotationPenalty||0),0)*.8)}
-function score(items:StylistPiece[],occasion:string,profile:StyleProfile,anchor?:StylistPiece){let s=contextMemoryScore(items,occasion,profile)+trendScore(items,profile)+rotationScore(items);if(complete(items))s+=80;else s-=80;if(anchor)s+=items.some(x=>String(x.id)===String(anchor.id))?120:-500;return s}
+function pieceText(p:StylistPiece){return norm(`${p.name||''} ${p.meta||''}`)}
+function paletteCoverageScore(items:StylistPiece[]){const c=readContext(),wanted=(c.colors||[]).map(norm).filter(Boolean);if(!wanted.length||c.paletteMode==='auto')return 0;const main=items.filter(p=>['Blusas','Calças','Calçados','Vestidos'].includes(p.category));const represented=new Set<string>();for(const p of main){const t=pieceText(p);for(const color of wanted)if(t.includes(color))represented.add(color)}let s=represented.size*16;const target=Math.min(wanted.length,Math.max(1,main.length));s-=Math.max(0,target-represented.size)*10;if(main.length>=2){const exact=main.map(p=>wanted.find(color=>pieceText(p).includes(color))||'').filter(Boolean);const counts=new Map<string,number>();for(const x of exact)counts.set(x,(counts.get(x)||0)+1);const max=Math.max(0,...counts.values());if(wanted.length>=3&&max>=2&&represented.size===1)s-=24;else if(wanted.length>=3&&max>=2&&represented.size===2)s-=7}return s}
+function score(items:StylistPiece[],occasion:string,profile:StyleProfile,anchor?:StylistPiece){let s=contextMemoryScore(items,occasion,profile)+trendScore(items,profile)+rotationScore(items)+paletteCoverageScore(items);if(complete(items))s+=80;else s-=80;if(anchor)s+=items.some(x=>String(x.id)===String(anchor.id))?120:-500;return s}
 function overlap(a:StylistPiece[],b:StylistPiece[]){if(!a.length||!b.length)return 0;const ids=new Set(b.map(x=>String(x.id)));return a.filter(x=>ids.has(String(x.id))).length/Math.max(1,Math.min(a.length,b.length))}
 const historyKey=(occasion:string,anchor?:StylistPiece)=>`closet.stylist.v3.history.${norm(occasion)}.${anchor?String(anchor.id):'free'}`;
 function recentSignatures(occasion:string,anchor?:StylistPiece){if(typeof window==='undefined')return[] as string[];try{return JSON.parse(sessionStorage.getItem(historyKey(occasion,anchor))||'[]') as string[]}catch{return[]}}
