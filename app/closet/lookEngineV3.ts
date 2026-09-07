@@ -1,7 +1,7 @@
 'use client';
 
 import {buildStyledLookV2,buildStyledLookWithAnchorV2} from './lookEngineV2';
-import {memoryScore,type StylistMemory} from './stylistMemory';
+import {latestStylistMemory,memoryScore,type StylistMemory} from './stylistMemory';
 import {fashionPulseScore,FASHION_PULSE_VERSION} from './fashionPulse';
 import {scoreLookComposition} from './stylistScoring';
 import {hasSemanticBase} from './lookSemantics';
@@ -14,7 +14,7 @@ function signature(items:StylistPiece[]){return items.map(x=>String(x.id)).sort(
 function complete(items:StylistPiece[]){const dress=items.some(p=>p.category==='Vestidos'),bottom=items.some(p=>p.category==='Calças'),shoe=items.some(p=>p.category==='Calçados');return shoe&&(dress||(hasSemanticBase(items)&&bottom))}
 function allowedForOccasion(p:StylistPiece,occasion:string){const pref:any=p.stylistPreference||{};if(pref.frequency==='never')return false;const only=Array.isArray(pref.only_occasions)?pref.only_occasions.map((x:any)=>norm(String(x))):[];if(only.length&&!only.includes(norm(occasion)))return false;return true}
 function usableWardrobe(all:StylistPiece[],occasion:string){return all.filter(p=>allowedForOccasion(p,occasion))}
-function contextMemoryScore(items:StylistPiece[],occasion:string,profile:StyleProfile){const m=(profile as any).stylist_memory as StylistMemory|undefined;if(!m)return 0;const c=readContext(),ids=items.map(x=>String(x.id));let s=0;for(const p of items)s+=memoryScore(m,String(p.id),occasion,ids.filter(id=>id!==String(p.id)),{detail:c.detail,period:c.period,dress_code:c.work_profile?.dress_code})*.55;return Math.max(-45,Math.min(45,s))}
+function contextMemoryScore(items:StylistPiece[],occasion:string,profile:StyleProfile){const m=(latestStylistMemory()||(profile as any).stylist_memory) as StylistMemory|undefined;if(!m)return 0;const c=readContext(),ids=items.map(x=>String(x.id));let s=0;for(const p of items)s+=memoryScore(m,String(p.id),occasion,ids.filter(id=>id!==String(p.id)),{detail:c.detail,period:c.period,dress_code:c.work_profile?.dress_code})*.55;return Math.max(-45,Math.min(45,s))}
 function trendScore(items:StylistPiece[],profile:StyleProfile){return Math.max(-6,Math.min(10,items.reduce((n,p)=>n+fashionPulseScore(p,profile),0)))}
 function rotationScore(items:StylistPiece[]){return -Math.min(22,items.reduce((n,p)=>n+Number(p.rotationPenalty||0),0)*.9)}
 function score(items:StylistPiece[],occasion:string,profile:StyleProfile,anchor?:StylistPiece){let s=scoreLookComposition(items,occasion,profile)+contextMemoryScore(items,occasion,profile)+trendScore(items,profile)+rotationScore(items);if(complete(items))s+=55;else s-=80;if(anchor)s+=items.some(x=>String(x.id)===String(anchor.id))?130:-650;return s}
