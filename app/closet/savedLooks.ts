@@ -21,7 +21,9 @@ function hydrate(row:any):SavedLook{const decoded=decodeNotes(row?.notes);return
 
 export async function saveLook(session:ClosetSession,input:{occasion:string;itemIds:string[];title?:string;rating?:string;notes?:string;context?:SavedLookContext;tags?:string[];source?:string}){
  const context={...(input.context||currentContext(input.occasion,input.source||'stylist'))};if(input.tags?.length)context.tags=[...new Set([...(context.tags||[]),...input.tags])];
- const payload={user_id:session.user.id,occasion:input.occasion,title:input.title||`Look para ${input.occasion}`,item_ids:input.itemIds,favorite:true,rating:input.rating||'saved',notes:encodeNotes(input.notes,context),worn_count:0};
+ const generatedSource=['stylist','manual','travel'].includes(String(input.source||context.source||''));
+ const safeRating=generatedSource&&input.rating==='love'?'saved':(input.rating||'saved');
+ const payload={user_id:session.user.id,occasion:input.occasion,title:input.title||`Look para ${input.occasion}`,item_ids:input.itemIds,favorite:true,rating:safeRating,notes:encodeNotes(input.notes,context),worn_count:0};
  const r=await fetch(`${url}/rest/v1/closet_saved_looks`,{method:'POST',headers:headers(session.access_token,{'Content-Type':'application/json','Prefer':'return=representation'}),body:JSON.stringify(payload)});
  const rows=await readJson(r);return hydrate(rows?.[0]);
 }
