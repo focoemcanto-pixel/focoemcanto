@@ -61,6 +61,7 @@ function outerwearTooWarm(p:StylistPiece){
 
 function desiredOuterwearLevel(){const tc=thermalContext();if(!tc)return 0;const t=tc.effective;if(t<=10)return 5;if(t<=14)return 4;if(t<=18)return 3;if(t<=21)return 2;return 0}
 function occasionOuterwearFit(p:StylistPiece,occasion:string){const t=text(p),o=norm(occasion);let s=0;if(['trabalho','igreja','evento'].includes(o)){if(/blazer|trench|casaco|cardigan/.test(t))s+=4;if(/puffer|parka|bomber/.test(t))s-=1}else if(['passeio','sair','viagem','aula'].includes(o)){if(/jaqueta|bomber|cardigan|corta vento|corta-vento/.test(t))s+=3}if(/preto|azul marinho|cinza|bege|marrom|off white|off-white/.test(t))s+=2;return s}
+function paletteMatch(p:StylistPiece){const c=readContext(),wanted=Array.isArray(c?.colors)?c.colors.map((x:string)=>norm(x)):[];if(!wanted.length)return false;const t=text(p);return wanted.some((x:string)=>t.includes(x))}
 
 export function ensureMandatoryAccessories<T extends StylistPiece>(look:T[],all:T[],occasion:string){
  const ids=new Set(look.map(x=>String(x.id)));
@@ -80,11 +81,13 @@ export function ensureBaseUnderOuterwear<T extends StylistPiece>(look:T[],all:T[
    if(candidates[0])next=[...next,candidates[0]];
   }
  }
- if(!hasOuterwear(next)||hasSemanticBase(next))return next;
- const current=new Set(next.map(x=>String(x.id)));
- const pool=all.filter(p=>isBaseTop(p)&&!current.has(String(p.id))&&(!p.wardrobeStatus||p.wardrobeStatus==='available')&&p.stylistPreference?.frequency!=='never');
+ if(hasSemanticBase(next))return next;
+ const current=new Set(next.map(x=>String(x.id))),c=readContext(),mode=String(c?.paletteMode||'auto');
+ let pool=all.filter(p=>isBaseTop(p)&&!current.has(String(p.id))&&(!p.wardrobeStatus||p.wardrobeStatus==='available')&&p.stylistPreference?.frequency!=='never');
+ if(mode==='strict'&&Array.isArray(c?.colors)&&c.colors.length)pool=pool.filter(paletteMatch);
  if(!pool.length)return next;
- const preferred=pool.find(p=>/branco|preto|off white|off-white|bege|cinza|azul marinho/.test(text(p)))||pool[0];
+ pool=[...pool].sort((a,b)=>{const pa=paletteMatch(a)?1:0,pb=paletteMatch(b)?1:0;if(pa!==pb)return pb-pa;const an=/branco|preto|off white|off-white|bege|cinza|azul marinho/.test(text(a))?1:0,bn=/branco|preto|off white|off-white|bege|cinza|azul marinho/.test(text(b))?1:0;return bn-an});
+ const preferred=pool[0];
  const outerIndex=next.findIndex(isOuterwear);
- next=[...next];next.splice(Math.max(0,outerIndex),0,preferred);return next;
+ next=[...next];next.splice(outerIndex>=0?outerIndex:0,0,preferred);return next;
 }
