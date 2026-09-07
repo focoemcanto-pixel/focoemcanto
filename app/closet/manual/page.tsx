@@ -18,7 +18,20 @@ function colorText(p:Piece){return p.meta.split(' · ')[0]||''}
 function norm(v:string){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/-/g,' ').trim()}
 function paletteMatch(p:Piece,colors:string[]){const c=norm(colorText(p));return Boolean(c&&colors.some(x=>norm(x)===c))}
 function thermalWarning(p:Piece,profile:StyleProfile){const c=currentContext(),w=c.weather||profile.weather_context||{},max=Number(w.feelsMax??w.tempMax),t=norm(`${p.name} ${p.meta}`);if(!Number.isFinite(max))return'';if(max>=29&&/jaqueta|blazer|casaco|sobretudo|puffer|parka|sueter|tricot/.test(t))return`Pode ficar quente para ${Math.round(max)}°.`;if(max<=18&&/regata|short|bermuda|sandalia/.test(t))return`Pode ficar leve demais para ${Math.round(max)}°.`;return''}
-function styleWarning(selected:Piece[],p:Piece){const all=[...selected,p].map(x=>norm(`${x.name} ${x.meta}`)).join(' | ');if(/camisa social/.test(all)&&/jogger|calca moletom/.test(all))return'Essa combinação mistura formalidade muito distante.';if(/blazer/.test(all)&&/short|bermuda/.test(all))return'Essa combinação tende a ficar incoerente para contextos arrumados.';return''}
+function pieceText(p:Piece){return norm(`${p.name} ${p.meta}`)}
+function styleWarning(selected:Piece[],p:Piece){
+ const items=[...selected,p],texts=items.map(pieceText),all=texts.join(' | ');
+ if(/camisa social/.test(all)&&/jogger|calca moletom/.test(all))return'Essa combinação mistura formalidade muito distante.';
+ if(/blazer/.test(all)&&/short|bermuda/.test(all))return'Blazer + peça muito curta tende a exigir intenção de styling específica.';
+ if(/alfaiataria|camisa social|blazer/.test(all)&&/running|corrida|treino|esportivo performance/.test(all))return'O calçado esportivo de performance quebra bastante a linguagem social.';
+ const wide=texts.filter(t=>/oversized|amplo|wide|baggy|relaxed|boxy|pantalona/.test(t)).length;
+ if(wide>=2)return'Há bastante volume em cima e embaixo. Pode funcionar, mas exige proporção intencional.';
+ const tight=texts.filter(t=>/skinny|super slim|muito justo/.test(t)).length;
+ if(tight>=2)return'O look está muito ajustado em mais de uma peça; confira se esse é o efeito desejado.';
+ if(/puffer|parka|sobretudo/.test(all)&&/moletom|hoodie|sueter grosso/.test(all))return'Muitas camadas volumosas podem pesar visualmente e termicamente.';
+ if(/estampad|xadrez|listr|floral/.test(texts[0]||'')&&texts.slice(1).some(t=>/estampad|xadrez|listr|floral/.test(t)))return'Duas estampas fortes pedem atenção à escala e às cores.';
+ return'';
+}
 
 export default function ManualBuilder(){
  const [session,setSession]=useState<ClosetSession|null>(null),[profile,setProfile]=useState<StyleProfile>({}),[pieces,setPieces]=useState<Piece[]>([]),[loading,setLoading]=useState(true),[occasion,setOccasion]=useState('Uso livre'),[selected,setSelected]=useState<Record<string,Piece|undefined>>({}),[accessories,setAccessories]=useState<Piece[]>([]),[picker,setPicker]=useState<LookLayer|null>(null),[tryOn,setTryOn]=useState(false),[avatarId,setAvatarId]=useState('m-1'),[saving,setSaving]=useState(false),[toast,setToast]=useState('');
@@ -39,7 +52,7 @@ export default function ManualBuilder(){
  function notify(m:string){setToast(m);window.setTimeout(()=>setToast(''),2200)}
  function pick(layer:LookLayer,p:Piece){if(layer==='accessory'){setAccessories(v=>v.some(x=>String(x.id)===String(p.id))?v.filter(x=>String(x.id)!==String(p.id)):[...v,p]);return}const next={...selected,[layer]:p};if(layer==='dress'){next['base-top']=undefined;next.bottom=undefined}else if(layer==='base-top'||layer==='bottom')next.dress=undefined;setSelected(next);setPicker(null)}
  function remove(layer:LookLayer){setSelected(v=>({...v,[layer]:undefined}))}
- async function save(){if(!session||!ready)return;setSaving(true);try{sessionStorage.setItem('closet_stylist_context',JSON.stringify({...ctx,occasion,source:'manual',createdAt:new Date().toISOString()}));await saveLook(session,{occasion,itemIds:composed.map(p=>String(p.id)),rating:'love',source:'manual',tags:['manual']});notify('Look manual salvo ♡')}catch(e:any){notify(e?.message||'Não consegui salvar.')}finally{setSaving(false)}}
+ async function save(){if(!session||!ready)return;setSaving(true);try{sessionStorage.setItem('closet_stylist_context',JSON.stringify({...ctx,occasion,source:'manual',createdAt:new Date().toISOString()}));await saveLook(session,{occasion,itemIds:composed.map(p=>String(p.id)),rating:'saved',source:'manual',tags:['manual']});notify('Look manual salvo ♡')}catch(e:any){notify(e?.message||'Não consegui salvar.')}finally{setSaving(false)}}
  function warningFor(p:Piece){return thermalWarning(p,profile)||styleWarning(composed.filter(x=>String(x.id)!==String(p.id)),p)}
  if(loading)return <main className={styles.page}><div className={styles.loading}>Abrindo seu guarda-roupa…</div></main>;
  if(!session)return <main className={styles.page}><div className={styles.empty}><h1>Entre no Closet primeiro.</h1><button onClick={()=>location.href='/closet/'}>Voltar</button></div></main>;
