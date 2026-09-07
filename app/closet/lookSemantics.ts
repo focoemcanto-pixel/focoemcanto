@@ -5,89 +5,33 @@ export type LookLayer='base-top'|'outerwear'|'dress'|'bottom'|'shoes'|'mandatory
 function norm(v:string){return String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/-/g,' ').replace(/\s+/g,' ').trim()}
 function text(p:StylistPiece){return norm(`${p.name||''} ${p.meta||''}`)}
 function readContext(){if(typeof window==='undefined')return{} as any;try{return JSON.parse(sessionStorage.getItem('closet_stylist_context')||'{}')||{}}catch{return{} as any}}
+function allowedForOccasion(p:StylistPiece,occasion:string){const pref:any=p.stylistPreference||{};if(pref.frequency==='never')return false;const only=Array.isArray(pref.only_occasions)?pref.only_occasions.map((x:any)=>norm(String(x))):[];return !only.length||only.includes(norm(occasion))}
 
-export function isOuterwear(p:StylistPiece){
- const t=text(p);
- return /\bjaqueta\b|\bblazer\b|\bcasaco\b|sobretudo|parka|puffer|cardigan|trench|corta vento|corta-vento|anorak/.test(t);
-}
+export function isOuterwear(p:StylistPiece){const t=text(p);return /\bjaqueta\b|\bblazer\b|\bcasaco\b|sobretudo|parka|puffer|cardigan|trench|corta vento|corta-vento|anorak/.test(t)}
 export function isBaseTop(p:StylistPiece){return p.category==='Blusas'&&!isOuterwear(p)}
 export function isMandatoryAccessory(p:StylistPiece){return Boolean((p.stylistPreference as any)?.mandatory)}
 export function mandatoryOccasions(p:StylistPiece){const v=(p.stylistPreference as any)?.mandatory_occasions;return Array.isArray(v)?v.map(norm):[]}
 export function mandatoryForOccasion(p:StylistPiece,occasion:string){if(!isMandatoryAccessory(p))return false;const only=mandatoryOccasions(p);return !only.length||only.includes(norm(occasion))}
-
-export function layerOf(p:StylistPiece):LookLayer{
- if(p.category==='Vestidos')return'dress';
- if(p.category==='Blusas')return isOuterwear(p)?'outerwear':'base-top';
- if(p.category==='Calças')return'bottom';
- if(p.category==='Calçados')return'shoes';
- if(isMandatoryAccessory(p))return'mandatory-accessory';
- return'accessory';
-}
-
+export function layerOf(p:StylistPiece):LookLayer{if(p.category==='Vestidos')return'dress';if(p.category==='Blusas')return isOuterwear(p)?'outerwear':'base-top';if(p.category==='Calças')return'bottom';if(p.category==='Calçados')return'shoes';if(isMandatoryAccessory(p))return'mandatory-accessory';return'accessory'}
 const order:Record<LookLayer,number>={'base-top':10,dress:15,outerwear:20,bottom:30,shoes:40,'mandatory-accessory':50,accessory:60};
 export function sortLookForTryOn<T extends StylistPiece>(items:T[]):T[]{return [...items].sort((a,b)=>order[layerOf(a)]-order[layerOf(b)])}
-
 export function hasSemanticBase(items:StylistPiece[]){return items.some(p=>p.category==='Vestidos'||isBaseTop(p))}
 export function hasOuterwear(items:StylistPiece[]){return items.some(isOuterwear)}
-
-export function thermalLevel(p:StylistPiece){
- const explicit=Number((p as any)?.dbMetadata?.thermal_level ?? (p as any)?.metadata?.thermal_level);
- if(Number.isFinite(explicit)&&explicit>=1&&explicit<=5)return explicit;
- const t=text(p);
- if(/puffer|parka|sobretudo|fleece|l[aã]|cashmere|segunda pele|t[eé]rmic/.test(t))return 5;
- if(/casaco|jaqueta de couro|couro|trench|anorak/.test(t))return 4;
- if(/jaqueta|blazer|cardigan|su[eé]ter|tricot/.test(t))return 3;
- if(/camisa|polo|jeans|chino|alfaiataria/.test(t))return 2;
- return 1;
-}
-
-function thermalContext(){
- const c=readContext(),w=c?.weather||{},max=Number(w.feelsMax??w.tempMax),min=Number(w.feelsMin??w.tempMin),period=norm(c?.period||''),sensitivity=Math.min(5,Math.max(1,Number(c?.thermal_sensitivity??3)));
- if(!Number.isFinite(max)&&!Number.isFinite(min))return null;
- const base=period==='noite'&&Number.isFinite(min)?min:Number.isFinite(max)?max:min;
- const adjustment=(sensitivity-3)*1.5;
- return {effective:Number(base)-adjustment,period,sensitivity,rain:Number(w.rainChance)};
-}
-
-function outerwearTooWarm(p:StylistPiece){
- if(!isOuterwear(p))return false;
- const tc=thermalContext();if(!tc)return false;
- const level=thermalLevel(p),effective=tc.effective;
- if(effective>=30)return level>=3;
- if(effective>=27)return level>=4;
- if(effective>=24)return level>=5;
- return false;
-}
-
+export function thermalLevel(p:StylistPiece){const explicit=Number((p as any)?.dbMetadata?.thermal_level ?? (p as any)?.metadata?.thermal_level);if(Number.isFinite(explicit)&&explicit>=1&&explicit<=5)return explicit;const t=text(p);if(/puffer|parka|sobretudo|fleece|l[aã]|cashmere|segunda pele|t[eé]rmic/.test(t))return 5;if(/casaco|jaqueta de couro|couro|trench|anorak/.test(t))return 4;if(/jaqueta|blazer|cardigan|su[eé]ter|tricot/.test(t))return 3;if(/camisa|polo|jeans|chino|alfaiataria/.test(t))return 2;return 1}
+function thermalContext(){const c=readContext(),w=c?.weather||{},max=Number(w.feelsMax??w.tempMax),min=Number(w.feelsMin??w.tempMin),period=norm(c?.period||''),sensitivity=Math.min(5,Math.max(1,Number(c?.thermal_sensitivity??3)));if(!Number.isFinite(max)&&!Number.isFinite(min))return null;const base=period==='noite'&&Number.isFinite(min)?min:Number.isFinite(max)?max:min;const adjustment=(sensitivity-3)*1.5;return {effective:Number(base)-adjustment,period,sensitivity,rain:Number(w.rainChance)}}
+function outerwearTooWarm(p:StylistPiece){if(!isOuterwear(p))return false;const tc=thermalContext();if(!tc)return false;const level=thermalLevel(p),effective=tc.effective;if(effective>=30)return level>=3;if(effective>=27)return level>=4;if(effective>=24)return level>=5;return false}
 function desiredOuterwearLevel(){const tc=thermalContext();if(!tc)return 0;const t=tc.effective;if(t<=10)return 5;if(t<=14)return 4;if(t<=18)return 3;if(t<=21)return 2;return 0}
 function occasionOuterwearFit(p:StylistPiece,occasion:string){const t=text(p),o=norm(occasion);let s=0;if(['trabalho','igreja','evento'].includes(o)){if(/blazer|trench|casaco|cardigan/.test(t))s+=4;if(/puffer|parka|bomber/.test(t))s-=1}else if(['passeio','sair','viagem','aula'].includes(o)){if(/jaqueta|bomber|cardigan|corta vento|corta-vento/.test(t))s+=3}if(/preto|azul marinho|cinza|bege|marrom|off white|off-white/.test(t))s+=2;return s}
 function paletteMatch(p:StylistPiece){const c=readContext(),wanted=Array.isArray(c?.colors)?c.colors.map((x:string)=>norm(x)):[];if(!wanted.length)return false;const t=text(p);return wanted.some((x:string)=>t.includes(x))}
-
-export function ensureMandatoryAccessories<T extends StylistPiece>(look:T[],all:T[],occasion:string){
- const ids=new Set(look.map(x=>String(x.id)));
- const required=all.filter(p=>mandatoryForOccasion(p,occasion)&&!ids.has(String(p.id))&&(p.category==='Acessórios'||p.category==='Bolsas'));
- return [...look,...required];
-}
-
+function available<T extends StylistPiece>(p:T,occasion:string){return (!p.wardrobeStatus||p.wardrobeStatus==='available')&&allowedForOccasion(p,occasion)}
+function fallbackForCategory<T extends StylistPiece>(all:T[],category:string,occasion:string,used:Set<string>,baseOnly=false){const c=readContext(),mode=String(c?.paletteMode||'auto');let pool=all.filter(p=>p.category===category&&!used.has(String(p.id))&&available(p,occasion)&&(!baseOnly||isBaseTop(p)));if(mode==='strict'&&Array.isArray(c?.colors)&&c.colors.length)pool=pool.filter(paletteMatch);return [...pool].sort((a,b)=>Number(paletteMatch(b))-Number(paletteMatch(a)))[0]}
+export function ensureMandatoryAccessories<T extends StylistPiece>(look:T[],all:T[],occasion:string){const ids=new Set(look.map(x=>String(x.id)));const required=all.filter(p=>mandatoryForOccasion(p,occasion)&&allowedForOccasion(p,occasion)&&!ids.has(String(p.id))&&(p.category==='Acessórios'||p.category==='Bolsas'));return [...look,...required]}
 export function ensureBaseUnderOuterwear<T extends StylistPiece>(look:T[],all:T[],occasion:string){
- let next=look.filter(p=>!outerwearTooWarm(p));
- if(!hasOuterwear(next)){
-  const wanted=desiredOuterwearLevel();
-  if(wanted>0){
-   const used=new Set(next.map(x=>String(x.id)));
-   const candidates=all.filter(p=>isOuterwear(p)&&!used.has(String(p.id))&&(!p.wardrobeStatus||p.wardrobeStatus==='available')&&p.stylistPreference?.frequency!=='never'&&!outerwearTooWarm(p)).sort((a,b)=>{
-    const da=Math.abs(thermalLevel(a)-wanted),db=Math.abs(thermalLevel(b)-wanted);if(da!==db)return da-db;return occasionOuterwearFit(b,occasion)-occasionOuterwearFit(a,occasion);
-   });
-   if(candidates[0])next=[...next,candidates[0]];
-  }
- }
+ const before=look;let next=look.filter(p=>allowedForOccasion(p,occasion)&&!outerwearTooWarm(p));
+ /* When a preference such as “only events” is saved while this look is open, remove it now and replace the essential slot instead of merely remembering it for later. */
+ const removed=before.filter(p=>!next.some(x=>String(x.id)===String(p.id))&&!outerwearTooWarm(p));
+ if(removed.length){const used=new Set(next.map(x=>String(x.id)));for(const old of removed){let replacement:T|undefined;if(isBaseTop(old))replacement=fallbackForCategory(all,'Blusas',occasion,used,true);else if(old.category==='Calças'||old.category==='Calçados'||old.category==='Vestidos')replacement=fallbackForCategory(all,old.category,occasion,used,false);if(replacement){next=[...next,replacement];used.add(String(replacement.id))}}}
+ if(!hasOuterwear(next)){const wanted=desiredOuterwearLevel();if(wanted>0){const used=new Set(next.map(x=>String(x.id)));const candidates=all.filter(p=>isOuterwear(p)&&!used.has(String(p.id))&&available(p,occasion)&&!outerwearTooWarm(p)).sort((a,b)=>{const da=Math.abs(thermalLevel(a)-wanted),db=Math.abs(thermalLevel(b)-wanted);if(da!==db)return da-db;return occasionOuterwearFit(b,occasion)-occasionOuterwearFit(a,occasion)});if(candidates[0])next=[...next,candidates[0]]}}
  if(hasSemanticBase(next))return next;
- const current=new Set(next.map(x=>String(x.id))),c=readContext(),mode=String(c?.paletteMode||'auto');
- let pool=all.filter(p=>isBaseTop(p)&&!current.has(String(p.id))&&(!p.wardrobeStatus||p.wardrobeStatus==='available')&&p.stylistPreference?.frequency!=='never');
- if(mode==='strict'&&Array.isArray(c?.colors)&&c.colors.length)pool=pool.filter(paletteMatch);
- if(!pool.length)return next;
- pool=[...pool].sort((a,b)=>{const pa=paletteMatch(a)?1:0,pb=paletteMatch(b)?1:0;if(pa!==pb)return pb-pa;const an=/branco|preto|off white|off-white|bege|cinza|azul marinho/.test(text(a))?1:0,bn=/branco|preto|off white|off-white|bege|cinza|azul marinho/.test(text(b))?1:0;return bn-an});
- const preferred=pool[0];
- const outerIndex=next.findIndex(isOuterwear);
- next=[...next];next.splice(outerIndex>=0?outerIndex:0,0,preferred);return next;
+ const current=new Set(next.map(x=>String(x.id))),c=readContext(),mode=String(c?.paletteMode||'auto');let pool=all.filter(p=>isBaseTop(p)&&!current.has(String(p.id))&&available(p,occasion));if(mode==='strict'&&Array.isArray(c?.colors)&&c.colors.length)pool=pool.filter(paletteMatch);if(!pool.length)return next;pool=[...pool].sort((a,b)=>{const pa=paletteMatch(a)?1:0,pb=paletteMatch(b)?1:0;if(pa!==pb)return pb-pa;const an=/branco|preto|off white|off-white|bege|cinza|azul marinho/.test(text(a))?1:0,bn=/branco|preto|off white|off-white|bege|cinza|azul marinho/.test(text(b))?1:0;return bn-an});const preferred=pool[0],outerIndex=next.findIndex(isOuterwear);next=[...next];next.splice(outerIndex>=0?outerIndex:0,0,preferred);return next
 }
