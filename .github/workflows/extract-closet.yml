@@ -1,0 +1,70 @@
+name: Finalize Closet extraction
+
+on:
+  push:
+    branches: [main]
+    paths: [".github/workflows/extract-closet.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Remove embedded Closet and keep redirect
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf app/closet app/api/closet
+          mkdir -p app/closet
+          cat > app/closet/page.tsx <<'EOF'
+          'use client';
+
+          import { useEffect } from 'react';
+
+          const CLOSET_URL = 'https://closet.focostart.com';
+
+          export default function ClosetMovedPage() {
+            useEffect(() => {
+              window.location.replace(CLOSET_URL);
+            }, []);
+
+            return (
+              <main style={{minHeight:'100vh',display:'grid',placeItems:'center',padding:'32px',fontFamily:'Arial, sans-serif',background:'#faf6ee',color:'#211a16'}}>
+                <div style={{maxWidth:'520px',textAlign:'center'}}>
+                  <p style={{letterSpacing:'0.18em',textTransform:'uppercase',fontSize:'12px'}}>Closet</p>
+                  <h1 style={{fontFamily:'Georgia, serif',fontWeight:400,fontSize:'42px',margin:'10px 0 16px'}}>O Closet mudou de endereço.</h1>
+                  <p style={{lineHeight:1.6,fontSize:'17px',opacity:.72}}>Você será encaminhado automaticamente para o novo aplicativo.</p>
+                  <a href={CLOSET_URL} style={{display:'inline-block',marginTop:'20px',padding:'14px 22px',borderRadius:'999px',background:'#211a16',color:'#fff',textDecoration:'none',fontWeight:700}}>Abrir Closet</a>
+                </div>
+              </main>
+            );
+          }
+          EOF
+
+          rm -f .github/workflows/extract-closet.yml
+
+      - name: Verify build
+        run: |
+          npm install
+          npm run build
+
+      - name: Commit extraction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Nothing to commit"
+            exit 0
+          fi
+          git commit -m "chore: move Closet to closet.focostart.com"
+          git push origin HEAD:main
