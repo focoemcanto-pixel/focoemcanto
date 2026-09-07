@@ -44,6 +44,17 @@ export function loadStylistMemory(session: ClosetSession): StylistMemory {
   } catch { return empty(); }
 }
 
+export function projectMemoryForCurrentContext(memory:StylistMemory){
+ if(typeof window==='undefined')return memory;
+ let c:any={};try{c=JSON.parse(sessionStorage.getItem('closet_stylist_context')||'{}')||{}}catch{}
+ const occasion=String(c.occasion||'');if(!occasion)return memory;
+ const ck=stylistContextKey({occasion,detail:c.detail,period:c.period,dress_code:c.work_profile?.dress_code});
+ const specific=memory.contextLikes?.[ck]||{};if(!Object.keys(specific).length)return memory;
+ const merged={...(memory.occasionLikes?.[occasion]||{})};
+ for(const [id,value] of Object.entries(specific))merged[id]=(merged[id]||0)+Number(value||0)*1.15;
+ return {...memory,occasionLikes:{...(memory.occasionLikes||{}),[occasion]:merged}};
+}
+
 export function learnFromSavedLooks(session: ClosetSession, looks: SavedLook[]) {
   const previous = loadStylistMemory(session);
   const m = empty();
