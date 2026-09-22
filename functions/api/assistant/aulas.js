@@ -64,6 +64,7 @@ export async function onRequestGet({ request, env }) {
         name: clean(student.name, 120) || 'Aula',
         modality: clean(student.modality, 30),
         neighborhood: clean(student.neighborhood, 120),
+        whatsapp: clean(student.whatsapp, 30).replace(/\D/g, ''),
         durationMinutes,
       }
       const rows = [{ ...base, occurrence: 1, day: clean(student.day, 20), time: clean(student.time, 10), endTime: clean(student.endTime, 10) || addMinutes(student.time, durationMinutes) }]
