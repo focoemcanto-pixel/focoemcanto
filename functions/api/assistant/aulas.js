@@ -71,5 +71,23 @@ export async function onRequestGet({ request, env }) {
       if (Number(student.weeklyFrequency) === 2 && student.secondDay && student.secondTime) rows.push({ ...base, occurrence: 2, day: clean(student.secondDay, 20), time: clean(student.secondTime, 10), endTime: addMinutes(student.secondTime, durationMinutes) })
       return rows
     })
-  return json(request, { classes: students, syncedAt: new Date().toISOString() })
+  const [leads, slots] = await Promise.all([
+    readPrefix(env.FOCO_LINKS, 'aulas:lead:'),
+    readPrefix(env.FOCO_LINKS, 'aulas:slot:'),
+  ])
+  const safeLeads = leads.map(lead => ({
+    id: clean(lead.id,80), status: clean(lead.status || 'waiting',20), name: clean(lead.name,120),
+    whatsapp: clean(lead.whatsapp,30), modality: clean(lead.modality,60),
+    availability: Array.isArray(lead.availability) ? lead.availability.slice(0,30).map(v=>clean(v,120)) : [],
+    flexible: Boolean(lead.flexible), startIntent: clean(lead.startIntent,100), goal: clean(lead.goal,160),
+    neighborhood: clean(lead.neighborhood,120), city: clean(lead.city,120),
+    createdAt: clean(lead.createdAt,40), updatedAt: clean(lead.updatedAt,40),
+  })).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)))
+  const safeSlots = slots.map(slot => ({
+    id: clean(slot.id,80), day: clean(slot.day,20), dayOrder: Number(slot.dayOrder || 9),
+    time: clean(slot.time,10), endTime: clean(slot.endTime,10) || addMinutes(slot.time, Number(slot.durationMinutes || 60)),
+    modality: clean(slot.modality,40), status: clean(slot.status || 'available',20),
+    studentId: clean(slot.studentId,80), studentName: clean(slot.studentName,120),
+  })).sort((a,b)=>`${a.dayOrder}-${a.time}`.localeCompare(`${b.dayOrder}-${b.time}`))
+  return json(request, { classes: students, leads: safeLeads, slots: safeSlots, syncedAt: new Date().toISOString() })
 }
