@@ -15,7 +15,27 @@ const Chart = dynamic(() => import('./Chart'), {
     <div className="trade-chart trade-skeleton">Preparando gráfico…</div>
   ),
 });
-type State = ReturnType<typeof runReplay>;
+type State = Omit<ReturnType<typeof runReplay>, 'source'> & {
+  source: 'replay' | 'live';
+  feed?: {
+    symbol: string;
+    status: string;
+    ageMs: number | null;
+    maxAgeMs: number;
+    receivedAt: string | null;
+    lastTick: {
+      timeMsc: number;
+      last: number;
+      bid: number;
+      ask: number;
+      volume: number;
+    } | null;
+    executionEnabled: boolean;
+    killSwitch: boolean;
+    positionsCount: number;
+    ordersCount: number;
+  };
+};
 type Mode = 'Copiloto' | 'Professor' | 'Replay';
 const format = (n: number | undefined) =>
   n === undefined
@@ -145,6 +165,13 @@ export default function TradeApp() {
     [runStatus, setRunStatus] = useState(''),
     [savingRun, setSavingRun] = useState(false),
     [savedRuns, setSavedRuns] = useState<any[]>([]);
+  const [source, setSource] = useState<'replay' | 'mt5'>('replay');
+  const [pulse, setPulse] = useState(0);
+  useEffect(() => {
+    if (source !== 'mt5') return;
+    const timer = setInterval(() => setPulse((p) => p + 1), 2000);
+    return () => clearInterval(timer);
+  }, [source]);
   const requestId = useRef(0);
   const latestCursor = useRef(cursor);
   latestCursor.current = cursor;
@@ -159,7 +186,7 @@ export default function TradeApp() {
     const id = ++requestId.current;
     const controller = new AbortController();
     setLoading(true);
-    fetch(`/api/trade/evaluate?cursor=${cursor}`, {
+    fetch(`/api/trade/evaluate?cursor=${cursor}&source=${source}`, {
       cache: 'no-store',
       signal: controller.signal,
     })
@@ -185,9 +212,9 @@ export default function TradeApp() {
         if (id === requestId.current) setLoading(false);
       });
     return () => controller.abort();
-  }, [cursor, authed, redirect]);
+  }, [cursor, authed, redirect, source, pulse]);
   useEffect(() => {
-    if (!playing || loading) return;
+    if (!playing || loading || source === 'mt5') return;
     const timer = setTimeout(
       () =>
         setCursor((c) => {
@@ -197,7 +224,7 @@ export default function TradeApp() {
           }
           return c + 1;
         }),
-      1000 / speed
+      1000 / speed,
     );
     return () => clearTimeout(timer);
   }, [playing, loading, cursor, speed]);
@@ -211,7 +238,7 @@ export default function TradeApp() {
         setJournalStatus(
           d.limited
             ? 'Mostrando as primeiras 100 notas.'
-            : 'Notas salvas no servidor.'
+            : 'Notas salvas no servidor.',
         );
       })
       .catch((e) => setJournalStatus(e.message));
@@ -226,7 +253,7 @@ export default function TradeApp() {
       const r = await fetch('/api/trade/professor', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: text, cursor }),
+        body: JSON.stringify({ question: text, cursor, source }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
@@ -242,6 +269,12 @@ export default function TradeApp() {
   };
   const saveNote = async (e: FormEvent) => {
     e.preventDefault();
+    if (source === 'mt5') {
+      setJournalStatus(
+        'O diário desta tela está associado ao replay. Selecione Replay para salvar.',
+      );
+      return;
+    }
     if (saving) return;
     setSaving(true);
     try {
@@ -262,6 +295,7 @@ export default function TradeApp() {
     }
   };
   const saveRun = async () => {
+    if (source === 'mt5') return;
     setSavingRun(true);
     try {
       const r = await fetch('/api/trade/runs', {
@@ -310,6 +344,15 @@ export default function TradeApp() {
         <a href="/admin/login/?next=%2Ftrade%2F">Entrar no FocoOS</a>
       </main>
     );
+  const feed = source === 'mt5' ? state?.feed : undefined;
+  const feedAge = feed?.lastTick ? Date.now() - feed.lastTick.timeMsc : null;
+  const live =
+    !!feed &&
+    feed.status === 'LIVE' &&
+    feedAge !== null &&
+    feedAge >= -2000 &&
+    feedAge <= (feed.maxAgeMs || 15000) &&
+    !error;
   return (
     <main className="trade-app ft-relative">
       <header className="trade-header">
@@ -353,14 +396,46 @@ export default function TradeApp() {
           </button>
         </div>
       </header>
-      <div className="trade-source">
+      <div className="trade-source trade-feed-source">
+        <select
+          aria-label="Fonte de mercado"
+          value={source}
+          onChange={(e) => {
+            setSource(e.target.value as 'replay' | 'mt5');
+            setState(undefined);
+            setPlaying(false);
+            setChat([]);
+            setRevealed(false);
+          }}
+        >
+          <option value="replay">Mock / Replay</option>
+          <option value="mt5">XP / MetaTrader 5</option>
+        </select>
         <span>
-          <i /> DADOS SIMULADOS
+          <i />{' '}
+          {source === 'mt5' ? (live ? 'LIVE' : 'OFFLINE') : 'DADOS SIMULADOS'}
         </span>
-        <p>Laboratório de estratégias · nenhum feed B3 conectado</p>
-        <span className="trade-source-right">
-          Sessão de estudo · 30 SET 2026
-        </span>
+        <p>
+          {source === 'mt5'
+            ? `${feed?.symbol || 'MT5'} · último dado ${feed?.lastTick ? new Date(feed.lastTick.timeMsc).toLocaleTimeString('pt-BR') : 'aguardando'} · idade ${feedAge === null ? '—' : Math.max(0, Math.round(feedAge / 1000)) + 's'} · Bid ${format(feed?.lastTick?.bid)} / Ask ${format(feed?.lastTick?.ask)} / Last ${format(feed?.lastTick?.last)} · posições ${feed?.positionsCount || 0} / ordens ${feed?.ordersCount || 0} · execução ${feed?.executionEnabled ? 'configurada' : 'bloqueada'}`
+            : 'Laboratório de estratégias · dados simulados'}
+        </p>
+        {source === 'mt5' && (
+          <button
+            onClick={async () => {
+              const r = await fetch('/api/trade/kill', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: true }),
+              });
+              if (!r.ok)
+                setError('Não foi possível confirmar o bloqueio no servidor');
+              else setPulse((p) => p + 1);
+            }}
+          >
+            Bloquear execução
+          </button>
+        )}
       </div>
       <section className="trade-workspace">
         <div className="trade-market">
@@ -371,17 +446,31 @@ export default function TradeApp() {
               </label>
               <div className="trade-instrument-name">
                 <select id="trade-symbol" aria-label="Ativo">
-                  <option>WIN</option>
+                  <option>
+                    {source === 'mt5' ? feed?.symbol || 'MT5' : 'WIN'}
+                  </option>
                 </select>
-                <span>Mini Índice · simulação</span>
+                <span>
+                  Mini Índice · {source === 'mt5' ? 'XP / MT5' : 'simulação'}
+                </span>
               </div>
             </div>
             <div className="trade-quote">
-              <strong>{format(last?.close)}</strong>
+              <strong>
+                {source === 'mt5'
+                  ? live
+                    ? format(feed?.lastTick?.last || feed?.lastTick?.bid)
+                    : '—'
+                  : format(last?.close)}
+              </strong>
               <small>
-                {last
-                  ? `${time(last.timestamp + 60)} · último fechamento 1m`
-                  : 'Aguardando primeiro candle'}
+                {source === 'mt5'
+                  ? live
+                    ? 'Último tick recebido'
+                    : 'Feed antigo/offline · preço ao vivo oculto'
+                  : last
+                    ? `${time(last.timestamp + 60)} · último fechamento 1m`
+                    : 'Aguardando primeiro candle'}
               </small>
             </div>
             <div className="trade-market-stat">
@@ -450,7 +539,10 @@ export default function TradeApp() {
                 <small>{state?.marketStatus || 'Preparando sessão'}</small>
               </div>
             </div>
-            <div className="trade-player-controls">
+            <div
+              className="trade-player-controls"
+              style={source === 'mt5' ? { display: 'none' } : undefined}
+            >
               <button
                 onClick={() => {
                   setPlaying(false);
@@ -493,7 +585,10 @@ export default function TradeApp() {
                 ))}
               </select>
             </div>
-            <div className="trade-progress">
+            <div
+              className="trade-progress"
+              style={source === 'mt5' ? { display: 'none' } : undefined}
+            >
               <progress max={420} value={cursor} />
               <small>{cursor} / 420 candles</small>
             </div>
@@ -785,7 +880,7 @@ export default function TradeApp() {
                     <span>{state?.signals.length || 0}</span>
                   )}
                 </button>
-              )
+              ),
             )}
           </nav>
           {bottom === 'Estratégias' && (
@@ -858,7 +953,7 @@ export default function TradeApp() {
               <div className="trade-save-run">
                 <button
                   className="trade-primary"
-                  disabled={savingRun || !cursor || loading}
+                  disabled={source === 'mt5' || savingRun || !cursor || loading}
                   onClick={saveRun}
                 >
                   {savingRun ? 'Salvando…' : 'Salvar execução paper'}

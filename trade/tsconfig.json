@@ -15,6 +15,7 @@
     "../app/trade/**/*.ts",
     "../app/trade/**/*.tsx",
     "core/**/*.ts",
+    "bridge/**/*.ts",
     "../functions/api/trade/**/*.ts",
     "../tests/trade/**/*.ts"
   ]

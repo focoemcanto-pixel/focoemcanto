@@ -1,3 +1,5 @@
+> Atualização: a ponte XP/MT5 foi implementada. Consulte [mt5.md](./mt5.md) para configuração real, gates e instalação no Mac. As alternativas de feed abaixo permanecem como referência.
+
 # Conectar WIN/B3 no próximo pregão
 
 O laboratório está funcional sem feed. Ele não acompanha XP Unity e não faz scraping.

@@ -13,7 +13,7 @@
     Inter,
     -apple-system,
     BlinkMacSystemFont,
-    'Segoe UI',
+    "Segoe UI",
     sans-serif;
   line-height: 1.5;
   width: 100%;
@@ -129,7 +129,7 @@
   color: var(--ft-accent);
 }
 .trade-header nav button.active:after {
-  content: '';
+  content: "";
   height: 2px;
   position: absolute;
   bottom: 0;
@@ -513,7 +513,7 @@
   padding-bottom: 17px;
 }
 .trade-pipeline > div:not(:last-child):before {
-  content: '';
+  content: "";
   position: absolute;
   left: 12px;
   top: 26px;
@@ -602,7 +602,7 @@
   color: #dbcaa9;
 }
 .trade-bottom > nav .active:after {
-  content: '';
+  content: "";
   height: 2px;
   position: absolute;
   left: 0;
@@ -1392,4 +1392,33 @@
   font-weight: 500;
   color: #b9d9ca;
   font-variant-numeric: tabular-nums;
+}
+.trade-feed-source {
+  height: auto;
+  min-height: 44px;
+  flex-wrap: wrap;
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.trade-feed-source select {
+  background: #19202e;
+  border: 1px solid #35425b;
+  border-radius: 4px;
+  padding: 5px;
+  font-size: 11px;
+}
+.trade-feed-source button {
+  font-size: 11px;
+  color: #e7a2a7;
+  border: 1px solid #66383f;
+  padding: 5px 10px;
+  border-radius: 4px;
+  margin-left: auto;
+}
+@media (max-width: 850px) {
+  .trade-feed-source p {
+    display: block;
+    width: 100%;
+    font-size: 10px;
+  }
 }

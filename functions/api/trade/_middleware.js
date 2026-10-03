@@ -1,5 +1,7 @@
 import { isAdminAuthenticated } from '../../_lib/admin-auth.js';
 export async function onRequest({ request, env, next }) {
+  // EA has its own strong credential, never an admin-cookie bypass for other routes.
+  if (new URL(request.url).pathname === '/api/trade/bridge/exchange' && request.method === 'POST') return next();
   if (!(await isAdminAuthenticated(request, env)))
     return Response.json(
       { error: 'Sessão expirada. Entre no FocoOS.' },

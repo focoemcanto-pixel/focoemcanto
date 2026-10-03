@@ -13,3 +13,13 @@ Capturas desktop 1440px e mobile 390px foram geradas e inspecionadas. Os testes 
 O núcleo incremental mantém igualdade com a agregação em lote para cada um dos 420 prefixos. Uma alteração arbitrária dos candles futuros não muda estado, sinais ou resultados no cursor anterior. Executar até 420 candles produz três hipóteses sintéticas; esse número apenas verifica o caminho funcional.
 
 No ambiente de trabalho, o servidor Wrangler local não pôde iniciar por restrição de interfaces de rede (`uv_interface_addresses`). Foi possível compilar o Worker e validar página/API por headless com handlers reais. Em produção, conferir middleware, cookie e KV no projeto Pages existente após o deploy.
+
+## Ponte XP / MT5 (03/10/2026)
+
+- Typecheck strict do módulo: passou.
+- 32 testes TS/API/Postgres/PGlite: passaram, incluindo autenticação bridge, rejeição de símbolos/contas, limites, freshness, idempotência, lote repetido, claim antes da entrega, resposta perdida sem redispatch, lease concorrente, eventos reais versus aceite, RLS server-only e source MT5 sem gerar setups não autorizados.
+- Compile Cloudflare Pages Functions: passou.
+- Next export e checagem de assets: passaram.
+- QA headless: 13 verificações, incluindo MT5 sem configuração mostrando OFFLINE/preço oculto e retorno ao replay; nenhuma ordem enviada.
+- EA: inspeção das APIs MQL5 documentadas, ledger antes de OrderSend e gates por padrão desarmados. **Compilação MetaEditor, execução Wine e conexão XP reais ainda pendentes**. Não há compilador MQL5 no ambiente.
+- Migration `20261003035402_mt5_bridge.sql` validada em Postgres/PGlite; não aplicada a um projeto Supabase de produção sem identificar o projeto destinado ao Trade.

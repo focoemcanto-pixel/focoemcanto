@@ -1,7 +1,7 @@
 # Foco Trade — primeira versão funcional
 
 Módulo educacional em `/trade/`, dentro de `focoemcanto-pixel/focoemcanto`.
-Usa dados sintéticos identificados como simulação e não executa ordens.
+Preserva Mock/Replay e agora inclui ponte XP/MT5 com dados reais e infraestrutura de execução desarmada. Instalação, secrets, migration e limites: [guia MT5](./mt5.md). Nenhuma ordem real foi enviada ou habilitada.
 
 ## Auditoria e decisão
 

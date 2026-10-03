@@ -127,13 +127,13 @@ const assert = require('node:assert/strict');
   await page.waitForFunction(
     () =>
       document.querySelector('.trade-chart canvas') &&
-      document.querySelector('.trade-quote strong')?.textContent !== '—'
+      document.querySelector('.trade-quote strong')?.textContent !== '—',
   );
   await fs.mkdir('.trade-qa', { recursive: true });
   await page.screenshot({ path: '.trade-qa/desktop.png', fullPage: true });
   assert.equal(
     await page.getByText('SETUP COMPLETO · PAPER', { exact: true }).count(),
-    1
+    1,
   );
   await page
     .getByRole('button', { name: 'Próximo candle', exact: true })
@@ -141,7 +141,7 @@ const assert = require('node:assert/strict');
   await page.waitForFunction(
     () =>
       document.querySelector('.trade-progress small')?.textContent ===
-      '181 / 420 candles'
+      '181 / 420 candles',
   );
   await page.getByRole('button', { name: '5m', exact: true }).click();
   await page.getByRole('button', { name: 'Professor', exact: true }).click();
@@ -184,9 +184,9 @@ const assert = require('node:assert/strict');
   await page.screenshot({ path: '.trade-qa/mobile.png', fullPage: true });
   assert.ok(
     await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth
+      () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
-    'No horizontal overflow on mobile'
+    'No horizontal overflow on mobile',
   );
   await page
     .getByRole('button', { name: 'Voltar ao início', exact: true })
@@ -196,6 +196,25 @@ const assert = require('node:assert/strict');
       exact: true,
     })
     .waitFor();
+  await page
+    .getByRole('combobox', { name: 'Fonte de mercado' })
+    .selectOption('mt5');
+  await page.getByText('OFFLINE', { exact: true }).waitFor();
+  await page
+    .getByRole('alert')
+    .filter({ hasText: 'MT5 não configurado' })
+    .waitFor();
+  assert.equal(await page.locator('.trade-quote strong').textContent(), '—');
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Próximo candle', exact: true })
+      .isVisible(),
+    false,
+  );
+  await page
+    .getByRole('combobox', { name: 'Fonte de mercado' })
+    .selectOption('replay');
+  await page.getByText('DADOS SIMULADOS', { exact: true }).waitFor();
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify({
@@ -212,9 +231,11 @@ const assert = require('node:assert/strict');
         'journal',
         'mobile overflow',
         'reset',
+        'MT5 offline never fabricates live price',
+        'source switch preserves replay',
       ],
       screenshots: ['.trade-qa/desktop.png', '.trade-qa/mobile.png'],
-    })
+    }),
   );
   await browser.close();
 })().catch((e) => {
