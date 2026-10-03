@@ -15,6 +15,7 @@ export function feedStatus(data: any, env: BridgeEnv, now = Date.now()) {
     : null;
   const ageMs = lastTick ? now - lastTick.timeMsc : null;
   const live =
+    lastTick?.symbol === c.symbol &&
     !!data?.state?.connected &&
     ageMs !== null &&
     ageMs >= -2000 &&

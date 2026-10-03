@@ -52,7 +52,7 @@ begin
  -- A repeated/lost-response batch never redispatches its command.
  if inserted=0 then return jsonb_build_object('command',null,'duplicate',true); end if;
  insert into public.trade_bridge_ticks select b,p_batch->>'session',(p_batch->>'batch')::bigint,ordinality,x->>'symbol',(x->>'timeMsc')::bigint,x from jsonb_array_elements(p_batch->'ticks') with ordinality as a(x,ordinality);
- select payload into last_tick from public.trade_bridge_ticks where bridge_id=b order by time_msc desc limit 1;
+ select payload into last_tick from public.trade_bridge_ticks where bridge_id=b and symbol=p_batch->>'symbol' order by time_msc desc limit 1;
  insert into public.trade_bridge_candles select b,x->>'symbol',(x->>'timestamp')::bigint,x from jsonb_array_elements(p_batch->'candles') x
  on conflict(bridge_id,symbol,timestamp) do update set payload=excluded.payload;
  insert into public.trade_bridge_state(bridge_id,symbol,session,account_hash,state,tick) values(b,p_batch->>'symbol',p_batch->>'session',p_batch->>'accountHash',p_batch->'state',last_tick)

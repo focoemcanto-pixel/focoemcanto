@@ -266,3 +266,20 @@ test('live evaluation uses persisted MT5 candles, preserves authorization and ne
     globalThis.fetch = original;
   }
 });
+
+test('rollover never labels an old-contract tick as live for the new symbol', () => {
+  const now = Date.now(),
+    b = batch(now);
+  assert.equal(
+    feedStatus(
+      {
+        state: b.state,
+        tick: b.ticks[0],
+        receivedAt: new Date(now).toISOString(),
+      },
+      { ...env, TRADE_MT5_SYMBOL: 'WINZ26' },
+      now,
+    ).status,
+    'OFFLINE',
+  );
+});

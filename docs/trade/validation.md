@@ -17,7 +17,7 @@ No ambiente de trabalho, o servidor Wrangler local não pôde iniciar por restri
 ## Ponte XP / MT5 (03/10/2026)
 
 - Typecheck strict do módulo: passou.
-- 32 testes TS/API/Postgres/PGlite: passaram, incluindo autenticação bridge, rejeição de símbolos/contas, limites, freshness, idempotência, lote repetido, claim antes da entrega, resposta perdida sem redispatch, lease concorrente, eventos reais versus aceite, RLS server-only e source MT5 sem gerar setups não autorizados.
+- 33 testes TS/API/Postgres/PGlite: passaram, incluindo autenticação bridge, rejeição de símbolos/contas, limites, freshness, idempotência, lote repetido, claim antes da entrega, resposta perdida sem redispatch, lease concorrente, eventos reais versus aceite, RLS server-only e source MT5 sem gerar setups não autorizados.
 - Compile Cloudflare Pages Functions: passou.
 - Next export e checagem de assets: passaram.
 - QA headless: 13 verificações, incluindo MT5 sem configuração mostrando OFFLINE/preço oculto e retorno ao replay; nenhuma ordem enviada.
