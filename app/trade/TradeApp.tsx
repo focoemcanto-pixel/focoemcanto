@@ -9,7 +9,6 @@ import {
 } from 'react';
 import type { runReplay } from '../../trade/core/engine';
 import type { Timeframe, Setup } from '../../trade/core/types';
-import './trade.css';
 const Chart = dynamic(() => import('./Chart'), {
   ssr: false,
   loading: () => (
