@@ -221,6 +221,10 @@ test('service-role RPC PAPER approval/journal works with execution false; schema
       true,
     );
     assert.equal(persisted.state.backendDiagnostics.serviceKeyPresent, true);
+    assert.equal(
+      persisted.state.backendDiagnostics.operationsRpcAvailable,
+      true,
+    );
     const { generateMockCandles } = await import('../../trade/core/providers');
     const bars = generateMockCandles().map((c) => ({ ...c, symbol: 'WINV26' }));
     const livePaper = {

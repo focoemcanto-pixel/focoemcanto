@@ -26,7 +26,7 @@ Dados reais: WINV26, xp-mt5-primary, 1.500 candles e dois ticks históricos; o c
 
 Executamos também ciclo de gravação/leitura PAPER e diário no Supabase real com SET LOCAL ROLE service_role, dentro de transação revertida. Verificamos confirmação, observação simulada, diário e ausência de comandos. Nenhum dado de teste ficou gravado após ROLLBACK.
 
-As flags backendDiagnostics dos heartbeats após deployment comprovam os bindings utilizados no runtime e executionExplicitlyDisabled. Para diagnóstico visual, autenticado no FocoOS, acesse `/api/trade/health`.
+O exchange também consulta a RPC operacional a cada 30s, com cache exclusivo de diagnóstico (nenhum candle/tick substituído por memória), e inclui operationsRpcAvailable no heartbeat. As flags backendDiagnostics do próximo heartbeat após deployment permitirão confirmar os bindings utilizados no runtime e executionExplicitlyDisabled. O último heartbeat observado antes do deployment foi 05:40:11 UTC; é necessário manter o MT5/EA ativo para concluir essa validação pós-deploy. Para diagnóstico visual, autenticado no FocoOS, acesse `/api/trade/health`.
 
 ## Segurança e limitações
 
