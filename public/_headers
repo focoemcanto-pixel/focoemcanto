@@ -1,0 +1,7 @@
+/trade/*
+  Cache-Control: private, no-store
+  CDN-Cache-Control: no-store
+  Cloudflare-CDN-Cache-Control: no-store
+
+/trade-boot.js
+  Cache-Control: no-cache, must-revalidate
