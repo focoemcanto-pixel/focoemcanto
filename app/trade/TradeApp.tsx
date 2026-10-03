@@ -128,7 +128,7 @@ export default function TradeApp() {
     [speed, setSpeed] = useState(1),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true),
-    [authed, setAuthed] = useState(false),
+    [authed, setAuthed] = useState(true),
     [bottom, setBottom] = useState('Estratégias'),
     [question, setQuestion] = useState(''),
     [asking, setAsking] = useState(false),
@@ -152,21 +152,9 @@ export default function TradeApp() {
   const redirect = useCallback(() => {
     window.location.href = '/admin/login/?next=%2Ftrade%2F';
   }, []);
-  useEffect(() => {
-    let alive = true;
-    fetch('/api/admin/session', { cache: 'no-store' })
-      .then((r) => r.json())
-      .then((d) => {
-        if (!d.ok) redirect();
-        else if (alive) setAuthed(true);
-      })
-      .catch(() =>
-        setError('Não foi possível verificar sua sessão. Recarregue a página.')
-      );
-    return () => {
-      alive = false;
-    };
-  }, [redirect]);
+  // The /trade/ route is already protected server-side by Pages middleware.
+  // Avoid blocking the entire UI on a redundant client-side session probe.
+  // Protected Trade APIs still enforce auth and redirect on 401.
   useEffect(() => {
     if (!authed) return;
     const id = ++requestId.current;
