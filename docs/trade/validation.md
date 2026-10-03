@@ -23,3 +23,11 @@ No ambiente de trabalho, o servidor Wrangler local não pôde iniciar por restri
 - QA headless: 13 verificações, incluindo MT5 sem configuração mostrando OFFLINE/preço oculto e retorno ao replay; nenhuma ordem enviada.
 - EA: inspeção das APIs MQL5 documentadas, ledger antes de OrderSend e gates por padrão desarmados. **Compilação MetaEditor, execução Wine e conexão XP reais ainda pendentes**. Não há compilador MQL5 no ambiente.
 - Migration `20261003035402_mt5_bridge.sql` validada em Postgres/PGlite; não aplicada a um projeto Supabase de produção sem identificar o projeto destinado ao Trade.
+
+## Aprovação humana (03/10/2026)
+
+- 39 testes passaram: acrescentados cálculos monetários, bloqueios de proposta, fills efetivos/parciais, idempotência e atomicidade da confirmação REAL, descarte, expiração, RLS, bloqueio de comando direto e PAPER sem futuro.
+- QA da interface: 14 verificações, incluindo proposta automática, confirmação PAPER, entrada no candle seguinte e zero comandos MT5.
+- Typecheck estrito, build Cloudflare Functions e Next/export passaram.
+- Migration validada em Postgres/PGlite; não aplicada a Supabase de produção ainda não escolhido.
+- MetaEditor/XP não estão disponíveis neste ambiente; validação do EA compilado e feed real permanecem pendentes. Nenhuma ordem real enviada, nenhum gate real habilitado.

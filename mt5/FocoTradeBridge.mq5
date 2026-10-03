@@ -47,7 +47,7 @@ string PositionsJson() {
  string j="["; bool first=true;
  for(int i=0;i<PositionsTotal();i++){ulong t=PositionGetTicket(i); if(t==0)continue;
  if(!first)j+=","; first=false;
- j+="{\"ticket\":"+Q((string)t)+",\"symbol\":"+Q(PositionGetString(POSITION_SYMBOL))+",\"magic\":"+Q((string)PositionGetInteger(POSITION_MAGIC))+",\"type\":"+(string)PositionGetInteger(POSITION_TYPE)+",\"volume\":"+N(PositionGetDouble(POSITION_VOLUME))+",\"price\":"+N(PositionGetDouble(POSITION_PRICE_OPEN))+",\"sl\":"+N(PositionGetDouble(POSITION_SL))+",\"tp\":"+N(PositionGetDouble(POSITION_TP))+"}";
+ j+="{\"ticket\":"+Q((string)t)+",\"symbol\":"+Q(PositionGetString(POSITION_SYMBOL))+",\"identifier\":"+Q((string)PositionGetInteger(POSITION_IDENTIFIER))+",\"current\":"+N(PositionGetDouble(POSITION_PRICE_CURRENT))+",\"profit\":"+N(PositionGetDouble(POSITION_PROFIT))+",\"magic\":"+Q((string)PositionGetInteger(POSITION_MAGIC))+",\"type\":"+(string)PositionGetInteger(POSITION_TYPE)+",\"volume\":"+N(PositionGetDouble(POSITION_VOLUME))+",\"price\":"+N(PositionGetDouble(POSITION_PRICE_OPEN))+",\"sl\":"+N(PositionGetDouble(POSITION_SL))+",\"tp\":"+N(PositionGetDouble(POSITION_TP))+"}";
  } return j+"]";
 }
 string OrdersJson() {
@@ -58,7 +58,7 @@ string OrdersJson() {
  }return j+"]";
 }
 bool ExecutionAllowed(){return EnableExecution && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
-string StateJson(){return "{\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
+string StateJson(){return "{\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
 string CandlesJson(){MqlRates rates[];int count;datetime closed=iTime(TradeSymbol,PERIOD_M1,1);
  if(lastBar==0)count=CopyRates(TradeSymbol,PERIOD_M1,1,HistoryBars,rates);else count=CopyRates(TradeSymbol,PERIOD_M1,lastBar,closed,rates);
  if(count>0)lastBar=rates[count-1].time;string j="[";
@@ -75,12 +75,25 @@ string TicksJson(){MqlTick ticks[];MqlTick latest;if(!SymbolInfoTick(TradeSymbol
  }return j+"]";}
 void Reconcile(){
  if(!HistorySelect(TimeCurrent()-86400*7,TimeCurrent()))return;
+ for(int i=0;i<HistoryOrdersTotal();i++){
+ ulong orderTicket=HistoryOrderGetTicket(i);
+ if((ulong)HistoryOrderGetInteger(orderTicket,ORDER_MAGIC)!=MagicNumber || HistoryOrderGetString(orderTicket,ORDER_SYMBOL)!=TradeSymbol)continue;
+ string orderId=CommandIdFor(HistoryOrderGetString(orderTicket,ORDER_COMMENT));
+ if(orderId==""){string marker="|"+(string)orderTicket+"=";int pos=StringFind(brokerRefs,marker);if(pos>=0)orderId=StringSubstr(brokerRefs,pos+StringLen(marker),36);}
+ if(orderId=="")continue;
+ long orderState=HistoryOrderGetInteger(orderTicket,ORDER_STATE);
+ QueueEvent("order_"+(string)orderTicket+"_"+(string)orderState,"order-state",orderId,",\"order\":"+Q((string)orderTicket)+",\"orderState\":"+(string)orderState);
+ }
  for(int i=0;i<HistoryDealsTotal();i++){ulong ticket=HistoryDealGetTicket(i); if((ulong)HistoryDealGetInteger(ticket,DEAL_MAGIC)!=MagicNumber || HistoryDealGetString(ticket,DEAL_SYMBOL)!=TradeSymbol)continue;
  string id=CommandIdFor(HistoryDealGetString(ticket,DEAL_COMMENT));
  if(id==""){string marker="|"+(string)HistoryDealGetInteger(ticket,DEAL_ORDER)+"=";int pos=StringFind(brokerRefs,marker);if(pos>=0)id=StringSubstr(brokerRefs,pos+StringLen(marker),36);}
+ ulong positionId=(ulong)HistoryDealGetInteger(ticket,DEAL_POSITION_ID);
+ string positionMarker="|pos"+(string)positionId+"=";
+ if(id==""){int pos=StringFind(brokerRefs,positionMarker);if(pos>=0)id=StringSubstr(brokerRefs,pos+StringLen(positionMarker),36);}
  if(id=="")continue;
+ if(HistoryDealGetInteger(ticket,DEAL_ENTRY)==DEAL_ENTRY_IN && StringFind(brokerRefs,positionMarker)<0){brokerRefs+=positionMarker+id;if(!Save(prefix+"refs.txt",brokerRefs)){ExpertRemove();return;}}
  // Broker deal IDs deduplicate reconciliation and transaction callbacks in Postgres.
- QueueEvent("deal_"+(string)ticket,"observed",id,",\"deal\":"+Q((string)ticket)+",\"order\":"+Q((string)HistoryDealGetInteger(ticket,DEAL_ORDER))+",\"price\":"+N(HistoryDealGetDouble(ticket,DEAL_PRICE))+",\"volume\":"+N(HistoryDealGetDouble(ticket,DEAL_VOLUME))+",\"profit\":"+N(HistoryDealGetDouble(ticket,DEAL_PROFIT))+",\"commission\":"+N(HistoryDealGetDouble(ticket,DEAL_COMMISSION))+",\"timeMsc\":"+(string)HistoryDealGetInteger(ticket,DEAL_TIME_MSC));
+ QueueEvent("deal_"+(string)ticket,"observed",id,",\"entry\":"+(string)HistoryDealGetInteger(ticket,DEAL_ENTRY)+",\"position\":"+Q((string)HistoryDealGetInteger(ticket,DEAL_POSITION_ID))+",\"deal\":"+Q((string)ticket)+",\"order\":"+Q((string)HistoryDealGetInteger(ticket,DEAL_ORDER))+",\"price\":"+N(HistoryDealGetDouble(ticket,DEAL_PRICE))+",\"volume\":"+N(HistoryDealGetDouble(ticket,DEAL_VOLUME))+",\"profit\":"+N(HistoryDealGetDouble(ticket,DEAL_PROFIT))+",\"commission\":"+N(HistoryDealGetDouble(ticket,DEAL_COMMISSION))+",\"timeMsc\":"+(string)HistoryDealGetInteger(ticket,DEAL_TIME_MSC));
  // Limit transport event size; next heartbeat resumes through durable broker history.
  if(StringLen(events)>50000)break;
  }
@@ -172,5 +185,5 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &
  // No network in callback. Durable event + next-heartbeat history reconciliation.
  if(trans.symbol!=TradeSymbol && request.symbol!=TradeSymbol)return;
  string id=CommandIdFor(request.comment);
- QueueEvent("tx_"+session+"_"+(string)(eventSequence++),"transaction",id,",\"type\":"+(string)trans.type+",\"order\":"+Q((string)trans.order)+",\"deal\":"+Q((string)trans.deal)+",\"position\":"+Q((string)trans.position)+",\"price\":"+N(trans.price)+",\"volume\":"+N(trans.volume)+",\"retcode\":"+(string)result.retcode);
+ QueueEvent("tx_"+session+"_"+(string)(eventSequence++),"transaction",id,",\"type\":"+(string)trans.type+",\"order\":"+Q((string)trans.order)+",\"deal\":"+Q((string)trans.deal)+",\"position\":"+Q((string)trans.position)+",\"price\":"+N(trans.price)+",\"volume\":"+N(trans.volume)+",\"orderState\":"+(string)trans.order_state+",\"retcode\":"+(string)result.retcode);
 }

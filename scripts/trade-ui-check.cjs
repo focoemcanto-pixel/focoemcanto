@@ -13,7 +13,31 @@ const { onRequest: journal } = require('../functions/api/trade/journal.js');
 const { onRequest: runs } = require('../functions/api/trade/runs.ts');
 const { onRequest: session } = require('../functions/api/admin/session.js');
 const assert = require('node:assert/strict');
+const { PGlite } = require('@electric-sql/pglite');
+const operations = require('../functions/api/trade/operations.ts');
 (async () => {
+  const db = new PGlite();
+  await db.exec(
+    'create role anon;create role authenticated;create role service_role bypassrls;',
+  );
+  for (const file of [
+    '20261003035402_mt5_bridge.sql',
+    '20261003042050_human_approval.sql',
+  ])
+    await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+  globalThis.fetch = async (url, init) => {
+    const name = new URL(url).pathname.split('/').pop(),
+      args = Object.values(JSON.parse(init.body));
+    try {
+      const result = await db.query(
+        `select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) as result`,
+        args,
+      );
+      return Response.json(result.rows[0]?.result ?? null);
+    } catch (e) {
+      return Response.json({ error: e.message }, { status: 409 });
+    }
+  };
   const browser = await chromium.launch({
     headless: true,
     ...(process.env.CHROMIUM_EXECUTABLE_PATH
@@ -34,6 +58,8 @@ const assert = require('node:assert/strict');
   const kv = new Map();
   const env = {
     ADMIN_TOKEN: 'local-test-only',
+    TRADE_SUPABASE_URL: 'https://fixture.invalid',
+    TRADE_SUPABASE_SERVICE_KEY: 'fixture',
     FOCO_LINKS: {
       put: async (k, v) => {
         kv.set(k, v);
@@ -70,13 +96,17 @@ const assert = require('node:assert/strict');
         request,
         env,
         next: async () =>
-          url.pathname.endsWith('evaluate')
-            ? evaluate({ request })
-            : url.pathname.endsWith('professor')
-              ? professor({ request, env })
-              : url.pathname.endsWith('journal')
-                ? journal({ request, env })
-                : runs({ request, env }),
+          url.pathname.endsWith('operations')
+            ? operations[
+                r.method() === 'POST' ? 'onRequestPost' : 'onRequestGet'
+              ]({ request, env })
+            : url.pathname.endsWith('evaluate')
+              ? evaluate({ request })
+              : url.pathname.endsWith('professor')
+                ? professor({ request, env })
+                : url.pathname.endsWith('journal')
+                  ? journal({ request, env })
+                  : runs({ request, env }),
       });
     if (response) {
       await route.fulfill({
@@ -136,8 +166,24 @@ const assert = require('node:assert/strict');
     1,
   );
   await page
+    .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
+    .waitFor();
+  assert.equal(
+    (await db.query('select * from trade_bridge_commands')).rows.length,
+    0,
+  );
+  await page
+    .getByRole('button', { name: 'CONFIRMAR OPERAÇÃO', exact: true })
+    .click();
+  await page.getByRole('heading', { name: 'ENVIANDO', exact: true }).waitFor();
+  await page
     .getByRole('button', { name: 'Próximo candle', exact: true })
     .click();
+  await page.getByRole('heading', { name: 'EXECUTADA', exact: true }).waitFor();
+  assert.equal(
+    (await db.query('select * from trade_bridge_commands')).rows.length,
+    0,
+  );
   await page.waitForFunction(
     () =>
       document.querySelector('.trade-progress small')?.textContent ===
@@ -223,6 +269,7 @@ const assert = require('node:assert/strict');
         'FocoOS login reuse',
         'candlestick canvas',
         'setup',
+        'human paper approval, next-candle fill, zero MT5 commands',
         'step',
         'timeframe',
         'Professor',
@@ -238,6 +285,7 @@ const assert = require('node:assert/strict');
     }),
   );
   await browser.close();
+  await db.close();
 })().catch((e) => {
   console.error(e);
   process.exit(1);

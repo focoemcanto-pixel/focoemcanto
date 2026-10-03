@@ -1422,3 +1422,5 @@
     font-size: 10px;
   }
 }
+
+.trade-operation{border:1px solid #b49a613d;background:#101923;padding:18px;margin:16px 0;border-radius:14px}.trade-operation dl{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:12px}.trade-operation dd{margin:0;color:#e5cf97}.trade-operation-controls,.trade-operation-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.trade-operation input{width:55px}.trade-operation input,.trade-operation select{background:#0d141e;color:#ede7d9;border:1px solid #38424e;border-radius:6px;padding:7px}.trade-operation small{display:block;color:#9aa6b3}.trade-operation details{margin-top:16px}.trade-operation article{border-top:1px solid #38424e;padding:8px 0}

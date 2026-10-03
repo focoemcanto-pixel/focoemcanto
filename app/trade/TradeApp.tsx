@@ -7,8 +7,9 @@ import {
   useState,
   type FormEvent,
 } from 'react';
+import OperationsPanel from './OperationsPanel';
 import type { runReplay } from '../../trade/core/engine';
-import type { Timeframe, Setup } from '../../trade/core/types';
+import type { Timeframe, Setup, Analysis } from '../../trade/core/types';
 const Chart = dynamic(() => import('./Chart'), {
   ssr: false,
   loading: () => (
@@ -17,6 +18,7 @@ const Chart = dynamic(() => import('./Chart'), {
 });
 type State = Omit<ReturnType<typeof runReplay>, 'source'> & {
   source: 'replay' | 'live';
+  paperAnalysis?: Analysis;
   feed?: {
     symbol: string;
     status: string;
@@ -816,6 +818,18 @@ export default function TradeApp() {
                   </div>
                 </div>
               )}
+              <OperationsPanel
+                source={source}
+                cursor={cursor}
+                complete={analysis?.status === 'complete'}
+                setupId={analysis?.setup?.id}
+                paperComplete={
+                  state?.paperAnalysis
+                    ? state?.paperAnalysis.status === 'complete'
+                    : undefined
+                }
+                paperSetupId={state?.paperAnalysis?.setup?.id}
+              />
               <div className="trade-pipeline-heading">
                 <span>PIPELINE DA ESTRATÉGIA</span>
                 <strong>

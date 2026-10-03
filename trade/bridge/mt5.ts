@@ -67,6 +67,20 @@ export class MT5BrokerExecutionProvider implements BrokerExecutionProvider {
       commands: data.commands,
     };
   }
+  async confirm(proposalId: string, value: BrokerCommand) {
+    const command = validateCommand(value, this.env),
+      c = config(this.env);
+    if (command.id !== proposalId) throw new Error('Command mismatch');
+    return rpc(this.env, 'trade_confirm', {
+      p_owner: 'focoos-admin',
+      p_id: proposalId,
+      p_action: 'confirm',
+      p_command: command,
+      p_max: c.maxContracts,
+      p_account: c.accountHash,
+      p_max_age: c.maxAgeMs,
+    });
+  }
   async submit(value: BrokerCommand) {
     const command = validateCommand(value, this.env),
       c = config(this.env);

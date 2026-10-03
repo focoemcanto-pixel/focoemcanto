@@ -66,6 +66,10 @@ export async function onRequestGet({
         parameters: pullbackParameters,
         trendLines,
         feed,
+        paperAnalysis:
+          feed.status === 'LIVE'
+            ? new TrendPullbackConfirmation().evaluate(snapshot)
+            : undefined,
       });
     } catch {
       return Response.json(
