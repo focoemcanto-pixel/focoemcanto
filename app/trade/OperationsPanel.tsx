@@ -97,7 +97,7 @@ export default function OperationsPanel({
     x = row?.execution;
   return (
     <section className="trade-operation" aria-label="Aprovação humana">
-      <span className="trade-eyebrow">OPERAÇÃO COM APROVAÇÃO HUMANA</span>
+      <header className="trade-operation-header"><div><span className="trade-eyebrow">MESA DE OPERAÇÕES</span><h2>{mode === 'PAPER' ? 'Treine sua decisão' : 'Sua decisão, sua operação'}</h2></div><span className="trade-operation-mode">{mode}</span></header>
       <div className="trade-operation-controls">
         <select
           aria-label="Modo de execução"
@@ -120,12 +120,13 @@ export default function OperationsPanel({
           />
         </label>
       </div>
-      <p>
+      <p className="trade-operation-caption">
         {mode === 'PAPER'
           ? 'Simulação, sem dinheiro real.'
           : 'XP / MetaTrader 5. Exige estratégia autorizada e os dois gates de execução.'}
       </p>
       <button
+        className="trade-operation-prepare"
         disabled={busy || !activeComplete}
         onClick={() => action('propose')}
       >
@@ -133,10 +134,10 @@ export default function OperationsPanel({
       </button>
       {p && (
         <>
-          <h3>
+<div className="trade-operation-status"><span className="trade-operation-dot"/><h3>
             {row.state === 'CONFIRMADA' ? x?.status || 'ENVIANDO' : row.state}
-          </h3>
-          <strong>
+</h3></div>
+          <strong className="trade-operation-instrument">
             {p.direction} · {p.symbol} · {p.quantity} contrato(s)
           </strong>
           <dl>
@@ -157,8 +158,8 @@ export default function OperationsPanel({
             <dt>Risco/retorno</dt>
             <dd>1 : {num(p.rr)}</dd>
           </dl>
-          <p>{p.setup.explanation}</p>
-          <small>
+<details className="trade-operation-reason"><summary>Por que este padrão foi identificado?</summary><p>{p.setup.explanation}</p></details>
+          <small className="trade-operation-footnote">
             Preço de execução pode variar. Valores não incluem taxas nem
             slippage. Proposta válida até{' '}
             {new Date(p.expiresAt).toLocaleTimeString('pt-BR')}.
@@ -223,8 +224,8 @@ export default function OperationsPanel({
           )}
         </>
       )}
-      {error && <p role="status">{error}</p>}
-      <details>
+      {error && <p className="trade-operation-error" role="status">{error}</p>}
+      <details className="trade-operation-diary">
         <summary>Diário de operações · {rows.length} ciclos</summary>
         {rows.map((r) => (
           <article key={r.id}>

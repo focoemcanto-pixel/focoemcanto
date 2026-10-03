@@ -1423,4 +1423,41 @@
   }
 }
 
-.trade-operation{border:1px solid #b49a613d;background:#101923;padding:18px;margin:16px 0;border-radius:14px}.trade-operation dl{display:grid;grid-template-columns:1fr auto;gap:8px;font-size:12px}.trade-operation dd{margin:0;color:#e5cf97}.trade-operation-controls,.trade-operation-actions{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}.trade-operation input{width:55px}.trade-operation input,.trade-operation select{background:#0d141e;color:#ede7d9;border:1px solid #38424e;border-radius:6px;padding:7px}.trade-operation small{display:block;color:#9aa6b3}.trade-operation details{margin-top:16px}.trade-operation article{border-top:1px solid #38424e;padding:8px 0}
+/* Human approval: compact execution ticket, consistent with the trading desk. */
+.trade-operation{--ticket-accent:#d5b57a;border:1px solid #33404d;background:linear-gradient(145deg,#141d28,#0c141e);padding:20px;margin:18px 0 24px;border-radius:12px;box-shadow:0 12px 28px #00000020;min-width:0}
+.trade-operation-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:16px;border-bottom:1px solid #ffffff0c}
+.trade-operation-header .trade-eyebrow{color:#b2a080;font-size:8px;letter-spacing:1.6px}
+.trade-operation-header h2{font-size:17px!important;font-weight:500;margin:7px 0 0;color:#f0eee8;letter-spacing:-.3px}
+.trade-operation-mode{font-size:9px;letter-spacing:1.2px;color:#dfc596;border:1px solid #a58b5540;background:#c8a6670b;padding:6px 8px;border-radius:5px}
+.trade-operation-controls{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0 10px;align-items:end}
+.trade-operation-controls label{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#9fabbc;font-size:11px}
+.trade-operation input,.trade-operation select{background:#0b121b;color:#e5eaf1;border:1px solid #35404f;border-radius:6px;padding:9px;font-size:12px;min-height:36px;min-width:0}
+.trade-operation input{width:54px;text-align:center;font-variant-numeric:tabular-nums}
+.trade-operation input:disabled{opacity:.55}
+.trade-operation-caption{font-size:11px!important;line-height:1.6;color:#8796aa!important;margin:0 0 14px}
+.trade-operation-prepare{width:100%;min-height:36px;border:1px solid #435164;border-radius:6px;font-size:11px;color:#c1cbd8;background:#ffffff03;transition:background .2s}
+.trade-operation-prepare:hover:not(:disabled){background:#ffffff09;border-color:#d5b57a70}
+.trade-operation button:disabled{opacity:.4;cursor:not-allowed}
+.trade-operation-status{display:flex;align-items:center;gap:8px;margin:22px 0 10px;padding:10px 12px;background:#d5b57a0a;border:1px solid #d5b57a22;border-radius:6px}
+.trade-operation-dot{height:5px;width:5px;flex:none;background:#d5b57a;border-radius:50%;box-shadow:0 0 9px #d5b57a30}
+.trade-operation-status h3{font-size:9px;margin:0;letter-spacing:1px;font-weight:600;color:#dfc596;line-height:1.5}
+.trade-operation-instrument{display:block;font-size:15px;font-weight:500;color:#e9eef5;letter-spacing:-.2px;margin:14px 0}
+.trade-operation dl{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0;margin:0;border-top:1px solid #ffffff0b;font-variant-numeric:tabular-nums}
+.trade-operation dt,.trade-operation dd{padding:10px 0;border-bottom:1px solid #ffffff0b;line-height:1.5;font-size:11px;min-width:0}
+.trade-operation dt{color:#8c9caf;padding-right:8px}
+.trade-operation dd{margin:0;text-align:right;color:#e5e9ef;font-weight:500;overflow-wrap:anywhere}
+.trade-operation-reason{margin:15px 0}
+.trade-operation summary{font-size:11px;color:#a9b6c8;cursor:pointer;line-height:1.6}
+.trade-operation-reason p{font-size:11px;line-height:1.7;color:#9cabbc;padding-top:7px}
+.trade-operation-footnote{display:block;color:#748397;font-size:9px;line-height:1.65;margin:12px 0}
+.trade-operation-actions{display:grid;gap:8px;margin:16px 0 0}
+.trade-operation-actions button{min-height:42px;border-radius:6px;font-size:10px;font-weight:600;letter-spacing:.9px;border:1px solid #425065;color:#aebcce;background:transparent}
+.trade-operation-actions .trade-primary{background:#d5b57a;color:#171b22;border-color:#d5b57a;box-shadow:0 4px 14px #d5b57a10}
+.trade-operation-actions .trade-primary:hover:not(:disabled){background:#e1c38e}
+.trade-operation-actions button:last-child{min-height:34px;border-color:transparent;font-size:9px;color:#8795a7}
+.trade-operation-error{background:#c8756a09;border-left:2px solid #b5776d;padding:10px 12px;color:#c5a09a!important;font-size:11px!important;line-height:1.6;margin:15px 0}
+.trade-operation-diary{border-top:1px solid #ffffff0c;padding-top:14px;margin-top:18px}
+.trade-operation-diary article{border-top:1px solid #ffffff0c;padding:12px 0}
+.trade-operation-diary article strong{font-size:11px;font-weight:500;color:#d3dce8}
+.trade-operation-diary article p{font-size:10px;line-height:1.6;color:#8191a6;margin:6px 0}
+@media(max-width:480px){.trade-operation{padding:18px}.trade-operation input,.trade-operation select{font-size:16px}.trade-operation dt,.trade-operation dd{font-size:12px}.trade-operation-actions button{min-height:46px}}
