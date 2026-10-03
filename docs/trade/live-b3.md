@@ -1,0 +1,16 @@
+# Conectar WIN/B3 no próximo pregão
+
+O laboratório está funcional sem feed. Ele não acompanha XP Unity e não faz scraping.
+Não é possível prometer monitoramento real antes de obter fornecedor, direitos de uso e credenciais.
+
+1. **Escolher e habilitar fornecedor licenciado B3** que permita uso via API por esta aplicação, com WIN, histórico 1m e streaming. Confirmar se a assinatura/plataforma de negociação atual inclui acesso programático e direitos de exibição; uma tela com preços não implica direito/API para redistribuí-los. Não contratar ou comprar serviço sem autorização do titular.
+2. **Obter especificação e credenciais**: documentação de REST/WebSocket, URLs, autenticação, símbolo do contrato vigente, timezone, volume, ajustes/rolagem, latência e limits. Manter chaves como secrets do servidor. A data/hora exata da sessão deve vir do calendário oficial e do fornecedor, incluindo feriados/leilões; não hardcodar “aberto” por relógio do navegador.
+3. **Implementar `MarketDataProvider`** em adapter server-side. `history(symbol,timeframe,asOf)` devolve apenas candles finalizados até o corte; `subscribe` emite candles finalizados e unsubscribe. Se feed fornecer ticks, construir candle 1m no servidor antes de agregar; não misturar candles em formação com fechados.
+4. **Serviço de ingestão persistente**: um WebSocket de fornecedor precisa de processo persistente (por exemplo Worker Durable Object/WebSocket compatível com o fornecedor ou um serviço dedicado). Pages Functions request/response não devem manter um feed global entre requisições. A chave nunca vai ao frontend. Publicar stream autenticado de dados normalizados para o gráfico; reconexão, heartbeat, deduplicação, gap filling e detecção de atraso são obrigatórios antes de chamar o monitor de pronto.
+5. **Inicializar histórico** suficiente para o contexto (mínimo 150 minutos finalizados; preferir pelo menos uma sessão completa) e confirmar alinhamento dos candles com o fornecedor. Persistir contrato real, fonte, timezone, sessão e timestamp de abertura de cada candle. Comparar OHLCV normalizado com fonte oficial/licenciada. Definir política para interrupções e negócios atrasados; pausar setups em feed atrasado/gap.
+6. **Conectar o mesmo núcleo**: `CandleAggregator.next` → `evaluateSnapshot` → estados explicáveis → UI/registro. Não fazer nova implementação de regras para live. Atualizar badge de fonte, status do mercado e identificação do contrato a partir do servidor.
+7. **Manter estratégia bloqueada** até backtests com dados reais, custos, spread, slippage, horários/regimes e validação fora da amostra, seguidos de paper prospectivo. Autorizar `live-monitoring` explicitamente em versão imutável após critérios aprovados. Isso continua sendo monitoramento educacional com execução humana, nunca ordem de corretora.
+
+Conexão de **dados** ao vivo e autorização de **setups** ao vivo são etapas diferentes. Podemos visualizar um feed real e ensinar contexto antes de autorizar a estratégia a emitir setups live.
+
+O que precisa do usuário/fornecedor: escolha/assinatura do feed, direitos de uso, credenciais e acesso à configuração de secrets/deploy da ingestão. O adapter só pode ser finalizado corretamente após receber a documentação do fornecedor escolhido; nenhum valor de integração foi inventado nesta entrega.

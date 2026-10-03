@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["DOM", "DOM.Iterable", "ES2023"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowJs": true
+  },
+  "include": [
+    "../app/trade/**/*.ts",
+    "../app/trade/**/*.tsx",
+    "core/**/*.ts",
+    "../functions/api/trade/**/*.ts",
+    "../tests/trade/**/*.ts"
+  ]
+}

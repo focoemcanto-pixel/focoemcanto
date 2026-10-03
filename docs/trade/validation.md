@@ -1,0 +1,15 @@
+# Validação da entrega
+
+- `npm run typecheck:trade`: TypeScript estrito para UI, núcleo, APIs e testes do módulo.
+- `npm run test:trade`: 25 testes aprovados; inclui execução real da migration em Postgres/PGlite isolado, RLS e propriedade de FKs.
+- `npm run build:trade-api`: Cloudflare Pages Functions compiladas com sucesso.
+- `npm run build`: export Next.js gerado, incluindo `/trade`; demais rotas preservadas.
+- `npm run test:trade:ui`: verificação headless da exportação + handlers reais. Cobre login FocoOS, canvas, setup, próximo candle, timeframe, Professor, aprendizado, salvar execução, diário, ausência de overflow em 390px e reset. API é interceptada para chamar handlers reais em memória; isso não substitui a verificação do runtime Cloudflare em produção.
+
+Para executar UI, instalar o Chromium do Playwright (`npx playwright install chromium`). Alternativamente `CHROMIUM_EXECUTABLE_PATH=/caminho/chromium npm run test:trade:ui`. O script não consulta dados nem contas externas.
+
+Capturas desktop 1440px e mobile 390px foram geradas e inspecionadas. Os testes não confundem dataset mock com desempenho histórico real.
+
+O núcleo incremental mantém igualdade com a agregação em lote para cada um dos 420 prefixos. Uma alteração arbitrária dos candles futuros não muda estado, sinais ou resultados no cursor anterior. Executar até 420 candles produz três hipóteses sintéticas; esse número apenas verifica o caminho funcional.
+
+No ambiente de trabalho, o servidor Wrangler local não pôde iniciar por restrição de interfaces de rede (`uv_interface_addresses`). Foi possível compilar o Worker e validar página/API por headless com handlers reais. Em produção, conferir middleware, cookie e KV no projeto Pages existente após o deploy.
