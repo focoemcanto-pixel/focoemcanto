@@ -17,6 +17,7 @@ export type Proposal = {
   tp: number;
   quantity: number;
   pointValue: number;
+  pointValueSource?: string;
   riskPoints: number;
   riskBRL: number;
   potentialPoints: number;
@@ -37,6 +38,7 @@ export function makeProposal(
     max: number;
     pointValue: number;
     currency: string;
+    pointValueSource?: string;
     cursor: number;
     asOf: number;
     liveAuthorized: boolean;
@@ -91,6 +93,7 @@ export function makeProposal(
     tp: s.targets[0],
     quantity: options.quantity,
     pointValue: options.pointValue,
+    pointValueSource: options.pointValueSource,
     riskPoints: risk,
     riskBRL: risk * options.pointValue * options.quantity,
     potentialPoints: potential,

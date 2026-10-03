@@ -15,6 +15,8 @@ const { onRequest: session } = require('../functions/api/admin/session.js');
 const assert = require('node:assert/strict');
 const { PGlite } = require('@electric-sql/pglite');
 const operations = require('../functions/api/trade/operations.ts');
+const health = require('../functions/api/trade/health.ts');
+let operationReadFailures = 1;
 (async () => {
   const db = new PGlite();
   await db.exec(
@@ -60,6 +62,7 @@ const operations = require('../functions/api/trade/operations.ts');
     ADMIN_TOKEN: 'local-test-only',
     TRADE_SUPABASE_URL: 'https://fixture.invalid',
     TRADE_SUPABASE_SERVICE_KEY: 'fixture',
+    TRADE_EXECUTION_ENABLED: 'false',
     FOCO_LINKS: {
       put: async (k, v) => {
         kv.set(k, v);
@@ -96,17 +99,27 @@ const operations = require('../functions/api/trade/operations.ts');
         request,
         env,
         next: async () =>
-          url.pathname.endsWith('operations')
-            ? operations[
-                r.method() === 'POST' ? 'onRequestPost' : 'onRequestGet'
-              ]({ request, env })
-            : url.pathname.endsWith('evaluate')
-              ? evaluate({ request })
-              : url.pathname.endsWith('professor')
-                ? professor({ request, env })
-                : url.pathname.endsWith('journal')
-                  ? journal({ request, env })
-                  : runs({ request, env }),
+          url.pathname.endsWith('health')
+            ? health.onRequestGet({ env })
+            : url.pathname.endsWith('operations')
+              ? r.method() === 'GET' && operationReadFailures-- > 0
+                ? Response.json(
+                    {
+                      error: 'Migration do módulo de operações ausente.',
+                      code: 'SCHEMA_MISSING',
+                    },
+                    { status: 503 },
+                  )
+                : operations[
+                    r.method() === 'POST' ? 'onRequestPost' : 'onRequestGet'
+                  ]({ request, env })
+              : url.pathname.endsWith('evaluate')
+                ? evaluate({ request })
+                : url.pathname.endsWith('professor')
+                  ? professor({ request, env })
+                  : url.pathname.endsWith('journal')
+                    ? journal({ request, env })
+                    : runs({ request, env }),
       });
     if (response) {
       await route.fulfill({
@@ -261,6 +274,18 @@ const operations = require('../functions/api/trade/operations.ts');
     .getByRole('combobox', { name: 'Fonte de mercado' })
     .selectOption('replay');
   await page.getByText('DADOS SIMULADOS', { exact: true }).waitFor();
+  await page.waitForFunction(
+    () =>
+      !document.body.textContent.includes(
+        'Migration do módulo de operações ausente.',
+      ),
+  );
+  const diagnostic = await page.evaluate(async () =>
+    (await fetch('/api/trade/health')).json(),
+  );
+  assert.equal(diagnostic.persistence, 'AVAILABLE');
+  assert.equal(diagnostic.realExecutionEnabled, false);
+  assert.equal(diagnostic.runtime.executionExplicitlyDisabled, true);
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify({
@@ -280,6 +305,7 @@ const operations = require('../functions/api/trade/operations.ts');
         'reset',
         'MT5 offline never fabricates live price',
         'source switch preserves replay',
+        'persistence recovery and authenticated runtime health with REAL disabled',
       ],
       screenshots: ['.trade-qa/desktop.png', '.trade-qa/mobile.png'],
     }),

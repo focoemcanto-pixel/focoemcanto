@@ -1,4 +1,10 @@
-import { config, rpc, type BridgeEnv } from '../../../trade/bridge/config';
+import {
+  config,
+  rpc,
+  persistenceFailure,
+  PersistenceError,
+  type BridgeEnv,
+} from '../../../trade/bridge/config';
 import {
   MT5MarketDataProvider,
   MT5BrokerExecutionProvider,
@@ -14,6 +20,7 @@ import { TrendPullbackConfirmation } from '../../../trade/core/strategy';
 import { generateMockCandles, snapshotOf } from '../../../trade/core/providers';
 import { evaluateSnapshot } from '../../../trade/core/engine';
 import { paperExecution } from '../../../trade/bridge/paper';
+import { instrumentValue } from '../../../trade/bridge/instruments';
 import { validateCommand } from '../../../trade/bridge/protocol';
 const owner = 'focoos-admin'; // Existing admin-session middleware, never client supplied.
 async function market(
@@ -33,6 +40,8 @@ async function market(
   const strategy = new TrendPullbackConfirmation();
   const data =
     source === 'mt5' ? await new MT5MarketDataProvider(env).read() : null;
+  if (source === 'mt5' && !data)
+    throw new Error('Bridge ainda não recebeu dados do MT5.');
   if (data && feedStatus(data, env).status !== 'LIVE')
     throw new Error('Feed offline ou antigo');
   const candles = data
@@ -67,9 +76,12 @@ export async function onRequestPost({
       if (b.mode !== 'PAPER' && b.mode !== 'REAL')
         throw new Error('Modo inválido');
       const m = await market(env, b.source, b.cursor, b.mode);
-      const pointValue = m.data
-        ? Number(m.data.state.tickValue) / Number(m.data.state.tickSize)
-        : approvalPolicy.paperPointValue;
+      const contract = instrumentValue(
+        m.snapshot.symbol,
+        b.mode,
+        m.data?.state,
+      );
+      const pointValue = contract.pointValue;
       const proposal = makeProposal(m.analysis, {
         mode: b.mode,
         source: b.source,
@@ -77,8 +89,9 @@ export async function onRequestPost({
         quantity: b.quantity,
         max: c.maxContracts,
         pointValue,
-        currency: m.data?.state?.currency || approvalPolicy.paperCurrency,
-        cursor: b.source === 'mt5' ? m.candles.length : b.cursor,
+        currency: contract.currency,
+        pointValueSource: contract.source,
+        cursor: b.source === 'mt5' ? m.snapshot.asOf : b.cursor,
         asOf: m.snapshot.asOf,
         liveAuthorized: m.strategy.liveAuthorized,
       });
@@ -138,7 +151,9 @@ export async function onRequestPost({
     );
   } catch (e) {
     return Response.json(
-      { error: e instanceof Error ? e.message : 'Operação bloqueada' },
+      e instanceof PersistenceError
+        ? persistenceFailure(e)
+        : { error: e instanceof Error ? e.message : 'Operação bloqueada' },
       { status: 409 },
     );
   }
@@ -184,16 +199,16 @@ export async function onRequestGet({
           p_owner: owner,
           p_id: p.id,
           p_execution: execution,
-          p_cursor: candles.length,
+          p_cursor:
+            source === 'mt5'
+              ? snapshotOf(candles, 'live').asOf
+              : candles.length,
         });
         row.execution = execution;
       }
     }
     return Response.json(rows);
-  } catch {
-    return Response.json(
-      { error: 'Fluxo de operações requer persistência Supabase configurada.' },
-      { status: 503 },
-    );
+  } catch (e) {
+    return Response.json(persistenceFailure(e), { status: 503 });
   }
 }

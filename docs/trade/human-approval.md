@@ -18,7 +18,7 @@ A estratégia calcula; a API recalcula a proposta; o usuário confirma; o proved
 Aplicar depois das migrations iniciais e do bridge:
 `supabase/migrations/20261003042050_human_approval.sql`.
 
-Usar os mesmos `TRADE_SUPABASE_URL` e `TRADE_SUPABASE_SERVICE_KEY` do bridge, somente no backend Cloudflare. Nenhum secret novo. Ambos os modos precisam dessa persistência transacional; não existe fallback de execução usando KV ou armazenamento do navegador. Não aplicamos a migration a um projeto Supabase ainda não escolhido.
+Usar os mesmos `TRADE_SUPABASE_URL` e `TRADE_SUPABASE_SERVICE_KEY` do bridge, somente no backend Cloudflare. Nenhum secret novo. Ambos os modos precisam dessa persistência transacional; não existe fallback de execução usando KV ou armazenamento do navegador. Aplicada no projeto autorizado hubfocoemcanto (jmhqdvracyjxqubqfgiz), durante a auditoria de integração de 03/10/2026. Não reexecute o CREATE TABLE; a estrutura já está instalada.
 
 RLS ligada, sem grants a anon/authenticated; apenas service_role. A autenticação existente de administrador e verificação Origin protegem as rotas. `owner_id=focoos-admin` corresponde ao acesso de administrador único atual; uma futura expansão multiusuário deve resolver identidade real no middleware, nunca receber owner do cliente.
 
@@ -30,7 +30,7 @@ A estratégia candidata continua PAPER, `liveAuthorized=false`. Não foi promovi
 
 `trade/bridge/approval.ts`: validade 30s, multiplicador PAPER do WIN de R$0,20/ponto, moeda BRL. Referência oficial: https://www.b3.com.br/pt_br/produtos-e-servicos/negociacao/renda-variavel/futuro-mini-de-ibovespa.htm .
 
-Fonte MT5 usa `SYMBOL_TRADE_TICK_VALUE / SYMBOL_TRADE_TICK_SIZE` e moeda da conta enviada pelo EA; moeda diferente de BRL ou valor inválido bloqueiam propostas. Não reutilizar o multiplicador mock para outro instrumento. Quantidade máxima vem de `TRADE_MAX_CONTRACTS` (padrão 1). Risco e potencial são estimativas na referência, sem taxas/slippage, não garantia de perda máxima.
+Fonte MT5 usa `SYMBOL_TRADE_TICK_VALUE / SYMBOL_TRADE_TICK_SIZE` e moeda da conta enviada pelo EA. Para PAPER com versões antigas do EA, somente WIN/vencimentos WIN recebem o multiplicador oficial explícito de R$0,20 e essa origem fica gravada na proposta e visível na interface. REAL nunca aceita esse fallback; moeda diferente de BRL ou valor inválido bloqueiam propostas. Não reutilizar o multiplicador mock para outro instrumento. Quantidade máxima vem de `TRADE_MAX_CONTRACTS` (padrão 1). Risco e potencial são estimativas na referência, sem taxas/slippage, não garantia de perda máxima.
 
 ## Validação
 

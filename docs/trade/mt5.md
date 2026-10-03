@@ -8,11 +8,11 @@ A implementação oficial usa APIs documentadas do terminal MT5 e MQL5, sem scra
 
 Não houve envio de ordens, mudança de credenciais XP ou ativação da negociação. O EA e o backend iniciam bloqueados. A estratégia candidata continua research/paper e `liveAuthorized=false`. Não há geração automática de comandos a partir de setups, nem botões BUY/SELL na interface desta entrega.
 
-A auditoria encontrou Next.js 14 App Router com export estático, Cloudflare Pages Functions, login FocoOS por cookie administrativo e KV para diário/replay. Não foi encontrada configuração Supabase de produção neste repositório. Reutilizamos Postgres/Supabase como tecnologia e fornecemos migration isolada; não selecionamos nem alteramos projetos de outros produtos. A persistência de comandos usa transações Postgres, não KV.
+A auditoria encontrou Next.js 14 App Router com export estático, Cloudflare Pages Functions, login FocoOS por cookie administrativo e KV para diário/replay. O projeto Supabase autorizado é hubfocoemcanto (jmhqdvracyjxqubqfgiz). As migrations do bridge e de aprovação humana estão instaladas; as tabelas de outros produtos foram preservadas. As variáveis são recebidas no runtime das Pages Functions, sem SDK no frontend. A persistência de comandos usa transações Postgres, não KV.
 
 ## Preparação do backend
 
-1. Escolha o projeto Supabase destinado ao Trade (pode ser o existente autorizado). Execute **somente** `supabase/migrations/20261003035402_mt5_bridge.sql` no SQL Editor desse projeto. A migration inicial `foco_trade` continua independente e não é pré-requisito da ponte.
+1. No projeto atual hubfocoemcanto, as migrations `20261003035402_mt5_bridge.sql` e `20261003042050_human_approval.sql` já foram aplicadas. Não execute novamente: relation already exists significa que o objeto já foi criado. A migration inicial `foco_trade` não é pré-requisito da ponte/propostas. Para nova instalação, ambas as migrations são necessárias, na ordem bridge → aprovação humana.
 2. Cloudflare → Workers & Pages → focoemcanto → Settings → Variables and Secrets → Production. Configure:
 
 | Variável | Valor/origem |
@@ -63,7 +63,7 @@ Marque token e chave Supabase como **secrets**. Nenhuma variável `NEXT_PUBLIC_*
 - Gates para qualquer execução futura: backend `TRADE_EXECUTION_ENABLED=true`, fingerprint correspondente, kill switch liberado explicitamente, feed recente, EA `EnableExecution=true`, permissões MT5/conta, símbolo correto, volume máximo, SL/TP, validade ≤30s e `OrderCheck`. Nunca libere estes gates no primeiro teste de feed.
 - Kill switch começa **true**. Botão “Bloquear execução” cancela queued e impede novos comandos. Não desfaz comando já entregue, não fecha posições nem cancela ordens na corretora automaticamente. Para emergência, desabilite Algo Trading/remova EA no MT5 e gerencie ordens/posições no terminal.
 - BUY/SELL a mercado, CLOSE por ticket, SLTP por posição, MODIFY/CANCEL por order ticket. O EA só altera posições/ordens do seu Magic e símbolo. Em conta netting, não misture operações manuais de WIN com Foco Trade: Magic não oferece segregação contábil perfeita de uma posição líquida compartilhada. Uso em produção de execução exige validação controlada posterior.
-- Não há botões de execução nem ativação automática nesta entrega. A API `POST /api/trade/commands` só aceita sessão FocoOS + Origin local; envio não foi testado contra corretora e permanece bloqueado. O motor de estratégias não chama essa API. `liveAuthorized` não foi removido.
+- `POST /api/trade/commands` está bloqueado. A proposta exige aprovação humana; PAPER usa o mesmo fluxo sem criar comandos MT5. REAL continua bloqueado por configuração, EA, kill switch e `liveAuthorized`. Consulte human-approval.md.
 
 ## Contrato de APIs e retenção
 

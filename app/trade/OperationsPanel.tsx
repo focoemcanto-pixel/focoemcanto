@@ -26,6 +26,7 @@ export default function OperationsPanel({
     [quantity, setQuantity] = useState(1),
     [rows, setRows] = useState<any[]>([]),
     [error, setError] = useState(''),
+    [loadError, setLoadError] = useState(''),
     [busy, setBusy] = useState(false);
   async function load() {
     const r = await fetch(
@@ -35,13 +36,14 @@ export default function OperationsPanel({
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
     setRows(d);
+    setLoadError('');
   }
   useEffect(() => {
     let active = true;
     const refresh = () => {
       if (active)
         load().catch((e) => {
-          if (active) setError(e.message);
+          if (active) setLoadError(e.message);
         });
     };
     refresh();
@@ -97,7 +99,17 @@ export default function OperationsPanel({
     x = row?.execution;
   return (
     <section className="trade-operation" aria-label="Aprovação humana">
-      <header className="trade-operation-header"><div><span className="trade-eyebrow">MESA DE OPERAÇÕES</span><h2>{mode === 'PAPER' ? 'Treine sua decisão' : 'Sua decisão, sua operação'}</h2></div><span className="trade-operation-mode">{mode}</span></header>
+      <header className="trade-operation-header">
+        <div>
+          <span className="trade-eyebrow">MESA DE OPERAÇÕES</span>
+          <h2>
+            {mode === 'PAPER'
+              ? 'Treine sua decisão'
+              : 'Sua decisão, sua operação'}
+          </h2>
+        </div>
+        <span className="trade-operation-mode">{mode}</span>
+      </header>
       <div className="trade-operation-controls">
         <select
           aria-label="Modo de execução"
@@ -134,9 +146,12 @@ export default function OperationsPanel({
       </button>
       {p && (
         <>
-<div className="trade-operation-status"><span className="trade-operation-dot"/><h3>
-            {row.state === 'CONFIRMADA' ? x?.status || 'ENVIANDO' : row.state}
-</h3></div>
+          <div className="trade-operation-status">
+            <span className="trade-operation-dot" />
+            <h3>
+              {row.state === 'CONFIRMADA' ? x?.status || 'ENVIANDO' : row.state}
+            </h3>
+          </div>
           <strong className="trade-operation-instrument">
             {p.direction} · {p.symbol} · {p.quantity} contrato(s)
           </strong>
@@ -158,8 +173,13 @@ export default function OperationsPanel({
             <dt>Risco/retorno</dt>
             <dd>1 : {num(p.rr)}</dd>
           </dl>
-<details className="trade-operation-reason"><summary>Por que este padrão foi identificado?</summary><p>{p.setup.explanation}</p></details>
+          <details className="trade-operation-reason">
+            <summary>Por que este padrão foi identificado?</summary>
+            <p>{p.setup.explanation}</p>
+          </details>
           <small className="trade-operation-footnote">
+            {p.pointValueSource === 'win-specification-paper' &&
+              'PAPER: R$ 0,20 por ponto conforme especificação WIN. '}
             Preço de execução pode variar. Valores não incluem taxas nem
             slippage. Proposta válida até{' '}
             {new Date(p.expiresAt).toLocaleTimeString('pt-BR')}.
@@ -224,7 +244,11 @@ export default function OperationsPanel({
           )}
         </>
       )}
-      {error && <p className="trade-operation-error" role="status">{error}</p>}
+      {(error || loadError) && (
+        <p className="trade-operation-error" role="status">
+          {error || loadError}
+        </p>
+      )}
       <details className="trade-operation-diary">
         <summary>Diário de operações · {rows.length} ciclos</summary>
         {rows.map((r) => (

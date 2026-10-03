@@ -2,6 +2,7 @@ import {
   authenticateBridge,
   config,
   rpc,
+  runtimeConfiguration,
   type BridgeEnv,
 } from '../../../../trade/bridge/config';
 import { validateBatch, commandWire } from '../../../../trade/bridge/protocol';
@@ -23,6 +24,15 @@ export async function onRequestPost({
     if (raw.length > 1000000) throw new Error('Lote excede limite');
     const batch = validateBatch(JSON.parse(raw), env),
       c = config(env);
+    batch.state = {
+      ...batch.state,
+      backendDiagnostics: {
+        ...runtimeConfiguration(env),
+        role: 'service_role-required',
+        transport: 'supabase-rpc',
+        verifiedAt: new Date().toISOString(),
+      },
+    };
     const result = await rpc(env, 'trade_bridge_exchange', {
       p_batch: batch,
       p_execution: c.execution && !!c.accountHash,
