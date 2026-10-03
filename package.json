@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "postbuild": "node scripts/publish-static-assets.cjs",
+    "build": "next build && node scripts/publish-static-assets.cjs",
     "start": "next start",
     "lint": "next lint",
     "test:trade": "node --import tsx --test tests/trade/*.test.ts",
