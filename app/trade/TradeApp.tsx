@@ -7,6 +7,8 @@ import {
   useState,
   type FormEvent,
 } from 'react';
+import ScannerPanel from './ScannerPanel';
+import type { ScannerResult } from '../../trade/scanner/types';
 import OperationsPanel from './OperationsPanel';
 import type { runReplay } from '../../trade/core/engine';
 import type { Timeframe, Setup, Analysis } from '../../trade/core/types';
@@ -18,6 +20,7 @@ const Chart = dynamic(() => import('./Chart'), {
 });
 type State = Omit<ReturnType<typeof runReplay>, 'source'> & {
   source: 'replay' | 'live';
+  scanner?: ScannerResult;
   paperAnalysis?: Analysis;
   feed?: {
     symbol: string;
@@ -325,7 +328,12 @@ export default function TradeApp() {
       })
       .catch((e) => setRunStatus(e.message));
   }, [bottom, authed]);
-  const analysis = state?.analyses[0],
+  const analysis =
+      state?.scanner?.opportunities.find((c) => c.state === 'CONFIRMED')
+        ?.analysis ||
+      state?.scanner?.opportunities.find((c) => c.state === 'WAITING_TRIGGER')
+        ?.analysis ||
+      state?.analyses[0],
     candles = state?.snapshot.candles[tf] || [],
     last = state?.snapshot.candles['1m'].at(-1),
     hide = learning && !revealed;
@@ -818,6 +826,11 @@ export default function TradeApp() {
                   </div>
                 </div>
               )}
+              <ScannerPanel
+                source={source}
+                cursor={cursor}
+                initial={state?.scanner}
+              />
               <OperationsPanel
                 source={source}
                 cursor={cursor}
@@ -833,7 +846,8 @@ export default function TradeApp() {
               <div className="trade-pipeline-heading">
                 <span>PIPELINE DA ESTRATÉGIA</span>
                 <strong>
-                  {satisfied} <small>/ 8</small>
+                  {satisfied}{' '}
+                  <small>/ {analysis?.conditions.length || 0}</small>
                 </strong>
               </div>
               <div className="trade-pipeline">
@@ -899,41 +913,12 @@ export default function TradeApp() {
           </nav>
           {bottom === 'Estratégias' && (
             <div className="trade-strategies">
-              <article>
-                <div className="trade-strategy-label">
-                  <span>01</span>
-                  <span className="trade-badge">RESEARCH / PAPER</span>
-                </div>
-                <h3>Tendência + pullback + confirmação</h3>
-                <p>Contexto 15m → estrutura 5m → confirmação e gatilho 1m.</p>
-                <footer>
-                  <span>v1.0.0 · parametrizável</span>
-                  <strong>Ao vivo bloqueado</strong>
-                </footer>
-                <details>
-                  <summary>Ver parâmetros da hipótese</summary>
-                  <dl className="trade-parameters">
-                    {Object.entries(state?.parameters || {}).map(([k, v]) => (
-                      <div key={k}>
-                        <dt>{k}</dt>
-                        <dd>{v}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                </details>
-              </article>
-              <article className="trade-research-card">
-                <span className="trade-eyebrow">PRÓXIMAS FAMÍLIAS</span>
-                <h3>Um motor. Muitas hipóteses.</h3>
-                <p>
-                  Breakout, reteste, VWAP, momentum, rejeição, falso rompimento,
-                  médias, RSI, MACD e confluências.
-                </p>
-                <footer>
-                  <span>Interface de estratégias plugáveis</span>
-                  <strong>Em pesquisa · não implementadas</strong>
-                </footer>
-              </article>
+              <ScannerPanel
+                source={source}
+                cursor={cursor}
+                initial={state?.scanner}
+                library
+              />
               <article className="trade-principle">
                 <Glyph name="brain" />
                 <h3>
@@ -964,6 +949,12 @@ export default function TradeApp() {
           )}
           {bottom === 'Resultados' && (
             <div className="trade-results">
+              <p className="trade-operation-caption">
+                Laboratório legado: backtest automático da hipótese inicial. As
+                decisões humanas e métricas multi-estratégia ficam na mesa e na
+                biblioteca. Amostras abaixo de 30 operações são insuficientes
+                para avaliar desempenho.
+              </p>
               <div className="trade-save-run">
                 <button
                   className="trade-primary"
@@ -980,11 +971,15 @@ export default function TradeApp() {
                   ['Encerradas', state?.metrics.closed],
                   [
                     'Win rate',
-                    `${((state?.metrics.winRate || 0) * 100).toFixed(1)}%`,
+                    (state?.metrics.closed || 0) >= 30
+                      ? `${((state?.metrics.winRate || 0) * 100).toFixed(1)}%`
+                      : 'DADOS INSUFICIENTES',
                   ],
                   [
                     'Expectativa',
-                    `${(state?.metrics.expectancy || 0).toFixed(2)}R`,
+                    (state?.metrics.closed || 0) >= 30
+                      ? `${(state?.metrics.expectancy || 0).toFixed(2)}R`
+                      : 'DADOS INSUFICIENTES',
                   ],
                   [
                     'Profit factor',

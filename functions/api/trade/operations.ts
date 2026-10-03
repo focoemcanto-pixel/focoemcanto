@@ -21,6 +21,8 @@ import { generateMockCandles, snapshotOf } from '../../../trade/core/providers';
 import { evaluateSnapshot } from '../../../trade/core/engine';
 import { paperExecution } from '../../../trade/bridge/paper';
 import { instrumentValue } from '../../../trade/bridge/instruments';
+import { scannerParameters } from '../../../trade/scanner/strategies';
+import { scanMarket } from '../../../trade/scanner/engine';
 import { validateCommand } from '../../../trade/bridge/protocol';
 const owner = 'focoos-admin'; // Existing admin-session middleware, never client supplied.
 async function market(
@@ -28,6 +30,7 @@ async function market(
   source: string,
   cursor: number,
   mode: string,
+  strategyId?: string,
 ) {
   if (source !== 'mt5' && source !== 'replay')
     throw new Error('Fonte inválida');
@@ -52,6 +55,14 @@ async function market(
       )
     : generateMockCandles().slice(0, cursor);
   const snapshot = snapshotOf(candles, data ? 'live' : 'replay');
+  if (
+    data &&
+    Date.now() / 1000 - snapshot.asOf >
+      scannerParameters.closedCandleMaxAgeSeconds
+  )
+    throw new Error(
+      'Candles fechados estão antigos. Aguarde atualização do histórico.',
+    );
   if (data) {
     snapshot.symbol = config(env).symbol;
     snapshot.tickSize = data.state.tickSize;
@@ -59,7 +70,12 @@ async function market(
   const analysis =
     mode === 'REAL'
       ? evaluateSnapshot(snapshot, [strategy])[0]
-      : strategy.evaluate(snapshot);
+      : strategyId
+        ? scanMarket(snapshot).candidates.find(
+            (c) => c.definition.id === strategyId,
+          )?.analysis
+        : strategy.evaluate(snapshot);
+  if (!analysis) throw new Error('Estratégia inexistente');
   return { analysis, snapshot, data, strategy, candles };
 }
 export async function onRequestPost({
@@ -75,7 +91,7 @@ export async function onRequestPost({
     if (b.action === 'propose') {
       if (b.mode !== 'PAPER' && b.mode !== 'REAL')
         throw new Error('Modo inválido');
-      const m = await market(env, b.source, b.cursor, b.mode);
+      const m = await market(env, b.source, b.cursor, b.mode, b.strategy);
       const contract = instrumentValue(
         m.snapshot.symbol,
         b.mode,
@@ -111,7 +127,7 @@ export async function onRequestPost({
     const p: Proposal = row.payload;
     let command = null;
     if (b.action === 'confirm' && row.state === 'AGUARDANDO CONFIRMAÇÃO') {
-      const m = await market(env, p.source, b.cursor, p.mode);
+      const m = await market(env, p.source, b.cursor, p.mode, p.setup.strategy);
       if (
         m.analysis.status !== 'complete' ||
         m.analysis.setup?.id !== p.setup.id ||
@@ -180,7 +196,27 @@ export async function onRequestGet({
           )
         : generateMockCandles().slice(0, Math.max(0, Math.min(420, cursor)));
     for (const row of rows) {
-      if (row.state !== 'CONFIRMADA') continue;
+      if (
+        row.state === 'DESCARTADA' &&
+        row.payload.mode === 'PAPER' &&
+        row.payload.source === source &&
+        !row.hypothetical_execution?.exitTime
+      ) {
+        const hypothetical = paperExecution(
+          row.payload,
+          candles,
+          row.hypothetical_execution,
+        );
+        if (hypothetical) {
+          await rpc(env, 'trade_hypothetical_observe', {
+            p_owner: owner,
+            p_id: row.id,
+            p_execution: hypothetical,
+          });
+          row.hypothetical_execution = hypothetical;
+        }
+      }
+      if (row.state !== 'CONFIRMADA' || row.execution?.exitTime) continue;
       const p: Proposal = row.payload;
       let execution = row.execution;
       if (p.mode === 'REAL')
@@ -192,7 +228,7 @@ export async function onRequestGet({
           !!data && feedStatus(data, env).status === 'LIVE',
         );
       else if (p.source === source) {
-        execution = paperExecution(p, candles) || row.execution;
+        execution = paperExecution(p, candles, row.execution) || row.execution;
       }
       if (execution) {
         await rpc(env, 'trade_operation_observe', {
@@ -205,6 +241,21 @@ export async function onRequestGet({
               : candles.length,
         });
         row.execution = execution;
+        if (
+          p.source === 'mt5' &&
+          (!data || feedStatus(data, env).status !== 'LIVE') &&
+          row.execution?.position
+        ) {
+          row.execution = {
+            ...row.execution,
+            feedLive: false,
+            position: {
+              ...row.execution.position,
+              current: null,
+              profit: null,
+            },
+          };
+        }
       }
     }
     return Response.json(rows);

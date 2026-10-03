@@ -1,3 +1,5 @@
+import type {ScannerResult} from '../../../trade/scanner/types';
+import { scanMarket } from '../../../trade/scanner/engine';
 import { onRequestGet as evaluate } from './evaluate';
 import { generateMockCandles } from '../../../trade/core/providers';
 import { runReplay } from '../../../trade/core/engine';
@@ -39,7 +41,18 @@ export async function onRequestPost({
     if (!r.ok) return r;
     state = await r.json();
   }
-  const a = state.analyses[0],
+  const scanner:ScannerResult =
+    (state as any).scanner ||
+    scanMarket(
+      state.snapshot,
+      undefined,
+      state.source !== 'live' || (state as any).feed?.status === 'LIVE',
+    );
+  const candidate = body.strategy
+    ? scanner.candidates.find((c) => c.definition.id === body.strategy)
+    : scanner.opportunities.find((c) => c.state === 'CONFIRMED') ||
+      scanner.opportunities[0];
+  const a = candidate?.analysis || state.analyses[0],
     q = question.toLowerCase();
   const relevant = a.conditions.filter((c) =>
     q.includes('suporte')
@@ -61,7 +74,7 @@ export async function onRequestPost({
       : 'Ainda não há setup completo neste candle. Não existe stop/entrada validado pelo motor para calcular seu risco. ' +
         a.explanation;
   if (q.includes('suporte'))
-    answer = `${a.support === undefined ? 'Ainda não há estrutura suficiente.' : `Suporte estrutural: ${a.support} pontos; resistência: ${a.resistance} pontos. São extremos dos últimos 10 candles 5m fechados, não garantias de reação.`}\n\n${answer}`;
+    answer = `${a.support === undefined ? 'Ainda não há estrutura suficiente.' : `Suporte estrutural: ${a.support} pontos; resistência: ${a.resistance} pontos. São níveis conhecidos pela regra ${a.strategy}, não garantias de reação.`}\n\n${answer}`;
   let provider = 'educational-rules';
   if (env.OPENAI_API_KEY) {
     try {
@@ -78,6 +91,16 @@ export async function onRequestPost({
           input: JSON.stringify({
             question,
             analysis: a,
+            scanner: {
+              summary: scanner.summary,
+              regimes: scanner.regimes,
+              candidates: scanner.candidates.map((c) => ({
+                strategy: c.definition.id,
+                version: c.definition.version,
+                state: c.state,
+                reasons: c.reasons,
+              })),
+            },
             source: state.source,
           }),
           max_output_tokens: 600,

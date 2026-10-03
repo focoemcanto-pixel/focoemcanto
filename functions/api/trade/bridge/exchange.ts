@@ -6,6 +6,9 @@ import {
   type BridgeEnv,
 } from '../../../../trade/bridge/config';
 import { validateBatch, commandWire } from '../../../../trade/bridge/protocol';
+import { runScanner } from '../../../../trade/scanner/service';
+import { onRequestGet as observePaper } from '../operations';
+let lastBackgroundAt = 0;
 // This cache is diagnostics only; market data is always persisted by the exchange RPC.
 let operationsProbe:
   | { origin: string; checkedAt: number; available: boolean; code?: string }
@@ -39,9 +42,11 @@ async function probeOperations(env: BridgeEnv) {
 export async function onRequestPost({
   request,
   env,
+  waitUntil,
 }: {
   request: Request;
   env: BridgeEnv;
+  waitUntil?: (task: Promise<unknown>) => void;
 }) {
   if (!(await authenticateBridge(request, env)))
     return Response.json({ error: 'Bridge não autorizado' }, { status: 401 });
@@ -75,6 +80,24 @@ export async function onRequestPost({
       p_account: c.accountHash,
       p_max_age: c.maxAgeMs,
     });
+    if (waitUntil && Date.now() - lastBackgroundAt >= 10000) {
+      lastBackgroundAt = Date.now();
+      waitUntil(
+        (async () => {
+          try {
+            await runScanner(env, 'mt5', 0);
+            await observePaper({
+              env,
+              request: new Request(
+                'https://internal/api/trade/operations?source=mt5',
+              ),
+            });
+          } catch {
+            /* feed ACK remains independent; scanner health/UI exposes failures */
+          }
+        })(),
+      );
+    }
     return new Response(commandWire(result.command), {
       headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' },
     });

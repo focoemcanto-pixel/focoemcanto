@@ -1,3 +1,5 @@
+import { scannerParameters } from '../../../trade/scanner/strategies';
+import { scanMarket } from '../../../trade/scanner/engine';
 import { config, type BridgeEnv } from '../../../trade/bridge/config';
 import { MT5MarketDataProvider, feedStatus } from '../../../trade/bridge/mt5';
 import { snapshotOf } from '../../../trade/core/providers';
@@ -29,10 +31,15 @@ export async function onRequestGet({
       const snapshot = snapshotOf(visible, 'live');
       snapshot.symbol = c.symbol;
       snapshot.tickSize = data?.state?.tickSize || 5;
+      const marketAvailable =
+        feed.status === 'LIVE' &&
+        snapshot.asOf > 0 &&
+        Date.now() / 1000 - snapshot.asOf <=
+          scannerParameters.closedCandleMaxAgeSeconds;
       const analyses = evaluateSnapshot(snapshot, [
         new TrendPullbackConfirmation(),
       ]);
-      if (feed.status !== 'LIVE')
+      if (!marketAvailable)
         analyses.forEach((a) => {
           a.status = 'blocked';
           a.setup = undefined;
@@ -54,6 +61,7 @@ export async function onRequestGet({
         }),
       );
       return Response.json({
+        scanner: scanMarket(snapshot, undefined, marketAvailable),
         source: 'live',
         cursor: visible.length,
         total: visible.length,
@@ -66,10 +74,9 @@ export async function onRequestGet({
         parameters: pullbackParameters,
         trendLines,
         feed,
-        paperAnalysis:
-          feed.status === 'LIVE'
-            ? new TrendPullbackConfirmation().evaluate(snapshot)
-            : undefined,
+        paperAnalysis: marketAvailable
+          ? new TrendPullbackConfirmation().evaluate(snapshot)
+          : undefined,
       });
     } catch {
       return Response.json(
@@ -87,5 +94,6 @@ export async function onRequestGet({
       { error: 'Cursor deve ser inteiro entre 0 e 420.' },
       { status: 400 },
     );
-  return Response.json(runReplay(generateMockCandles(), cursor));
+  const result = runReplay(generateMockCandles(), cursor);
+  return Response.json({ ...result, scanner: scanMarket(result.snapshot) });
 }

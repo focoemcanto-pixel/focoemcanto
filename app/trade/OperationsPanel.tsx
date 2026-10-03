@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Proposal } from '../../trade/bridge/approval';
 const num = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -27,7 +27,8 @@ export default function OperationsPanel({
     [rows, setRows] = useState<any[]>([]),
     [error, setError] = useState(''),
     [loadError, setLoadError] = useState(''),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    [selectedId, setSelectedId] = useState('');
   async function load() {
     const r = await fetch(
       `/api/trade/operations?source=${source}&cursor=${cursor}`,
@@ -74,27 +75,9 @@ export default function OperationsPanel({
   const activeComplete =
     mode === 'PAPER' ? (paperComplete ?? complete) : complete;
   const activeSetupId = mode === 'PAPER' ? (paperSetupId ?? setupId) : setupId;
-  const attempted = useRef('');
-  useEffect(() => {
-    const key = `${source}:${mode}:${activeSetupId || ''}`;
-    if (
-      !activeComplete ||
-      !activeSetupId ||
-      attempted.current === key ||
-      rows.some(
-        (r) =>
-          r.state === 'AGUARDANDO CONFIRMAÇÃO' &&
-          r.payload.source === source &&
-          r.payload.mode === mode,
-      )
-    )
-      return;
-    attempted.current = key;
-    void action('propose');
-  }, [source, mode, activeSetupId, activeComplete]);
-  const row = rows.find(
-      (r) => r.payload.source === source && r.payload.mode === mode,
-    ),
+  const row =
+      rows.find((r) => r.id === selectedId && r.payload.source === source) ||
+      rows.find((r) => r.payload.source === source && r.payload.mode === mode),
     p: Proposal | undefined = row?.payload,
     x = row?.execution;
   return (
@@ -117,7 +100,7 @@ export default function OperationsPanel({
           onChange={(e) => setMode(e.target.value as 'PAPER' | 'REAL')}
         >
           <option>PAPER</option>
-          <option disabled={source !== 'mt5'}>REAL</option>
+          <option disabled>REAL · bloqueado</option>
         </select>
         <label>
           Contratos{' '}
@@ -126,8 +109,8 @@ export default function OperationsPanel({
             type="number"
             min="1"
             step="1"
-            disabled={row?.state === 'AGUARDANDO CONFIRMAÇÃO'}
-            value={quantity}
+            disabled
+            value={p?.quantity || quantity}
             onChange={(e) => setQuantity(Number(e.target.value))}
           />
         </label>
@@ -137,13 +120,29 @@ export default function OperationsPanel({
           ? 'Simulação, sem dinheiro real.'
           : 'XP / MetaTrader 5. Exige estratégia autorizada e os dois gates de execução.'}
       </p>
-      <button
-        className="trade-operation-prepare"
-        disabled={busy || !activeComplete}
-        onClick={() => action('propose')}
-      >
-        Preparar proposta
-      </button>
+      {rows.filter(
+        (r) => r.payload.source === source && r.payload.mode === 'PAPER',
+      ).length > 1 && (
+        <label className="trade-proposal-picker">
+          Propostas / posições
+          <select
+            aria-label="Proposta PAPER"
+            value={row?.id || ''}
+            onChange={(e) => setSelectedId(e.target.value)}
+          >
+            {rows
+              .filter(
+                (r) =>
+                  r.payload.source === source && r.payload.mode === 'PAPER',
+              )
+              .map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.payload.setup.strategy} · {r.payload.direction} · {r.state}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
       {p && (
         <>
           <div className="trade-operation-status">
@@ -175,6 +174,9 @@ export default function OperationsPanel({
           </dl>
           <details className="trade-operation-reason">
             <summary>Por que este padrão foi identificado?</summary>
+            <p>
+              {p.setup.strategy} · v{p.setup.version}
+            </p>
             <p>{p.setup.explanation}</p>
           </details>
           <small className="trade-operation-footnote">
@@ -191,10 +193,10 @@ export default function OperationsPanel({
                 disabled={busy || Date.now() > p.expiresAt}
                 onClick={() => action('confirm', p.id)}
               >
-                CONFIRMAR OPERAÇÃO
+                ENTRAR NO PAPER
               </button>
               <button disabled={busy} onClick={() => action('discard', p.id)}>
-                DESCARTAR
+                NÃO ENTRAR
               </button>
             </div>
           )}
@@ -260,6 +262,13 @@ export default function OperationsPanel({
               {r.execution?.status || r.state} ·{' '}
               {new Date(r.created_at).toLocaleString('pt-BR')}
             </p>
+            {r.hypothetical_execution?.exitTime && (
+              <p>
+                Você não entrou. Resultado hipotético para estudo:{' '}
+                {num(r.hypothetical_execution.resultR)}R ·{' '}
+                {money(r.hypothetical_execution.resultBRL)}
+              </p>
+            )}
             {r.journal?.map((j: any) => (
               <p key={j.id}>
                 {new Date(j.created_at).toLocaleTimeString('pt-BR')} · {j.kind}

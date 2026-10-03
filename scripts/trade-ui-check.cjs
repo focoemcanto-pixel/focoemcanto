@@ -15,6 +15,8 @@ const { onRequest: session } = require('../functions/api/admin/session.js');
 const assert = require('node:assert/strict');
 const { PGlite } = require('@electric-sql/pglite');
 const operations = require('../functions/api/trade/operations.ts');
+const scanner = require('../functions/api/trade/scanner.ts');
+const strategyMetrics = require('../functions/api/trade/strategy-metrics.ts');
 const health = require('../functions/api/trade/health.ts');
 let operationReadFailures = 1;
 (async () => {
@@ -25,6 +27,7 @@ let operationReadFailures = 1;
   for (const file of [
     '20261003035402_mt5_bridge.sql',
     '20261003042050_human_approval.sql',
+    '20261003124510_multi_strategy_scanner.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   globalThis.fetch = async (url, init) => {
@@ -45,13 +48,7 @@ let operationReadFailures = 1;
     ...(process.env.CHROMIUM_EXECUTABLE_PATH
       ? { executablePath: process.env.CHROMIUM_EXECUTABLE_PATH }
       : {}),
-    args: [
-      '--no-sandbox',
-      '--disable-dev-shm-usage',
-      '--single-process',
-      '--no-zygote',
-      '--disable-gpu',
-    ],
+    args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'],
   });
   const ctx = await browser.newContext({
     viewport: { width: 1440, height: 1100 },
@@ -101,25 +98,31 @@ let operationReadFailures = 1;
         next: async () =>
           url.pathname.endsWith('health')
             ? health.onRequestGet({ env })
-            : url.pathname.endsWith('operations')
-              ? r.method() === 'GET' && operationReadFailures-- > 0
-                ? Response.json(
-                    {
-                      error: 'Migration do módulo de operações ausente.',
-                      code: 'SCHEMA_MISSING',
-                    },
-                    { status: 503 },
-                  )
-                : operations[
-                    r.method() === 'POST' ? 'onRequestPost' : 'onRequestGet'
-                  ]({ request, env })
-              : url.pathname.endsWith('evaluate')
-                ? evaluate({ request })
-                : url.pathname.endsWith('professor')
-                  ? professor({ request, env })
-                  : url.pathname.endsWith('journal')
-                    ? journal({ request, env })
-                    : runs({ request, env }),
+            : url.pathname.endsWith('scanner')
+              ? scanner[
+                  request.method === 'POST' ? 'onRequestPost' : 'onRequestGet'
+                ]({ request, env })
+              : url.pathname.endsWith('strategy-metrics')
+                ? strategyMetrics.onRequestGet({ env })
+                : url.pathname.endsWith('operations')
+                  ? r.method() === 'GET' && operationReadFailures-- > 0
+                    ? Response.json(
+                        {
+                          error: 'Migration do módulo de operações ausente.',
+                          code: 'SCHEMA_MISSING',
+                        },
+                        { status: 503 },
+                      )
+                    : operations[
+                        r.method() === 'POST' ? 'onRequestPost' : 'onRequestGet'
+                      ]({ request, env })
+                  : url.pathname.endsWith('evaluate')
+                    ? evaluate({ request })
+                    : url.pathname.endsWith('professor')
+                      ? professor({ request, env })
+                      : url.pathname.endsWith('journal')
+                        ? journal({ request, env })
+                        : runs({ request, env }),
       });
     if (response) {
       await route.fulfill({
@@ -160,13 +163,29 @@ let operationReadFailures = 1;
     }
   });
   const page = await ctx.newPage();
-  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (msg) => {
+    if (
+      msg.type() === 'error' &&
+      /TypeError|ReferenceError|React error/.test(msg.text())
+    )
+      errors.push(msg.text());
+  });
+  page.on('pageerror', (e) => {
+    errors.push(e.message);
+    console.error('PAGE ERROR', e.message);
+  });
   await page.goto('https://trade.test/trade/');
   await page.waitForURL('**/admin/login/**');
   await page.locator('#token').fill('local-test-only');
   await page.getByRole('button', { name: 'Entrar no Foco OS' }).click();
   await page.waitForURL('**/trade/');
-  await page.getByRole('heading', { name: 'Copiloto', exact: true }).waitFor();
+  await page
+    .getByRole('heading', { name: 'Copiloto', exact: true })
+    .waitFor()
+    .catch(async (e) => {
+      console.error('UI STATE', await page.locator('body').innerText());
+      throw e;
+    });
   await page.waitForFunction(
     () =>
       document.querySelector('.trade-chart canvas') &&
@@ -178,6 +197,17 @@ let operationReadFailures = 1;
     await page.getByText('SETUP COMPLETO · PAPER', { exact: true }).count(),
     1,
   );
+  assert.equal(
+    await page.locator('.trade-scanner-library > details').count(),
+    17,
+  );
+  assert.equal(
+    await page
+      .locator('select[aria-label="Modo de execução"] option')
+      .nth(1)
+      .isDisabled(),
+    true,
+  );
   await page
     .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
     .waitFor();
@@ -186,7 +216,7 @@ let operationReadFailures = 1;
     0,
   );
   await page
-    .getByRole('button', { name: 'CONFIRMAR OPERAÇÃO', exact: true })
+    .getByRole('button', { name: 'ENTRAR NO PAPER', exact: true })
     .click();
   await page.getByRole('heading', { name: 'ENVIANDO', exact: true }).waitFor();
   await page
@@ -294,6 +324,8 @@ let operationReadFailures = 1;
         'FocoOS login reuse',
         'candlestick canvas',
         'setup',
+        'multi-strategy scanner and 17-entry library',
+        'paper-only action and REAL option disabled',
         'human paper approval, next-candle fill, zero MT5 commands',
         'step',
         'timeframe',

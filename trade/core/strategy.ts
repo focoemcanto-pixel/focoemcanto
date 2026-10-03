@@ -62,11 +62,11 @@ export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
       minutes = s.candles['1m'];
     const fast = ema(
         context.map((c) => c.close),
-        p.contextFastPeriod
+        p.contextFastPeriod,
       ),
       slow = ema(
         context.map((c) => c.close),
-        p.contextSlowPeriod
+        p.contextSlowPeriod,
       );
     const enough =
       context.length >= p.contextSlowPeriod + p.contextSlopeBars &&
@@ -106,7 +106,7 @@ export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
     const candidates = [sign * (fast.at(-1) || 0), base, base + impulse * 0.5];
     const regionProjected =
       candidates.sort(
-        (a, b) => Math.abs(a - bottom) - Math.abs(b - bottom)
+        (a, b) => Math.abs(a - bottom) - Math.abs(b - bottom),
       )[0] || supportProjected;
     const last = minutes.at(-1),
       prev = minutes.at(-2),
@@ -132,7 +132,7 @@ export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
       confirmationCandles.length === p.confirmationCloses &&
       confirmationCandles.every(
         (c, i) =>
-          i === 0 || sign * (c.close - confirmationCandles[i - 1].close) > 0
+          i === 0 || sign * (c.close - confirmationCandles[i - 1].close) > 0,
       );
     const trigger =
       confirmation &&
@@ -203,7 +203,7 @@ export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
     const conflicts: string[] = [];
     if (contextMet && last && sign * (last.close - (slow.at(-1) || 0)) < 0)
       conflicts.push(
-        'Preço 1m está do lado oposto da média lenta de contexto.'
+        'Preço 1m está do lado oposto da média lenta de contexto.',
       );
     const complete = conditions.every((c) => c.met) && conflicts.length === 0;
     const missing = conditions.filter((c) => !c.met).map((c) => c.label);
@@ -230,6 +230,14 @@ export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
         sign * regionProjected + p.supportTolerancePoints,
       ];
     }
+    if (enough && risk > 0 && result.region)
+      result.projected = {
+        entry,
+        stop,
+        target: entry + sign * risk * p.targetR,
+        rr: p.targetR,
+        region: result.region,
+      };
     if (complete && last)
       result.setup = {
         id: `${this.id}:${last.timestamp}`,

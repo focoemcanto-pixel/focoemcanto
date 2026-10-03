@@ -27,6 +27,8 @@ export type Proposal = {
   asOf: number;
   expiresAt: number;
   cursor: number;
+  scope?: string;
+  setupWatchId?: string;
 };
 export function makeProposal(
   a: Analysis,

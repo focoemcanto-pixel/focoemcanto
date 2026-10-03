@@ -45,6 +45,13 @@ export type Analysis = {
   resistance?: number;
   region?: [number, number];
   setup?: Setup;
+  projected?: {
+    entry: number;
+    stop: number;
+    target: number;
+    rr: number;
+    region: [number, number];
+  };
   explanation: string;
 };
 export type MarketSnapshot = {
