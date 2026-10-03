@@ -3,6 +3,7 @@ import Script from 'next/script'
 import './globals.css'
 import './premium-fixes.css'
 import './final-mobile-fixes.css'
+import './trade/trade.css'
 
 export const metadata: Metadata = {
   title: 'Foco em Canto | Mentoria Vocal',
