@@ -194,13 +194,36 @@ let operationReadFailures = 1;
   await fs.mkdir('.trade-qa', { recursive: true });
   await page.screenshot({ path: '.trade-qa/desktop.png', fullPage: true });
   assert.equal(
-    await page.getByText('SETUP COMPLETO · PAPER', { exact: true }).count(),
-    1,
-  );
-  assert.equal(
     await page.locator('.trade-scanner-library > details').count(),
+    0,
+  );
+  await page
+    .getByRole('button', { name: 'Ver estratégias', exact: true })
+    .click();
+  const drawer = page.getByRole('dialog');
+  await drawer.waitFor();
+  assert.equal(
+    await drawer.locator('.trade-scanner-library > details').count(),
     17,
   );
+  await drawer
+    .getByRole('textbox', { name: 'Buscar estratégias' })
+    .fill('VWAP');
+  assert.equal(
+    await drawer.locator('.trade-scanner-library > details').count(),
+    1,
+  );
+  await page.keyboard.press('Escape');
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Ver estratégias', exact: true })
+      .evaluate((el) => el === document.activeElement),
+    true,
+  );
+  await page
+    .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
+    .waitFor();
   assert.equal(
     await page
       .locator('select[aria-label="Modo de execução"] option')
@@ -234,6 +257,20 @@ let operationReadFailures = 1;
   );
   await page.getByRole('button', { name: '5m', exact: true }).click();
   await page.getByRole('button', { name: 'Professor', exact: true }).click();
+  await page
+    .getByRole('button', { name: 'Ver raciocínio completo', exact: true })
+    .click();
+  await page.getByRole('dialog').waitFor();
+  assert.equal(
+    await page
+      .getByRole('dialog')
+      .locator('.trade-scanner-library > details')
+      .count(),
+    17,
+  );
+  await page
+    .getByRole('button', { name: 'Fechar detalhes do motor', exact: true })
+    .click();
   await page
     .getByRole('button', { name: 'Por que ainda não entrar?', exact: true })
     .click();
@@ -270,6 +307,26 @@ let operationReadFailures = 1;
   await page.getByRole('button', { name: 'Copiloto', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Estratégias', exact: true }).click();
+  assert.equal(
+    await page.locator('.trade-scanner-library > details').count(),
+    0,
+  );
+  await page
+    .getByRole('button', { name: 'Ver estratégias', exact: true })
+    .click();
+  await page.getByRole('dialog').waitFor();
+  assert.ok(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  );
+  await page.screenshot({
+    path: '.trade-qa/mobile-drawer.png',
+    fullPage: true,
+  });
+  await page
+    .getByRole('button', { name: 'Fechar detalhes do motor', exact: true })
+    .click();
   await page.screenshot({ path: '.trade-qa/mobile.png', fullPage: true });
   assert.ok(
     await page.evaluate(
@@ -324,12 +381,13 @@ let operationReadFailures = 1;
         'FocoOS login reuse',
         'candlestick canvas',
         'setup',
-        'multi-strategy scanner and 17-entry library',
+        'compact motor; full 17-entry library only in accessible drawer, search, Escape and focus recovery',
+        'proposal before formation; detailed method on demand',
         'paper-only action and REAL option disabled',
         'human paper approval, next-candle fill, zero MT5 commands',
         'step',
         'timeframe',
-        'Professor',
+        'Professor ON: full reasoning drawer; OFF: compact operational view',
         'learning',
         'save run',
         'journal',

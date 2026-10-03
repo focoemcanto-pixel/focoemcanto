@@ -1,5 +1,6 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useId } from 'react';
+import { observationGroups, marketReading } from './decision-view';
 import type { ScannerResult, SetupWatch } from '../../trade/scanner/types';
 const labels: Record<string, string> = {
   FORMING: 'EM FORMAÇÃO',
@@ -27,11 +28,13 @@ export default function ScannerPanel({
   cursor,
   initial,
   library = false,
+  professor = false,
 }: {
   source: 'mt5' | 'replay';
   cursor: number;
   initial?: ScannerResult;
   library?: boolean;
+  professor?: boolean;
 }) {
   const [data, setData] = useState<{
       scan: ScannerResult;
@@ -40,7 +43,12 @@ export default function ScannerPanel({
       feedLive: boolean;
     }>(),
     [error, setError] = useState(''),
-    [stats, setStats] = useState<any[]>([]);
+    [stats, setStats] = useState<any[]>([]),
+    [drawerOpen, setDrawerOpen] = useState(false),
+    [search, setSearch] = useState('');
+  const dialogId = useId(),
+    openButton = useRef<HTMLButtonElement>(null),
+    dialogRef = useRef<HTMLDivElement>(null);
   const run = useRef(''),
     last = useRef(cursor);
   useEffect(() => {
@@ -87,17 +95,18 @@ export default function ScannerPanel({
     };
   }, [source, cursor, library]);
   useEffect(() => {
-    if (!library) return;
+    if (!drawerOpen) return;
     let active = true;
     fetch('/api/trade/strategy-metrics')
       .then((r) => r.json())
       .then((d) => {
         if (active && Array.isArray(d)) setStats(d);
-      });
+      })
+      .catch(() => {});
     return () => {
       active = false;
     };
-  }, [library, data?.scan.asOf]);
+  }, [drawerOpen, data?.scan.asOf]);
   const scan = data?.scan || initial;
   async function watchAction(w: SetupWatch, action: string) {
     const r = await fetch('/api/trade/scanner', {
@@ -118,7 +127,7 @@ export default function ScannerPanel({
           : d,
       );
   }
-  if (library)
+  function renderLibrary() {
     return (
       <div className="trade-scanner-library">
         <header>
@@ -129,169 +138,372 @@ export default function ScannerPanel({
             vantagem.
           </p>
         </header>
-        {scan?.candidates.map((c) => {
-          const m = stats.find(
-            (x) =>
-              x.strategy === c.definition.id &&
-              x.version === c.definition.version,
-          );
-          return (
-            <details key={c.definition.id}>
-              <summary>
-                <strong>{c.definition.name}</strong>
-                <span>{labels[c.state] || c.state}</span>
-              </summary>
-              <p>
-                {c.definition.enabled ? 'RESEARCH · PAPER ATIVA' : 'DISABLED'} ·
-                v{c.definition.version} · {c.definition.stage.toUpperCase()} ·{' '}
-                {c.definition.timeframes.join(' + ')}
-              </p>
-              <p>Dados: {c.definition.requiredData.join(' · ')}</p>
-              <p>Regimes: {c.definition.eligibleRegimes.join(', ')}</p>
-              <p>{c.analysis.explanation}</p>
-              <p>
-                Observações {m?.detected || 0} · Confirmados {m?.confirmed || 0}{' '}
-                · Entradas {m?.accepted || 0} · Recusas {m?.rejected || 0} ·
-                Encerrados {m?.closed || 0}
-              </p>
-              <p>
-                {m?.sampleStatus || 'DADOS INSUFICIENTES'}
-                {m?.expectancy != null
-                  ? ` · expectativa descritiva ${num(m.expectancy)}R · acerto ${num(m.winRate * 100)}%`
-                  : ''}
-              </p>
-              <p>
-                Acumulado PAPER: {num(m?.netR)}R · {num(m?.netPoints)} pts · R${' '}
-                {num(m?.netMoney)}
-              </p>
-              <details>
-                <summary>Condições e parâmetros</summary>
-                {c.analysis.conditions.map((x) => (
-                  <p key={x.key}>
-                    {x.met ? '✓' : '○'} {x.label}: {x.detail}
-                  </p>
-                ))}
-                <pre>{JSON.stringify(c.definition.parameters, null, 2)}</pre>
+        <input
+          className="trade-library-search"
+          aria-label="Buscar estratégias"
+          placeholder="Buscar método ou indicador…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {scan?.candidates
+          .filter((c) =>
+            (
+              c.definition.name +
+              ' ' +
+              c.definition.id +
+              ' ' +
+              c.definition.requiredData.join(' ')
+            )
+              .toLocaleLowerCase('pt-BR')
+              .includes(search.toLocaleLowerCase('pt-BR')),
+          )
+          .map((c) => {
+            const m = stats.find(
+              (x) =>
+                x.strategy === c.definition.id &&
+                x.version === c.definition.version,
+            );
+            return (
+              <details key={c.definition.id}>
+                <summary>
+                  <strong>{c.definition.name}</strong>
+                  <span>{labels[c.state] || c.state}</span>
+                </summary>
+                <p>
+                  {c.definition.enabled ? 'RESEARCH · PAPER ATIVA' : 'DISABLED'}{' '}
+                  · v{c.definition.version} · {c.definition.stage.toUpperCase()}{' '}
+                  · {c.definition.timeframes.join(' + ')}
+                </p>
+                <p>Dados: {c.definition.requiredData.join(' · ')}</p>
+                <p>Regimes: {c.definition.eligibleRegimes.join(', ')}</p>
+                <p>{c.analysis.explanation}</p>
+                <p>
+                  Observações {m?.detected || 0} · Confirmados{' '}
+                  {m?.confirmed || 0} · Entradas {m?.accepted || 0} · Recusas{' '}
+                  {m?.rejected || 0} · Encerrados {m?.closed || 0}
+                </p>
+                <p>
+                  {m?.sampleStatus || 'DADOS INSUFICIENTES'}
+                  {m?.expectancy != null
+                    ? ` · expectativa descritiva ${num(m.expectancy)}R · acerto ${num(m.winRate * 100)}%`
+                    : ''}
+                </p>
+                <p>
+                  Acumulado PAPER: {num(m?.netR)}R · {num(m?.netPoints)} pts ·
+                  R$ {num(m?.netMoney)}
+                </p>
+                <details>
+                  <summary>Condições e parâmetros</summary>
+                  {c.analysis.conditions.map((x) => (
+                    <p key={x.key}>
+                      {x.met ? '✓' : '○'} {x.label}: {x.detail}
+                    </p>
+                  ))}
+                  <pre>{JSON.stringify(c.definition.parameters, null, 2)}</pre>
+                </details>
               </details>
-            </details>
-          );
-        })}
+            );
+          })}
       </div>
     );
-  const watches = (data?.watches || []).filter((w) =>
-    [
-      'FORMING',
-      'WAITING_TRIGGER',
-      'CONFIRMED',
-      'PROPOSED',
-      'OPEN_PAPER',
-    ].includes(w.state),
+  }
+
+  const grouped = observationGroups(data?.watches || [], scan),
+    reading = marketReading(scan);
+  const feedAvailable =
+    source === 'replay' ||
+    (library
+      ? !!initial &&
+        initial.summary.UNAVAILABLE_DATA < initial.candidates.length
+      : data?.feedLive === true);
+  const visible = feedAvailable ? grouped : [];
+  const primary = visible[0];
+  const focused =
+    scan?.opportunities.find((c) => c.state === 'CONFIRMED') ||
+    scan?.opportunities.find((c) => c.state === 'WAITING_TRIGGER') ||
+    primary?.watch.candidate;
+  function closeDrawer() {
+    setDrawerOpen(false);
+    openButton.current?.focus();
+  }
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const prior = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const first = dialogRef.current?.querySelector<HTMLElement>('button');
+    first?.focus();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeDrawer();
+      }
+      if (e.key === 'Tab') {
+        const nodes = [
+          ...(dialogRef.current?.querySelectorAll<HTMLElement>(
+            'button, summary, select, input, [tabindex="0"]',
+          ) || []),
+        ].filter((x) => x.getClientRects().length > 0);
+        const first = nodes[0],
+          last = nodes.at(-1);
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last?.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', key);
+    return () => {
+      document.body.style.overflow = prior;
+      document.removeEventListener('keydown', key);
+    };
+  }, [drawerOpen]);
+  const motor = (
+    <section className="trade-motor" aria-label="Motor de estratégias">
+      <div className="trade-motor-top">
+        <span className="trade-eyebrow">MOTOR DE ESTRATÉGIAS</span>
+        <span className="trade-motor-state">
+          {source === 'mt5' && !feedAvailable ? 'AGUARDANDO FEED' : 'ATIVO'}
+        </span>
+      </div>
+      <h3>{reading.monitoring} estratégias monitoradas</h3>
+      <p>
+        {scan?.summary.CONFIRMED || 0} confirmada(s) ·{' '}
+        {scan?.summary.WAITING_TRIGGER || 0} aguardando gatilho
+      </p>
+      <small>
+        {reading.evaluated} avaliações, incluindo hipóteses sem dados. O motor
+        continua trabalhando nos bastidores.
+      </small>
+      <button
+        ref={openButton}
+        className="trade-motor-link"
+        onClick={() => setDrawerOpen(true)}
+        aria-haspopup="dialog"
+        aria-controls={dialogId}
+      >
+        {professor
+          ? 'Ver raciocínio completo'
+          : library
+            ? 'Ver estratégias'
+            : 'Ver análise'}
+      </button>
+    </section>
   );
+  function card(group: (typeof grouped)[number], featured = false) {
+    const w = group.watch,
+      c = w.candidate,
+      p = c.projected,
+      missing = c.analysis.conditions.find((x) => !x.met);
+    return (
+      <article
+        className={`trade-observation ${featured ? 'featured' : ''}`}
+        key={w.id}
+      >
+        <div className="trade-observation-heading">
+          <span className="trade-eyebrow">{labels[w.state]}</span>
+          <strong className={c.analysis.trend === 'down' ? 'short' : 'long'}>
+            {c.analysis.trend === 'down' ? 'VENDA' : 'COMPRA'}
+          </strong>
+        </div>
+        <h3>{c.definition.name}</h3>
+        <p className="trade-observation-progress">
+          {c.analysis.conditions.filter((x) => x.met).length} de{' '}
+          {c.analysis.conditions.length} condições confirmadas
+        </p>
+        <p className="trade-observation-next">
+          <span>O QUE FALTA</span>
+          {missing?.label || 'Aguardar a proposta'}
+          <small>{c.trigger}</small>
+        </p>
+        {p && (
+          <div className="trade-projected-levels">
+            <div>
+              <small>ENTRADA PROJETADA</small>
+              <strong>{num(p.entry)}</strong>
+            </div>
+            <div>
+              <small>STOP TÉCNICO</small>
+              <strong>{num(p.stop)}</strong>
+            </div>
+            <div>
+              <small>ALVO</small>
+              <strong>{num(p.target)}</strong>
+            </div>
+            <div>
+              <small>RISCO / RETORNO</small>
+              <strong>1 : {num(p.rr)}</strong>
+            </div>
+          </div>
+        )}
+        <div className="trade-observation-time">
+          <span>Detectado {time(w.detectedAt)}</span>
+          <span>Válido até {time(w.validUntil)}</span>
+        </div>
+        {group.methods.length > 1 && (
+          <details className="trade-confluences">
+            <summary>
+              {group.methods.length} métodos convergem nesta região
+            </summary>
+            <p>
+              {group.methods
+                .map(
+                  (id) =>
+                    scan?.candidates.find((x) => x.definition.id === id)
+                      ?.definition.name || id,
+                )
+                .join(' · ')}
+            </p>
+            <small>Confluência de regras; não comprova vantagem.</small>
+          </details>
+        )}
+        <details
+          className="trade-method-explanation"
+          open={professor || undefined}
+        >
+          <summary>Entender esta estratégia</summary>
+          <p>{c.analysis.explanation}</p>
+          {c.analysis.conditions.map((x) => (
+            <p key={x.key}>
+              {x.met ? '✓' : '○'} {x.label}: {x.detail}
+            </p>
+          ))}
+          <p>Gatilho: {c.trigger}</p>
+          {p && (
+            <p>
+              Região {num(p.region[0])}–{num(p.region[1])}. Stop técnico{' '}
+              {num(p.stop)}; alvo de referência {num(p.target)}. Os níveis
+              descrevem uma hipótese.
+            </p>
+          )}
+          <small>v{c.definition.version} · Pesquisa/PAPER</small>
+        </details>
+        {c.analysis.conflicts.map((x) => (
+          <p key={x} className="trade-operation-error">
+            {x}
+          </p>
+        ))}
+        <div className="trade-operation-actions">
+          <button
+            className="trade-primary"
+            onClick={() => watchAction(w, 'follow')}
+          >
+            ACOMPANHAR
+          </button>
+          <button onClick={() => watchAction(w, 'discard')}>DESCARTAR</button>
+        </div>
+      </article>
+    );
+  }
+  const drawer = drawerOpen && (
+    <div
+      className="trade-drawer-backdrop"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) closeDrawer();
+      }}
+    >
+      <div
+        ref={dialogRef}
+        className="trade-engine-drawer"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={dialogId + '-title'}
+        id={dialogId}
+      >
+        <header className="trade-drawer-heading">
+          <div>
+            <span className="trade-eyebrow">POR TRÁS DA LEITURA</span>
+            <h2 id={dialogId + '-title'}>
+              {professor ? 'Raciocínio completo' : 'Detalhes do motor'}
+            </h2>
+            <p>
+              {reading.evaluated} estratégias avaliadas ·{' '}
+              {scan?.summary.REJECTED || 0} descartadas · {reading.regime}
+            </p>
+          </div>
+          <button onClick={closeDrawer} aria-label="Fechar detalhes do motor">
+            ✕
+          </button>
+        </header>
+        <p className="trade-drawer-note">
+          Regras, indicadores e condições de cada hipótese. A primeira hipótese
+          em foco representa o estado atual; não há ranking de rentabilidade.
+        </p>
+        {renderLibrary()}
+      </div>
+    </div>
+  );
+  if (library)
+    return (
+      <>
+        {motor}
+        {drawer}
+      </>
+    );
   return (
-    <section className="trade-scanner" aria-label="Setups em observação">
-      <header>
-        <span className="trade-eyebrow">LEITURA MULTI-ESTRATÉGIA · PAPER</span>
-        <h2>Setups em observação</h2>
-        <p>
-          {scan?.candidates.length || 0} avaliadas ·{' '}
-          {scan?.summary.REJECTED || 0} descartadas ·{' '}
-          {(scan?.summary.INSUFFICIENT_DATA || 0) +
-            (scan?.summary.UNAVAILABLE_DATA || 0)}{' '}
-          sem dados · {scan?.summary.CONFIRMED || 0} confirmadas
-        </p>
-        <small>
-          {scan?.regimes.join(' · ') || 'Aguardando dados'} · sem ranking de
-          rentabilidade
-        </small>
-      </header>
-      {source === 'mt5' && !data?.feedLive && (
-        <p className="trade-operation-error">
-          Feed antigo/OFFLINE: novas confirmações bloqueadas.
-        </p>
-      )}
+    <section
+      className="trade-decision-scanner"
+      aria-label="Setups em observação"
+    >
       {error && (
         <p role="status" className="trade-operation-error">
           {error}
         </p>
       )}
-      {!watches.length && (
-        <p className="trade-operation-caption">
-          Nenhuma hipótese ativa. O scanner informa na biblioteca por que cada
-          regra foi descartada ou está aguardando dados.
-        </p>
+      {!primary && (
+        <div className="trade-no-opportunity">
+          <span className="trade-eyebrow">
+            {scan?.summary.CONFIRMED && feedAvailable
+              ? 'HIPÓTESE CONFIRMADA'
+              : 'NENHUMA ENTRADA AGORA'}
+          </span>
+          <h3>
+            {scan?.summary.CONFIRMED && feedAvailable
+              ? 'Confira a proposta PAPER.'
+              : 'Continuarei acompanhando.'}
+          </h3>
+          <p>
+            {source === 'mt5' && !feedAvailable
+              ? 'Feed antigo ou offline. Novas confirmações estão bloqueadas.'
+              : `O motor acompanha ${reading.monitoring} estratégias. ${reading.regime}.`}
+          </p>
+        </div>
       )}
-      {watches.map((w) => {
-        const c = w.candidate,
-          p = c.projected;
-        return (
-          <details className="trade-watch" key={w.id}>
-            <summary>
-              <div>
-                <span className="trade-eyebrow">
-                  {labels[w.state]} ·{' '}
-                  {c.analysis.trend === 'down' ? 'VENDA' : 'COMPRA'}
-                </span>
-                <strong>{c.definition.name}</strong>
-                <small>
-                  {c.analysis.conditions.filter((x) => x.met).length}/
-                  {c.analysis.conditions.length} condições ·{' '}
-                  {time(w.detectedAt)} → {time(w.validUntil)}
-                </small>
-              </div>
-            </summary>
-            <p>{c.analysis.explanation}</p>
-            <p>
-              <b>Gatilho:</b> {c.trigger}
-            </p>
-            {w.participants.length > 1 && (
-              <p>Confluências: {w.participants.map((x) => x.id).join(', ')}</p>
-            )}
-            {c.analysis.conditions.map((x) => (
-              <p key={x.key}>
-                {x.met ? '✓' : '○'} {x.label} · {x.detail}
-              </p>
-            ))}
-            {p && (
-              <dl>
-                <dt>Região</dt>
-                <dd>
-                  {num(p.region[0])}–{num(p.region[1])}
-                </dd>
-                <dt>Entrada projetada</dt>
-                <dd>{num(p.entry)}</dd>
-                <dt>Invalidação</dt>
-                <dd>{num(p.stop)}</dd>
-                <dt>Alvo / R:R</dt>
-                <dd>
-                  {num(p.target)} · 1:{num(p.rr)}
-                </dd>
-              </dl>
-            )}
-            {c.analysis.conflicts.map((x) => (
-              <p key={x} className="trade-operation-error">
-                {x}
-              </p>
-            ))}
-            {['FORMING', 'WAITING_TRIGGER'].includes(w.state) ? (
-              <div className="trade-operation-actions">
-                <button onClick={() => watchAction(w, 'follow')}>
-                  ACOMPANHAR
-                </button>
-                <button onClick={() => watchAction(w, 'discard')}>
-                  DESCARTAR OBSERVAÇÃO
-                </button>
-              </div>
-            ) : (
-              <p>Decida ENTRAR NO PAPER ou NÃO ENTRAR na mesa de operações.</p>
-            )}
-            <small>
-              v{c.definition.version} · Não entrar antes da confirmação. Valores
-              projetados podem mudar.
-            </small>
-          </details>
-        );
-      })}
-      <details>
+      {primary && card(primary, true)}
+      {visible.length > 1 && (
+        <details className="trade-other-opportunities">
+          <summary>Outras observações · {visible.length - 1}</summary>
+          {visible.slice(1).map((g) => card(g))}
+        </details>
+      )}
+      <section className="trade-market-reading">
+        <span className="trade-eyebrow">MERCADO AGORA</span>
+        <div>
+          <strong>
+            {feedAvailable ? reading.bias : 'Sem leitura ao vivo'}
+          </strong>
+          <span>{reading.regime}</span>
+        </div>
+        {focused && <small>Hipótese em foco: {focused.definition.name}</small>}
+      </section>
+      {professor && (
+        <details className="trade-professor-reasoning">
+          <summary>Por que o motor chegou a esta leitura?</summary>
+          <p>
+            {scan?.summary.REJECTED || 0} descartadas ·{' '}
+            {scan?.summary.FORMING || 0} em formação ·{' '}
+            {scan?.summary.CONFIRMED || 0} confirmadas.
+          </p>
+          <p>
+            {focused?.analysis.explanation ||
+              'Nenhuma hipótese elegível neste momento.'}
+          </p>
+        </details>
+      )}
+      {motor}
+      <details className="trade-watch-history">
         <summary>Histórico das observações</summary>
         {data?.watches
           .slice()
@@ -303,6 +515,7 @@ export default function ScannerPanel({
             </p>
           ))}
       </details>
+      {drawer}
     </section>
   );
 }

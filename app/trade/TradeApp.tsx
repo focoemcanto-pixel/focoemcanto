@@ -621,6 +621,14 @@ export default function TradeApp() {
                   <p>Entenda o que o gráfico diz.</p>
                 </div>
               </div>
+              {!hide && (
+                <ScannerPanel
+                  source={source}
+                  cursor={cursor}
+                  initial={state?.scanner}
+                  professor
+                />
+              )}
               <button
                 className="trade-learn-button"
                 onClick={() => {
@@ -784,111 +792,30 @@ export default function TradeApp() {
                   <p>
                     {mode === 'Replay'
                       ? 'O mesmo motor, candle a candle.'
-                      : 'Uma hipótese. Regras visíveis.'}
+                      : 'Clareza para a próxima decisão.'}
                   </p>
                 </div>
                 <span className="trade-live-dot" />
               </div>
-              <div
-                className={`trade-status ${analysis?.status === 'complete' ? 'complete' : ''}`}
-              >
-                <span className="trade-eyebrow">
-                  {analysis?.status === 'complete'
-                    ? 'SETUP COMPLETO'
-                    : 'STATUS · AGUARDAR'}
-                </span>
-                <h3>
-                  {analysis?.status === 'complete'
-                    ? 'Regras satisfeitas.'
-                    : 'A leitura vem antes da entrada.'}
-                </h3>
-                <p>
-                  {analysis?.explanation || 'Carregando o estado do motor…'}
-                </p>
+              <div className="trade-decision-desk">
+                <OperationsPanel
+                  strategyNames={Object.fromEntries(
+                    state?.scanner?.candidates.map((c) => [
+                      c.definition.id,
+                      c.definition.name,
+                    ]) || [],
+                  )}
+                  source={source}
+                  cursor={cursor}
+                  complete={analysis?.status === 'complete'}
+                  setupId={analysis?.setup?.id}
+                />
+                <ScannerPanel
+                  source={source}
+                  cursor={cursor}
+                  initial={state?.scanner}
+                />
               </div>
-              {analysis?.setup && (
-                <div className="trade-quick-risk">
-                  <div>
-                    <small>REFERÊNCIA</small>
-                    <strong>{format(analysis.setup.entry)}</strong>
-                  </div>
-                  <div>
-                    <small>INVALIDAÇÃO</small>
-                    <strong>{format(analysis.setup.stop)}</strong>
-                  </div>
-                  <div>
-                    <small>ALVO</small>
-                    <strong>{format(analysis.setup.targets[0])}</strong>
-                  </div>
-                  <div>
-                    <small>RISCO / RETORNO</small>
-                    <strong>1 : {analysis.setup.rr.toFixed(1)}</strong>
-                  </div>
-                </div>
-              )}
-              <ScannerPanel
-                source={source}
-                cursor={cursor}
-                initial={state?.scanner}
-              />
-              <OperationsPanel
-                source={source}
-                cursor={cursor}
-                complete={analysis?.status === 'complete'}
-                setupId={analysis?.setup?.id}
-                paperComplete={
-                  state?.paperAnalysis
-                    ? state?.paperAnalysis.status === 'complete'
-                    : undefined
-                }
-                paperSetupId={state?.paperAnalysis?.setup?.id}
-              />
-              <div className="trade-pipeline-heading">
-                <span>PIPELINE DA ESTRATÉGIA</span>
-                <strong>
-                  {satisfied}{' '}
-                  <small>/ {analysis?.conditions.length || 0}</small>
-                </strong>
-              </div>
-              <div className="trade-pipeline">
-                {analysis?.conditions.map((c, i) => (
-                  <div className={c.met ? 'met' : ''} key={c.key}>
-                    <span className="trade-condition-index">
-                      {c.met ? (
-                        <Glyph name="check" />
-                      ) : (
-                        String(i + 1).padStart(2, '0')
-                      )}
-                    </span>
-                    <div>
-                      <strong>{c.label}</strong>
-                      <p>{c.detail}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {analysis?.conflicts.map((c) => (
-                <div className="trade-conflict" key={c}>
-                  Conflito: {c}
-                </div>
-              ))}
-              {analysis?.setup ? (
-                <SetupCard setup={analysis.setup} />
-              ) : (
-                <div className="trade-next">
-                  <span className="trade-eyebrow">O QUE FALTA AGORA</span>
-                  <p>{analysis?.missing[0] || 'Aguardando análise'}</p>
-                  <button
-                    onClick={() => {
-                      changeMode('Professor');
-                      ask('Por que ainda não entrar?');
-                    }}
-                  >
-                    Entender com o Professor
-                    <Glyph name="arrow" />
-                  </button>
-                </div>
-              )}
             </>
           )}
         </aside>
@@ -919,17 +846,6 @@ export default function TradeApp() {
                 initial={state?.scanner}
                 library
               />
-              <article className="trade-principle">
-                <Glyph name="brain" />
-                <h3>
-                  O cálculo é objetivo.
-                  <br />A decisão é sua.
-                </h3>
-                <p>
-                  Nenhum setup desta versão foi validado com histórico real.
-                  Replay é ferramenta de estudo, não prova de resultado futuro.
-                </p>
-              </article>
             </div>
           )}
           {bottom === 'Histórico de sinais' && (
