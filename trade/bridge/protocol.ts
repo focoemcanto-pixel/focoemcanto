@@ -26,6 +26,12 @@ export type BrokerCommand = {
   price: number;
   ticket: string;
   expiresAt: number;
+  signature?: string;
+  signatureVersion?: number;
+  referencePrice?: number;
+  maxRiskBRL?: number;
+  maxLossBRL?: number;
+  maxSlippagePoints?: number;
 };
 export interface BrokerExecutionProvider {
   submit(command: BrokerCommand): Promise<unknown>;
@@ -142,7 +148,9 @@ export function validateCommand(value: any, env: BridgeEnv): BrokerCommand {
     throw new Error('Expiração máxima: 30 segundos');
   return value;
 }
+export function commandCanonical(c:BrokerCommand){return ['CMD2',c.id,c.action,c.symbol,c.volume.toFixed(8),c.sl.toFixed(8),c.tp.toFixed(8),c.price.toFixed(8),c.ticket,c.expiresAt,(c.referencePrice||0).toFixed(8),(c.maxRiskBRL||0).toFixed(8),(c.maxLossBRL||0).toFixed(8),(c.maxSlippagePoints||0).toFixed(8)].join('|');}
 export function commandWire(command: BrokerCommand | null) {
+ if(command?.signatureVersion===2){if(!/^[a-f0-9]{64}$/.test(command.signature||''))throw new Error('Comando sem assinatura');return 'OK\n'+commandCanonical(command)+'|'+command.signature+'\n';}
   if (!command) return 'OK\n';
   return (
     'OK\nCMD|' +

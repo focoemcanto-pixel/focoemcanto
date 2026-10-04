@@ -86,3 +86,10 @@ export function paperExecution(p: Proposal, candles: Candle[], previous?: any) {
   }
   return null;
 }
+
+/** PAPER approval never depends on live activation gates. */
+export class PaperExecutionProvider {
+ constructor(private env:import('./config').BridgeEnv){}
+ async approve(p:Proposal){if(p.mode!=='PAPER')throw new Error('Provider PAPER não executa REAL');const {config,rpc}=await import('./config'),c=config(this.env);return rpc(this.env,'trade_confirm',{p_owner:'focoos-admin',p_id:p.id,p_action:'confirm',p_command:null,p_max:c.maxContracts,p_account:c.accountHash,p_max_age:c.maxAgeMs});}
+ observe(p:Proposal,candles:Candle[],previous?:any){if(p.mode!=='PAPER')throw new Error('Provider PAPER não executa REAL');return paperExecution(p,candles,previous);}
+}
