@@ -2434,3 +2434,107 @@
 .trade-execution-status + .trade-observation-next {
   margin-top: 16px;
 }
+
+/* REAL session: INDISPONÍVEL / BLOQUEADO / ARMADO, always explicit. */
+.trade-real-session {
+  margin: 14px 0;
+  padding: 14px;
+  border: 1px solid #35352f;
+  border-left: 3px solid #6f7465;
+  border-radius: 8px;
+  background: #151912;
+}
+.trade-real-session[data-state='BLOCKED'] {
+  border-left-color: #c8aa78;
+}
+.trade-real-session[data-state='ARMED'] {
+  border-left-color: #e0705a;
+  background: #221613;
+}
+.trade-real-session-head strong {
+  display: block;
+  margin: 6px 0 4px;
+  font-size: 16px;
+  letter-spacing: 0.8px;
+  color: #e7e2d4;
+}
+.trade-real-session[data-state='ARMED'] .trade-real-session-head strong {
+  color: #f09a83;
+}
+.trade-real-session-head small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #a3a795;
+}
+.trade-real-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: 4px 12px;
+  margin: 12px 0 0;
+  font-size: 12px;
+}
+.trade-real-overview dt {
+  color: #898f82;
+}
+.trade-real-overview dd {
+  margin: 0;
+  color: #d4d6c9;
+  overflow-wrap: anywhere;
+}
+.trade-danger {
+  background: #b9452f !important;
+  color: #fff7f3 !important;
+  border: 1px solid #b9452f !important;
+  padding: 10px 17px;
+  border-radius: 5px;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.6px;
+}
+.trade-real-ack {
+  display: block;
+  margin: 12px 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #d4d6c9;
+}
+.trade-real-config {
+  margin-top: 14px;
+  font-size: 12px;
+}
+.trade-real-config summary {
+  cursor: pointer;
+  color: #d6c3a1;
+}
+.trade-real-config-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 8px 12px;
+  margin: 10px 0;
+}
+.trade-real-config-grid label {
+  display: grid;
+  gap: 4px;
+  color: #a3a795;
+}
+.trade-real-authorization {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+  border-top: 1px solid #2b2e27;
+}
+.trade-real-order-line {
+  display: block;
+  margin: 10px 0;
+  font-size: 22px;
+  letter-spacing: 0.5px;
+}
+.trade-real-order-line[data-direction='BUY'] {
+  color: #8fd0a6;
+}
+.trade-real-order-line[data-direction='SELL'] {
+  color: #f09a83;
+}

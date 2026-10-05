@@ -67,3 +67,5 @@ Não executamos estes passos nesta entrega. Antes de qualquer teste com dinheiro
 103 testes TS/API/Postgres isolados aprovados nesta reconstrução: gates, assinatura/tampering, confirmação dupla, idempotência, resposta perdida, reinício, parcial, fees/R, proteção, causalidade, RLS e PAPER com execução false. Typecheck strict, build Next/export e build Pages Functions aprovados. QA headless desktop/mobile cobre login, gráfico, modos, checklist bloqueado, confirmação PAPER e diário. Nenhum teste local usa conta XP ou endpoint de corretora.
 
 Advisors Trade: apenas INFO de RLS sem policies, intencional para tabelas server-only sem grants públicos. [Referência do aviso](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy). Avisos de outros produtos foram preservados fora deste escopo.
+
+> Operação diária, sessão REAL armável e configuração uma-vez: [real-session-operations.md](real-session-operations.md).

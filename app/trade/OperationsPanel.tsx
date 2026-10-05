@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react';
 import type { Proposal } from '../../trade/bridge/approval';
 import { remainingPositionRiskBRL } from '../../trade/core/risk-engine';
+import RealSessionPanel from './RealSessionPanel';
 const num = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const money = (v: number | null | undefined) =>
@@ -199,7 +200,14 @@ export default function OperationsPanel({
             setFinalConfirmation(null);
           }}
         >
-          REAL<small>{ready ? 'AGUARDA CONFIRMAÇÃO' : 'BLOQUEADO'}</small>
+          REAL
+          <small>
+            {source !== 'mt5' || readiness?.state === 'UNAVAILABLE' || !readiness
+              ? 'INDISPONÍVEL'
+              : readiness?.armed
+                ? 'ARMADO'
+                : 'BLOQUEADO'}
+          </small>
         </button>
       </div>
       <p className="trade-mode-banner" data-mode={mode}>
@@ -208,9 +216,16 @@ export default function OperationsPanel({
           : 'CONTA REAL — ORDENS PODEM ENVOLVER DINHEIRO REAL'}
       </p>
       {mode === 'REAL' && (
+        <RealSessionPanel
+          real={readiness}
+          source={source}
+          onChanged={() => load().catch(() => {})}
+        />
+      )}
+      {mode === 'REAL' && (
         <details className="trade-real-checklist">
           <summary>
-            {readiness?.status || 'REAL DESARMADO'} · pipeline implementado
+            {readiness?.status || 'REAL INDISPONÍVEL'} · checklist completo
             <span className="trade-real-gate-count">
               {readiness?.gates?.filter((g: any) => !g.ok).length ?? '—'}{' '}
               verificações bloqueadas · ver checklist
@@ -270,7 +285,7 @@ export default function OperationsPanel({
         <p className="trade-operation-caption">
           {mode === 'PAPER'
             ? 'Simulação, sem dinheiro real.'
-            : 'XP / MetaTrader 5. Exige estratégia autorizada e os dois gates de execução.'}
+            : 'XP / MetaTrader 5. Exige sessão REAL armada, proposta READY e sua confirmação final em cada ordem.'}
         </p>
         {rows.filter(
           (r) => r.payload.source === source && r.payload.mode === mode,
@@ -326,7 +341,7 @@ export default function OperationsPanel({
               <dd>{num(p.sl)}</dd>
               <dt>Take profit</dt>
               <dd>{num(p.tp)}</dd>
-              <dt>{riskBlocked ? 'Risco técnico' : 'Risco estimado'}</dt>
+              <dt>{riskBlocked ? 'Risco técnico' : 'Stop em pontos · risco total'}</dt>
               <dd>
                 {num(p.riskPoints)} pts
                 {!riskBlocked && ` · ${money(p.riskBRL)}`}
@@ -511,12 +526,16 @@ export default function OperationsPanel({
         {finalConfirmation && (
           <>
             <span className="trade-eyebrow">ÚLTIMA CONFIRMAÇÃO HUMANA</span>
-            <h2>Confirmar operação REAL?</h2>
+            <h2>
+              {finalConfirmation.inspectionOnly
+                ? 'Confirmar operação REAL?'
+                : 'VOCÊ ESTÁ PRESTES A ENVIAR UMA ORDEM REAL À XP'}
+            </h2>
             <p>
-              {finalConfirmation.inspectionOnly ? 'INSPEÇÃO REAL — esta tentativa será bloqueada. Nenhum comando será enviado à XP.' : 'Esta confirmação pode enviar uma ordem com dinheiro real. Aceite HTTP não confirma execução.'}
+              {finalConfirmation.inspectionOnly ? 'INSPEÇÃO REAL — esta tentativa será bloqueada. Nenhum comando será enviado à XP.' : 'Dinheiro real. Não é PAPER nem simulação. O servidor revalida tudo antes de enviar; qualquer mudança aborta. Aceite HTTP não confirma execução.'}
             </p>
-            <strong>
-              {finalConfirmation.proposal.direction} ·{' '}
+            <strong className="trade-real-order-line" data-direction={finalConfirmation.proposal.direction}>
+              {finalConfirmation.proposal.direction === 'BUY' ? 'COMPRA' : 'VENDA'} ·{' '}
               {finalConfirmation.proposal.symbol} ·{' '}
               {finalConfirmation.proposal.quantity} contrato(s)
             </strong>
@@ -527,7 +546,11 @@ export default function OperationsPanel({
               <dd>{num(finalConfirmation.proposal.sl)}</dd>
               <dt>Take profit</dt>
               <dd>{num(finalConfirmation.proposal.tp)}</dd>
-              <dt>Risco estimado</dt>
+              <dt>Stop em pontos</dt>
+              <dd>{num(finalConfirmation.proposal.riskPoints)} pts</dd>
+              <dt>Risco por contrato</dt>
+              <dd>{money(finalConfirmation.proposal.riskPerContractBRL ?? finalConfirmation.proposal.riskPoints * finalConfirmation.proposal.pointValue)}</dd>
+              <dt>Risco máximo estimado</dt>
               <dd>{money(finalConfirmation.proposal.riskBRL)}</dd>
               <dt>Conta</dt><dd>{finalConfirmation.readiness?.gates?.find((g:any)=>g.key==='account')?.ok ? 'XP · identidade autorizada' : 'XP · identidade ainda bloqueada'}</dd>
               <dt>Potencial estimado</dt><dd>{money(finalConfirmation.proposal.potentialBRL)}</dd>
@@ -556,7 +579,7 @@ export default function OperationsPanel({
               CONFIRMAR ORDEM REAL
             </button>
             <button onClick={() => setFinalConfirmation(null)}>
-              VOLTAR · NÃO ENVIAR
+              CANCELAR
             </button>
           </>
         )}

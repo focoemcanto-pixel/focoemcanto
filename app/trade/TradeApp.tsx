@@ -430,11 +430,14 @@ export default function TradeApp() {
         </span>
         <p>
           {source === 'mt5'
-            ? `${feed?.symbol || 'MT5'} · último dado ${feed?.lastTick ? new Date(feed.lastTick.timeMsc).toLocaleTimeString('pt-BR') : 'aguardando'} · idade ${feedAge === null ? '—' : Math.max(0, Math.round(feedAge / 1000)) + 's'} · Bid ${format(feed?.lastTick?.bid)} / Ask ${format(feed?.lastTick?.ask)} / Last ${format(feed?.lastTick?.last)} · posições ${feed?.positionsCount || 0} / ordens ${feed?.ordersCount || 0} · execução ${feed?.executionEnabled ? 'configurada' : 'bloqueada'}`
+            ? `${feed?.symbol || 'MT5'} · último dado ${feed?.lastTick ? new Date(feed.lastTick.timeMsc).toLocaleTimeString('pt-BR') : 'aguardando'} · idade ${feedAge === null ? '—' : Math.max(0, Math.round(feedAge / 1000)) + 's'} · Bid ${format(feed?.lastTick?.bid)} / Ask ${format(feed?.lastTick?.ask)} / Last ${format(feed?.lastTick?.last)} · posições ${feed?.positionsCount || 0} / ordens ${feed?.ordersCount || 0} · REAL ${feed?.killSwitch === false ? 'ARMADO' : 'BLOQUEADO'}`
             : 'Laboratório de estratégias · dados simulados'}
         </p>
-        {source === 'mt5' && (
+        {/* Only an armed session can be blocked; a blocked session never shows this button. */}
+        {source === 'mt5' && feed?.killSwitch === false && (
           <button
+            className="trade-danger"
+            title="Impede novas ordens, desarma a sessão REAL e cancela comandos na fila. Não fecha posições nem cancela ordens já na corretora."
             onClick={async () => {
               const r = await fetch('/api/trade/kill', {
                 method: 'POST',
@@ -446,7 +449,7 @@ export default function TradeApp() {
               else setPulse((p) => p + 1);
             }}
           >
-            Bloquear execução
+            BLOQUEAR EXECUÇÃO
           </button>
         )}
       </div>
