@@ -37,22 +37,22 @@ export interface BrokerExecutionProvider {
   submit(command: BrokerCommand): Promise<unknown>;
   state(): Promise<unknown>;
 }
+export class BatchValidationError extends Error {
+ constructor(readonly code:string,readonly field:string,message:string){super(message);}
+}
 export function validateBatch(value: any, env: BridgeEnv) {
   const c = config(env);
-  if (
-    !value ||
-    value.bridgeId !== c.bridgeId ||
-    value.symbol !== c.symbol ||
-    !/^[a-zA-Z0-9_-]{1,80}$/.test(value.session || '') ||
-    !Number.isSafeInteger(value.batch) ||
-    value.batch < 0
-  )
-    throw new Error('Identidade/batch inválido');
+  const reject=(code:string,field:string,message:string):never=>{throw new BatchValidationError(code,field,message);};
+  if(!value || typeof value!=='object')reject('BRIDGE_IDENTITY_INVALID','batch','Identidade/batch inválido');
+  if(value.bridgeId!==c.bridgeId)reject('BRIDGE_ID_MISMATCH','bridgeId','Identidade/batch inválido');
+  if(value.symbol!==c.symbol)reject('BRIDGE_SYMBOL_MISMATCH','symbol','Identidade/batch inválido');
+  if(!/^[a-zA-Z0-9_-]{1,80}$/.test(value.session||''))reject('BRIDGE_SESSION_INVALID','session','Identidade/batch inválido');
+  if(!Number.isSafeInteger(value.batch)||value.batch<0)reject('BRIDGE_BATCH_INVALID','batch','Identidade/batch inválido');
   if (
     !/^[a-f0-9]{64}$/.test(value.accountHash || '') ||
     (c.accountHash && value.accountHash !== c.accountHash)
   )
-    throw new Error('Conta divergente');
+    reject('BRIDGE_ACCOUNT_MISMATCH','accountHash','Conta divergente');
   if (
     !Array.isArray(value.ticks) ||
     value.ticks.length > 1000 ||
@@ -61,7 +61,7 @@ export function validateBatch(value: any, env: BridgeEnv) {
     !Array.isArray(value.events) ||
     value.events.length > 200
   )
-    throw new Error('Lote inválido');
+    reject('BRIDGE_BATCH_SIZE','ticks/candles/events','Lote inválido');
   for (const tick of value.ticks)
     if (
       tick.symbol !== c.symbol ||
@@ -72,15 +72,15 @@ export function validateBatch(value: any, env: BridgeEnv) {
       ) ||
       [tick.bid, tick.ask, tick.last, tick.volume].some((n: number) => n < 0)
     )
-      throw new Error('Tick inválido');
-  validateCandles(value.candles);
+      reject('BRIDGE_TICK_INVALID','ticks','Tick inválido');
+  try{validateCandles(value.candles);}catch{reject('BRIDGE_CANDLES_INVALID','candles','Candles inválidos, fora de ordem ou misturados.');}
   if (
     value.candles.some(
       (x: any) =>
         x.symbol !== c.symbol || x.timestamp + 60 > Date.now() / 1000 + 2,
     )
   )
-    throw new Error('Candle não fechado/símbolo inválido');
+    reject('BRIDGE_CANDLE_UNCLOSED_OR_SYMBOL','candles','Candle não fechado/símbolo inválido');
   if (
     !value.state ||
     typeof value.state.connected !== 'boolean' ||
@@ -90,7 +90,7 @@ export function validateBatch(value: any, env: BridgeEnv) {
     value.state.positions.length > 100 ||
     value.state.orders.length > 100
   )
-    throw new Error('Estado inválido');
+    reject('BRIDGE_STATE_INVALID','state','Estado inválido');
   for (const row of [...value.state.positions, ...value.state.orders]) {
     if (
       !/^\d{1,20}$/.test(row.ticket || '') ||
@@ -98,16 +98,16 @@ export function validateBatch(value: any, env: BridgeEnv) {
       !Number.isFinite(row.volume) ||
       row.volume < 0
     )
-      throw new Error('Posição/ordem inválida');
+      reject('BRIDGE_POSITION_ORDER_INVALID','state.positions/orders','Posição/ordem inválida');
   }
   if (!Number.isFinite(value.state.tickSize) || value.state.tickSize <= 0)
-    throw new Error('Tick size inválido');
+    reject('BRIDGE_TICK_SIZE_INVALID','state.tickSize','Tick size inválido');
   for (const event of value.events)
     if (
       !/^[a-zA-Z0-9:_-]{1,120}$/.test(event.id || '') ||
       typeof event.kind !== 'string'
     )
-      throw new Error('Evento inválido');
+      reject('BRIDGE_EVENT_INVALID','events','Evento inválido');
   return value;
 }
 export function validateCommand(value: any, env: BridgeEnv): BrokerCommand {
