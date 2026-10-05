@@ -2,12 +2,23 @@ import { config, rpc, type BridgeEnv } from './config';
 import { feedStatus } from './mt5';
 import { isExecutable, type Proposal } from './approval';
 import { commandCanonical, type BrokerCommand } from './protocol';
+export type GateScope = 'static' | 'session' | 'operation';
 export type RealGate = {
   key: string;
   label: string;
   ok: boolean;
   reason: string;
+  /** static: configured once · session: armed/disarmed from the UI · operation: every order. */
+  scope: GateScope;
 };
+/** Gates that are configuration, set once (backend env, policy, authorization, EA inputs). */
+const staticGates = new Set(['backend','policy','authorization','account','protocol','symbol','expiration','rollover','limits','local','metadata','exposure']);
+/** Gates evaluated per order on a concrete proposal. */
+const operationGates = new Set(['inspection','sizing','notional','quantity','prices','risk','proposal']);
+const scopeOf = (key: string): GateScope =>
+  staticGates.has(key) ? 'static' : operationGates.has(key) ? 'operation' : 'session';
+/** Gates the arming step can't satisfy beforehand: arming itself releases the kill switch. */
+const armingExcluded = new Set(['armed', 'kill']);
 /** Financial limits, calendar and rollover are explicit policy, never guesses. */
 export function realReadiness(
   ctx: any,
@@ -23,7 +34,7 @@ export function realReadiness(
     local = s.localLimits || {};
   const gates: RealGate[] = [];
   const add = (key: string, label: string, ok: unknown, reason: string) =>
-    gates.push({ key, label, ok: ok === true, reason });
+    gates.push({ key, label, ok: ok === true, reason, scope: scopeOf(key) });
   const pos = (v: unknown) =>
     typeof v === 'number' && Number.isFinite(v) && v > 0;
   const recent = (v: unknown) =>
@@ -56,6 +67,19 @@ export function realReadiness(
     'Autorização live da estratégia/versão',
     authorized(auth),
     'liveAuthorized=false; homologação e autorização por versão necessárias.',
+  );
+  const session = ctx?.session || null,
+    armed =
+      session?.active === true &&
+      !session.disarmed_at &&
+      Date.parse(session.expires_at) > now;
+  add(
+    'armed',
+    'Sessão REAL armada',
+    armed,
+    session?.disarm_reason
+      ? `Sessão desarmada (${session.disarm_reason}). Arme novamente de forma deliberada.`
+      : 'Nenhuma sessão REAL armada. Use ARMAR SESSÃO REAL.',
   );
   add(
     'kill',
@@ -127,12 +151,13 @@ export function realReadiness(
     'session',
     'Mercado/sessão autorizados',
     Array.isArray(policy.session_windows) &&
-      policy.session_windows.some(
-        (w: any) => Date.parse(w.open) <= now && Date.parse(w.close) > now,
-      ) &&
+      (policy.session_windows.length === 0 ||
+        policy.session_windows.some(
+          (w: any) => Date.parse(w.open) <= now && Date.parse(w.close) > now,
+        )) &&
       s.sessionOpen === true &&
       s.tradeMode === 4,
-    'Fora da janela datada autorizada ou mercado indisponível.',
+    'Pregão fechado no MT5, símbolo sem negociação plena ou fora de janela datada da policy.',
   );
   add(
     'limits',
@@ -291,8 +316,55 @@ export function realReadiness(
     );
   }
   const canExecute = gates.every((g) => g.ok);
+  // Arming needs every static and session gate except the ones arming itself establishes.
+  const armingGates = gates.filter(
+    (g) => g.scope !== 'operation' && !armingExcluded.has(g.key),
+  );
+  const unavailable = armingGates.filter((g) => g.scope === 'static' && !g.ok);
+  const canArm = !armed && armingGates.every((g) => g.ok);
   return {
-    status: canExecute ? 'REAL PRONTO PARA CONFIRMAÇÃO' : 'REAL DESARMADO',
+    status: armed
+      ? canExecute
+        ? 'REAL ARMADO · PRONTO PARA CONFIRMAÇÃO'
+        : 'REAL ARMADO'
+      : unavailable.length
+        ? 'REAL INDISPONÍVEL'
+        : 'REAL BLOQUEADO',
+    state: armed ? 'ARMED' : unavailable.length ? 'UNAVAILABLE' : 'BLOCKED',
+    armed,
+    canArm,
+    armingGates,
+    session: session
+      ? {
+          id: session.id,
+          armedAt: session.armed_at,
+          expiresAt: session.expires_at,
+          disarmedAt: session.disarmed_at,
+          reason: session.disarm_reason,
+          active: armed,
+        }
+      : null,
+    overview: {
+      symbol: b?.symbol ?? null,
+      accountMatches:
+        /^[a-f0-9]{64}$/.test(c.accountHash) &&
+        b?.accountHash === c.accountHash &&
+        policy.account_hash === c.accountHash,
+      accountTradeMode: s.accountTradeMode ?? null,
+      feedStatus: feed.status,
+      feedAgeMs: feed.ageMs,
+      bridgeConnected: s.connected === true && recent(b?.receivedAt),
+      eaExecutionAllowed: s.executionAllowed === true,
+      policyLoaded: policy.enabled === true,
+      positions: Array.isArray(s.positions) ? s.positions.length : null,
+      orders: Array.isArray(s.orders) ? s.orders.length : null,
+      killSwitch: b?.killSwitch ?? true,
+      loss24hBRL: Number.isFinite(s.loss24hBRL) ? s.loss24hBRL : null,
+      authorizedStrategies: (ctx?.authorizations || [])
+        .filter(authorized)
+        .map((a: any) => `${a.strategy_id}@${a.version}`),
+      maxSessionMinutes: policy.max_session_minutes ?? null,
+    },
     canExecute,
     pipeline: 'IMPLEMENTADO',
     gates,
@@ -310,11 +382,18 @@ export function realReadiness(
       maxOrdersPerSession: policy.max_orders_per_session ?? null,
       maxOrdersPerDay: policy.max_orders_per_day ?? null,
       maxNotionalBRL: policy.max_notional_brl ?? null,
+      maxSlippagePoints: policy.max_slippage_points ?? null,
     },
   };
 }
+/** Re-evaluates (and, on any critical change, disarms) the armed session before reading it. */
 export async function realContext(env: BridgeEnv) {
-  return rpc(env, 'trade_real_context', { p_bridge: config(env).bridgeId });
+  const c = config(env);
+  await rpc(env, 'trade_real_session_check', {
+    p_bridge: c.bridgeId,
+    p_age: c.maxAgeMs,
+  });
+  return rpc(env, 'trade_real_context', { p_bridge: c.bridgeId });
 }
 export function assertReady(r: ReturnType<typeof realReadiness>) {
   if (!r.canExecute)

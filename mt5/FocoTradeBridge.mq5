@@ -199,14 +199,16 @@ void Execute(string line){
  if(!Save(prefix+"ledger.txt",ledger)){Print("Cannot persist command intent; no order sent");ExpertRemove();return;}
  if(!ExecutionAllowed() || ExpectedAccountFingerprint=="" || ExpectedAccountFingerprint!=accountHash || MagicNumber!=706032601 || !SessionOpen() || p[3]!=TradeSymbol || StringToInteger(p[9])<(long)TimeGMT()*1000 || StringToInteger(p[9])>(long)TimeGMT()*1000+32000){ResultEvent(id,"rejected",0,0,0);return;}
  double volume=StringToDouble(p[4]),sl=StringToDouble(p[5]),tp=StringToDouble(p[6]),price=StringToDouble(p[7]);ulong ticket=(ulong)StringToInteger(p[8]);
- MqlTick tick;if(!SymbolInfoTick(TradeSymbol,tick) || ((long)TimeGMT()*1000-tick.time_msc>15000 || tick.time_msc>(long)TimeGMT()*1000+2000)){ResultEvent(id,"rejected",0,0,0);return;}
+ // Tick time is labelled with the broker server clock (XP: BRT wall time), so freshness is measured
+ // against TimeTradeServer(), never TimeGMT(). Command expiry above stays on real UTC (TimeGMT).
+ MqlTick tick;long serverNowMs=(long)TimeTradeServer()*1000;if(!SymbolInfoTick(TradeSymbol,tick) || (serverNowMs-tick.time_msc>15000 || tick.time_msc>serverNowMs+2000)){ResultEvent(id,"rejected",0,0,0);return;}
  if(volume<0 || volume>MaxContracts || (action=="BUY" || action=="SELL" || action=="CLOSE") && (volume<1 || MathFloor(volume)!=volume)){ResultEvent(id,"rejected",0,0,0);return;}
  MqlTradeRequest req={};MqlTradeResult res={};MqlTradeCheckResult check={};
  req.magic=MagicNumber;req.symbol=TradeSymbol;req.comment=Tag(id);req.volume=volume;req.sl=sl;req.tp=tp;req.deviation=MaxDeviationPoints;
  long filling=SymbolInfoInteger(TradeSymbol,SYMBOL_FILLING_MODE);req.type_filling=(filling&SYMBOL_FILLING_FOK)!=0?ORDER_FILLING_FOK:ORDER_FILLING_IOC;
  if(action=="BUY" || action=="SELL"){
  HistoryHealth();ProtectionHealth();
- if(!historyReady || protectionFault || PositionsTotal()!=0 || OrdersTotal()!=0 || MaxPositions<1 || MaxRiskBRL<=0 || MaxLoss24hBRL<=0 || MaxSlippagePoints<=0 || AccountInfoString(ACCOUNT_CURRENCY)!="BRL" || SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)!=SYMBOL_TRADE_MODE_FULL || SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)<=TimeGMT()){ResultEvent(id,"rejected",0,0,0);return;}
+ if(!historyReady || protectionFault || PositionsTotal()!=0 || OrdersTotal()!=0 || MaxPositions<1 || MaxRiskBRL<=0 || MaxLoss24hBRL<=0 || MaxSlippagePoints<=0 || AccountInfoString(ACCOUNT_CURRENCY)!="BRL" || SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)!=SYMBOL_TRADE_MODE_FULL || SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)<=TimeTradeServer()){ResultEvent(id,"rejected",0,0,0);return;}
  double minVol=SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN),step=SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP),maxVol=SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX);
  if(step<=0 || volume<minVol || volume>maxVol || MathAbs(volume/step-MathRound(volume/step))>1e-7){ResultEvent(id,"rejected",0,0,0);return;}
  double exposure=0;
@@ -276,7 +278,7 @@ int OnInit(){
  if(!Save(prefix+"ledger.txt",durable))return INIT_FAILED;FileDelete(prefix+"reply.txt",FILE_COMMON);
  }
  if(pending!="" && JsonField(JsonField(pending,"state"),"protocolVersion")!="2")Print("Legacy pending detected; safe transport upgrade scheduled");
- Print("Foco Trade v2.04; execution enabled: ",EnableExecution);
+ Print("Foco Trade v2.05; execution enabled: ",EnableExecution);
  EventSetTimer(PollSeconds);return INIT_SUCCEEDED;
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);}

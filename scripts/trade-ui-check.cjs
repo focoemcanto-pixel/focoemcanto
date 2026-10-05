@@ -34,9 +34,13 @@ let simulateMissingBridge=false;
     '20261005000359_real_execution_fail_closed.sql',
     '20261005091111_pre_real_homologation.sql',
     '20261005092318_pre_real_account_mode.sql',
+    '20261005122031_bridge_market_clock.sql',
     '20261005150000_risk_blocked_technical_proposal.sql',
+    '20261006090000_real_session_arming.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+  // Fixture ticks are stamped in real UTC; the production broker-wall clock is covered in real-session.test.ts.
+  await db.exec('delete from trade_bridge_clock_settings');
   globalThis.fetch = async (url, init) => {
     const name = new URL(url).pathname.split('/').pop(),
       args = Object.values(JSON.parse(init.body));
@@ -237,7 +241,7 @@ let simulateMissingBridge=false;
     .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
     .waitFor();
   await page
-    .getByRole('button', { name: 'REAL BLOQUEADO', exact: true })
+    .getByRole('button', { name: 'REAL INDISPONÍVEL', exact: true })
     .click();
   await page.locator('.trade-real-checklist summary').waitFor();
   assert.equal(
@@ -351,7 +355,7 @@ let simulateMissingBridge=false;
     .click();
   await page.screenshot({ path: '.trade-qa/mobile.png', fullPage: true });
   await page
-    .getByRole('button', { name: 'REAL BLOQUEADO', exact: true })
+    .getByRole('button', { name: 'REAL INDISPONÍVEL', exact: true })
     .click();
   await page.screenshot({ path: '.trade-qa/mobile-real.png', fullPage: true });
   assert.ok(
@@ -438,7 +442,7 @@ let simulateMissingBridge=false;
   await db.query("insert into trade_execution_policy(bridge_id,enabled,max_risk_brl) values('xp-mt5-primary',false,10000)");
   await page.setViewportSize({width:1440,height:1100});
   await page.getByRole('combobox',{name:'Fonte de mercado'}).selectOption('mt5');
-  await page.getByRole('button',{name:'REAL BLOQUEADO',exact:true}).click();
+  await page.getByRole('button',{name:'REAL INDISPONÍVEL',exact:true}).click();
   const prepareButton=page.getByRole('button',{name:'Preparar proposta REAL',exact:true});
   await prepareButton.waitFor();await page.waitForFunction(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent==='Preparar proposta REAL');return b&&!b.disabled;});
   await prepareButton.click();await page.getByRole('button',{name:'REVISAR PROPOSTA REAL',exact:true}).click();

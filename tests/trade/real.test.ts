@@ -131,6 +131,14 @@ function fixture() {
     ],
     unresolved: 0,
     ordersDay:0,ordersSession:0,
+    session: {
+      id: 'fixture-session',
+      active: true,
+      armed_at: new Date(now - 60000).toISOString(),
+      expires_at: new Date(now + 3600000).toISOString(),
+      disarmed_at: null,
+      disarm_reason: null,
+    },
   };
   return { now, p, env, ctx };
 }
@@ -178,7 +186,15 @@ const blocks: Record<string, (f: ReturnType<typeof fixture>) => void> = {
     (f.ctx.bridge.state.expirationTime = (f.now - 1) / 1000),
   'rollover missing': (f) => (f.ctx.policy.rollover_confirmed = false),
   'session closed': (f) => (f.ctx.bridge.state.sessionOpen = false),
-  'calendar absent': (f) => (f.ctx.policy.session_windows = []),
+  'outside configured dated window': (f) =>
+    (f.ctx.policy.session_windows = [
+      { open: new Date(f.now - 7200000).toISOString(), close: new Date(f.now - 3600000).toISOString() },
+    ]),
+  'REAL session not armed': (f) => ((f.ctx as any).session = null),
+  'REAL session expired': (f) =>
+    (f.ctx.session.expires_at = new Date(f.now - 1).toISOString()),
+  'REAL session disarmed': (f) =>
+    Object.assign(f.ctx.session, { active: false, disarmed_at: new Date(f.now).toISOString(), disarm_reason: 'FEED_STALE' }),
   'quantity invalid': (f) => (f.p.quantity = 3),
   'volume step': (f) => (f.ctx.bridge.state.volumeStep = 2),
   'wrong SL': (f) => (f.p.sl = f.p.entry),
@@ -316,9 +332,13 @@ async function database() {
     '20261005000359_real_execution_fail_closed.sql',
     '20261005091111_pre_real_homologation.sql',
     '20261005092318_pre_real_account_mode.sql',
+    '20261005122031_bridge_market_clock.sql',
     '20261005150000_risk_blocked_technical_proposal.sql',
+    '20261006090000_real_session_arming.sql',
   ])
     await db.exec(readFileSync('supabase/migrations/' + name, 'utf8'));
+  // Fixtures stamp ticks in real UTC; production XP is broker-wall (see real-session.test.ts).
+  await db.exec('delete from trade_bridge_clock_settings');
   return db;
 }
 async function seed(
@@ -341,10 +361,6 @@ async function seed(
     account,
   ]);
   await db.query(
-    'update trade_bridge_state set kill_switch=false where bridge_id=$1',
-    [bridge],
-  );
-  await db.query(
     `insert into trade_execution_policy(bridge_id,enabled,account_hash,symbol,contract_expires_at,rollover_confirmed,session_windows,max_contracts,max_positions,max_risk_brl,max_daily_loss_brl,max_slippage_points) values($1,true,$2,$3,$4,true,$5,2,1,200,600,20) on conflict(bridge_id) do update set enabled=true,account_hash=excluded.account_hash,symbol=excluded.symbol,contract_expires_at=excluded.contract_expires_at,rollover_confirmed=true,session_windows=excluded.session_windows,max_contracts=2,max_positions=1,max_risk_brl=200,max_daily_loss_brl=600,max_slippage_points=20`,
     [
       bridge,
@@ -358,6 +374,14 @@ async function seed(
   await db.query(
     `insert into trade_live_authorizations(strategy_id,version,live_authorized,stage)values($1,$2,true,'live-monitoring')on conflict(strategy_id,version)do update set live_authorized=true,stage='live-monitoring'`,
     [f.p.setup.strategy, f.p.setup.version],
+  );
+  await arm(db);
+}
+/** Deliberate arming through the same Postgres function the UI uses; the kill switch is never released directly. */
+async function arm(db: PGlite) {
+  await db.query(
+    "select trade_real_arm('focoos-admin',$1,60,$2,15000,true,'ARMAR SESSÃO REAL')",
+    [bridge, account],
   );
 }
 test('database second confirmation, atomic idempotence, kill at dispatch, lost response, restart and RLS', async () => {
@@ -454,15 +478,8 @@ test('database second confirmation, atomic idempotence, kill at dispatch, lost r
           account,
         ],
       );
-    await db.query(
-      'update trade_bridge_state set kill_switch=true where bridge_id=$1',
-      [bridge],
-    );
-    assert.equal((await exchange(1)).rows[0].result.command ?? null, null);
-    await db.query(
-      'update trade_bridge_state set kill_switch=false where bridge_id=$1',
-      [bridge],
-    );
+    // Kill switch at dispatch: covered in real-session.test.ts (it disarms and cancels the queue;
+    // releasing it requires a new deliberate arming). Here the armed session dispatches once.
     assert.equal((await exchange(2)).rows[0].result.command.id, f.p.id);
     assert.equal((await exchange(2)).rows[0].result.command ?? null, null);
     await db.query(
@@ -566,6 +583,8 @@ test('actual API shares scanner and requires both human steps before signed queu
     await db.exec(
       'update trade_execution_policy set max_risk_brl=10000,max_daily_loss_brl=100000,max_slippage_points=1000',
     );
+    // Any policy change disarms; the operator arms again deliberately.
+    await arm(db);
     globalThis.fetch = async (input, init) => {
       const u = new URL(String(input));
       assert.equal(u.hostname, 'local-fixture.invalid');
