@@ -98,10 +98,10 @@ export async function runScanner(
    * LAB: every confirmed setup is recorded once (dedup by watch) with an immutable snapshot, before
    * and independently of any proposal. A setup whose price already moved away is MISSED, never chased.
    */
-  const observe = async (w: SetupWatch, scan: ScannerResult) => {
+  const observe = async (w: SetupWatch, scan: ScannerResult, at: typeof quote = quote) => {
     const id = observationId(scope, w.id),
-      snap = buildSetupSnapshot(w, scan, { source: source === 'mt5' ? 'LIVE' : 'REPLAY', scope, quote, pointValue }),
-      act = assessActionability({ direction: snap.direction as 'BUY' | 'SELL', entry: snap.entry, stop: snap.stop, target: snap.target }, quote);
+      snap = buildSetupSnapshot(w, scan, { source: source === 'mt5' ? 'LIVE' : 'REPLAY', scope, quote: at, pointValue }),
+      act = assessActionability({ direction: snap.direction as 'BUY' | 'SELL', entry: snap.entry, stop: snap.stop, target: snap.target }, at);
     const row = await rpc(env, 'trade_setup_observe', {
       p_owner: tradeOwner,
       p_observation: { id, scope, source: snap.source, snapshot: snap, actionability: act },
@@ -227,6 +227,9 @@ export async function runScanner(
   let watches: SetupWatch[] = old.watches || [],
     scan: ScannerResult = scanMarket(snapshot, undefined, available);
   const evaluations: any[] = [];
+  // Setups confirmed on an intermediate candle of a catch-up batch (scanner not polled at that
+  // minute). Recorded in the LAB at their own confirmation candle so no confirmed setup is lost.
+  const catchUp: { watch: SetupWatch; scan: ScannerResult }[] = [];
   const agg = new CandleAggregator();
   for (const candle of candles) {
     const s = agg.next(candle, source === 'mt5' ? 'live' : 'replay');
@@ -247,6 +250,10 @@ export async function runScanner(
       })),
     });
     watches = advanceWatches(watches, scan);
+    if (available && s.asOf !== snapshot.asOf)
+      for (const w of watches)
+        if (w.state === 'CONFIRMED' && w.lastAsOf === s.asOf && w.candidate.analysis.setup && !catchUp.some((x) => x.watch.id === w.id))
+          catchUp.push({ watch: structuredClone(w), scan });
   }
   const saved = await rpc(env, 'trade_scanner_save', {
     p_owner: tradeOwner,
@@ -261,6 +268,24 @@ export async function runScanner(
       feedLive: available,
     },
   });
+  // A catch-up confirmation is observed with no quote (the book at that minute is unknown, never
+  // invented). If it is no longer confirmed on the latest candle it was never presentable: MISSED.
+  for (const { watch, scan: at } of catchUp) {
+    if (!(saved.watches || []).some((w: SetupWatch) => w.id === watch.id)) continue;
+    try {
+      const obs = await observe(watch, at, null),
+        now = (saved.watches || []).find((w: SetupWatch) => w.id === watch.id);
+      if (!watch.candidate.analysis.conflicts.length && !(now && ['CONFIRMED', 'PROPOSED', 'RISK_BLOCKED'].includes(now.state) && now.lastAsOf === snapshot.asOf))
+        await rpc(env, 'trade_setup_lifecycle', {
+          p_owner: tradeOwner,
+          p_id: obs.id,
+          p_state: 'MISSED',
+          p_payload: { ...obs.actionability, status: 'MISSED', reasons: ['Confirmado durante recuperação de candles; não estava mais válido no candle atual e nunca foi apresentado como proposta.'] },
+        });
+    } catch {
+      // Best effort, not retried: the watch history still keeps the confirmation.
+    }
+  }
   const proposals = await propose(saved.watches || [], scan);
   const outcomesUpdated = await track().catch(() => 0);
   return {

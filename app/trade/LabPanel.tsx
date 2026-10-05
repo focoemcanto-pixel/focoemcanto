@@ -11,7 +11,7 @@ const datasetLabel: Record<string, string> = {
   PAPER_FORWARD: 'PAPER forward',
   REPLAY: 'REPLAY',
   BACKTEST: 'BACKTEST',
-  REAL: 'REAL',
+  REAL: 'REAL · bloqueado',
 };
 const lifecycleLabel: Record<string, string> = {
   CONFIRMED: 'confirmado',
@@ -78,16 +78,16 @@ function EquityCurve({ curve }: { curve: { at: number; cumR: number }[] }) {
     </figure>
   );
 }
-function Distribution({ histogram, n }: { histogram: { from: number; to: number; count: number }[]; n: number }) {
+function Distribution({ histogram, n }: { histogram: { from: number | null; to: number | null; count: number }[]; n: number }) {
   const max = Math.max(1, ...histogram.map((b) => b.count));
   return (
     <figure className="trade-lab-chart">
       <figcaption>Distribuição dos resultados (R)</figcaption>
       <div className="trade-lab-bars" role="list">
         {histogram.map((b) => (
-          <div key={b.from} role="listitem" title={`${b.from}R a ${b.to}R: ${b.count} de ${n}`}>
+          <div key={String(b.from)} role="listitem" title={`${b.from === null ? `abaixo de ${b.to}R` : b.to === null ? `${b.from}R ou mais` : `${b.from}R a ${b.to}R`}: ${b.count} de ${n}`}>
             <span style={{ height: `${(b.count / max) * 100}%` }} />
-            <small>{b.from}</small>
+            <small>{b.from === null ? `<${b.to}` : b.to === null ? `≥${b.from}` : b.from}</small>
           </div>
         ))}
       </div>
@@ -127,6 +127,7 @@ function Segment({ title, rows }: { title: string; rows: any[] }) {
  */
 export default function LabPanel() {
   const [days, setDays] = useState(90),
+    [dataset, setDataset] = useState('ALL'),
     [data, setData] = useState<any>(null),
     [error, setError] = useState(''),
     [note, setNote] = useState<Record<string, string>>({});
@@ -148,7 +149,8 @@ export default function LabPanel() {
   }, [days]);
   if (!data) return <div className="trade-lab">{error ? <p className="trade-operation-error">{error}</p> : <p>Carregando LAB…</p>}</div>;
   const t = data.today,
-    min = data.models.lab.minSample;
+    min = data.models.lab.minSample,
+    groups = data.analytics.groups.filter((g: any) => dataset === 'ALL' || g.dataset === dataset);
   return (
     <div className="trade-lab">
       <header className="trade-lab-head">
@@ -170,6 +172,17 @@ export default function LabPanel() {
             ))}
           </select>
         </label>
+        <label>
+          Origem{' '}
+          <select value={dataset} onChange={(e) => setDataset(e.target.value)} aria-label="Origem dos dados">
+            <option value="ALL">Todas (separadas)</option>
+            {Object.entries(datasetLabel).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
       </header>
       {error && <p className="trade-operation-error">{error}</p>}
       <section aria-label="Hoje" className="trade-lab-funnel">
@@ -181,16 +194,17 @@ export default function LabPanel() {
           <dt>Ignorados</dt><dd>{t.ignored}</dd>
           <dt>Bloqueados por risco</dt><dd>{t.blockedRisk}</dd>
           <dt>Perdidos / expirados</dt><dd>{t.missed} / {t.expired}</dd>
+          <dt>Invalidados / cancelados</dt><dd>{t.invalidated} / {t.cancelled}</dd>
         </dl>
         <p>
-          Desfechos (hipotéticos ou PAPER): {t.outcomes.targetFirst} alvo primeiro · {t.outcomes.stopFirst} stop primeiro ·{' '}
+          Desfechos HIPOTÉTICOS dos setups (operados ou não; não são operações): {t.outcomes.targetFirst} alvo primeiro · {t.outcomes.stopFirst} stop primeiro ·{' '}
           {t.outcomes.ambiguous} ambíguo · {t.outcomes.expired} sem desfecho · {t.outcomes.open} em acompanhamento.
         </p>
       </section>
       <section aria-label="Estratégias" className="trade-lab-strategies">
         <span className="trade-eyebrow">ESTRATÉGIAS · POR VERSÃO E ORIGEM</span>
-        {!data.analytics.groups.length && <p>Nenhum setup confirmado na janela. A base começa a crescer com o feed LIVE.</p>}
-        {data.analytics.groups.map((g: any) => {
+        {!groups.length && <p>Nenhum setup confirmado na janela{dataset === 'ALL' ? '' : ' para esta origem'}. A base começa a crescer com o feed LIVE.</p>}
+        {groups.map((g: any) => {
           const m = g.metrics,
             enough = m.n >= min;
           return (
