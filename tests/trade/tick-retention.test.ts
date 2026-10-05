@@ -70,18 +70,18 @@ test('N/O/P/Q: keeps exactly the 5 most recent trading sessions; weekends, holid
     assert.equal(plan.toDelete, 12 + 12 + 1);
     assert.equal(plan.preserved, 12 * 5 + 2);
 
-    // Dry run deletes nothing but records the interval.
-    await w.db.query('select public.trade_tick_retention_run(p_dry_run=>true,p_force=>true,p_min_ticks=>10)');
+    // Audit-only: the run records exactly what WOULD be removed and deletes nothing.
+    await w.db.query('select public.trade_tick_retention_run(p_force=>true,p_min_ticks=>10)');
+    await w.db.query('select public.trade_tick_retention_run(p_force=>true,p_min_ticks=>10)'); // idempotent
     assert.equal((await w.days()).reduce((s: number, d: any) => s + d.n, 0), 12 * 7 + 2 + 1);
-    // Real run, tiny batches to exercise the commit-per-batch loop.
-    await w.db.query('select public.trade_tick_retention_run(p_force=>true,p_min_ticks=>10,p_batch=>4,p_max_batches=>50)');
-    assert.deepEqual((await w.days()).map((d: any) => d.d), ['2026-09-28', '2026-09-29', '2026-10-01', '2026-10-02', '2026-10-05', '2026-10-06']);
-    // Idempotent: a second run finds nothing to delete.
-    await w.db.query('select public.trade_tick_retention_run(p_force=>true,p_min_ticks=>10,p_batch=>4,p_max_batches=>50)');
-    const runs = (await w.db.query<any>('select status,dry_run,deleted,to_delete,preserved,cutoff_brt::text c from trade_tick_retention_runs order by id')).rows;
-    const mine = runs.filter((r: any) => r.c);
-    assert.deepEqual(mine.map((r: any) => [r.status, r.dry_run, Number(r.deleted)]), [['DRY_RUN', true, 0], ['DONE', false, 25], ['DONE', false, 0]]);
-    assert.equal(mine[1].c, '2026-09-28 00:00:00');
+    const runs = (await w.db.query<any>('select status,dry_run,deleted,to_delete,preserved,cutoff_brt::text c from trade_tick_retention_runs where cutoff_brt is not null order by id')).rows;
+    assert.deepEqual(runs.map((r: any) => [r.status, r.dry_run, Number(r.deleted), Number(r.to_delete), Number(r.preserved), r.c]), [
+      ['DRY_RUN', true, 0, 25, 62, '2026-09-28 00:00:00'],
+      ['DRY_RUN', true, 0, 25, 62, '2026-09-28 00:00:00'],
+    ]);
+    // Deletion is not enabled in this phase and no deletion function exists.
+    await assert.rejects(w.db.query('select public.trade_tick_retention_run(p_dry_run=>false,p_force=>true)'), /TICK_DELETION_DISABLED/);
+    assert.equal((await w.db.query<any>("select count(*)::int n from pg_proc where proname='trade_tick_retention_batch'")).rows[0].n, 0);
     // O/P/Q: candles, LAB, PAPER/proposals, journal, commands and every other table are untouched.
     assert.deepEqual(await w.counts(), before);
     assert.equal(before.trade_bridge_commands, 0);
@@ -104,38 +104,6 @@ test('N: fewer sessions than required deletes nothing; market hours are skipped 
       "select extract(isodow from t)<=5 and t::time between time '08:30' and time '18:45' g from (values (timestamp '2026-10-05 10:00'),(timestamp '2026-10-05 19:30'),(timestamp '2026-10-04 10:00')) v(t)",
     )).rows.map((x: any) => x.g);
     assert.deepEqual(guard, [true, false, false]);
-  } finally {
-    await w.close();
-  }
-});
-
-test('N: a large backlog is drained across bounded calls (PARTIAL → DONE) with the same cutoff', async () => {
-  const w = await world();
-  try {
-    for (const d of ['2026-09-01', '2026-09-02', '2026-09-28', '2026-09-29', '2026-10-01', '2026-10-05', '2026-10-06']) await w.ticks(d, 12);
-    const r1: any = (await w.db.query<any>('select public.trade_tick_retention_run(p_force=>true,p_min_ticks=>10,p_batch=>5,p_max_batches=>2) r')).rows[0].r;
-    assert.deepEqual([r1[0].status, r1[0].deleted], ['PARTIAL', 10]);
-    const r2: any = (await w.db.query<any>('select public.trade_tick_retention_run(p_force=>true,p_min_ticks=>10,p_batch=>5,p_max_batches=>2) r')).rows[0].r;
-    assert.deepEqual([r2[0].status, r2[0].deleted], ['PARTIAL', 10]);
-    const r3: any = (await w.db.query<any>('select public.trade_tick_retention_run(p_force=>true,p_min_ticks=>10,p_batch=>5,p_max_batches=>2) r')).rows[0].r;
-    assert.deepEqual([r3[0].status, r3[0].deleted, r3[0].preserved], ['DONE', 4, 60]);
-    assert.deepEqual((await w.days()).map((d: any) => d.d), ['2026-09-28', '2026-09-29', '2026-10-01', '2026-10-05', '2026-10-06']);
-    const sizes = (await w.db.query<any>('select size_before,size_after from trade_tick_retention_runs where deleted>0')).rows;
-    assert.ok(sizes.every((x: any) => Number(x.size_before) > 0 && Number(x.size_after) > 0));
-  } finally {
-    await w.close();
-  }
-});
-
-test('retention batch refuses a missing cutoff and never touches another bridge', async () => {
-  const w = await world();
-  try {
-    await w.ticks('2026-09-01', 3);
-    await w.db.query("insert into trade_bridge_ticks values('other','s',1,1,'WINV26',$1,'{}')", [raw('2026-09-01')]);
-    await assert.rejects(w.db.query('select public.trade_tick_retention_batch($1,null,10)', [bridge]));
-    const n = (await w.db.query<any>('select public.trade_tick_retention_batch($1,$2,10) n', [bridge, raw('2026-10-01')])).rows[0].n;
-    assert.equal(n, 3);
-    assert.equal((await w.db.query<any>("select count(*)::int n from trade_bridge_ticks where bridge_id='other'")).rows[0].n, 1);
   } finally {
     await w.close();
   }

@@ -147,28 +147,21 @@ Os agrupamentos são sempre estratégia × versão × dataset.
 
 Nenhuma leitura do LAB seleciona `account_hash`, token ou fingerprint. Nenhuma estatística altera gates: REAL continua bloqueado (`TRADE_EXECUTION_ENABLED=false`, kill switch ativo, policy desabilitada).
 
-## Retenção de ticks (`20261007090000_tick_retention.sql`)
+## Retenção de ticks (`20261007090000_tick_retention.sql`) — fase de AUDITORIA
 
-**Regra:**
+**Regra planejada:**
 
-- mantém os **5 pregões mais recentes presentes na base**, não 5 dias corridos;
+- manter os **5 pregões mais recentes presentes na base**, não 5 dias corridos;
 - um pregão é uma data BRT, no relógio de mercado normalizado, com pelo menos 1.000 ticks;
 - fins de semana, feriados e ticks de teste não reduzem a janela;
-- o cutoff é 00:00 BRT do pregão preservado mais antigo, e só os ticks anteriores a ele são removidos.
+- o cutoff é 00:00 BRT do pregão preservado mais antigo.
 
-**Execução:**
+**Nesta fase nada é apagado: não existe função de exclusão.**
 
-- `trade_tick_retention_plan` é a prévia somente leitura;
-- `trade_tick_retention_run` processa no máximo 10 lotes de 20 mil linhas por chamada, em transação curta;
-- não roda entre 08:30 e 18:45 BRT em dia útil;
-- o pg_cron chama a função a cada 10 min, das 19:00 às 23:50 BRT.
-
-**Auditoria:** cada execução fica em `trade_tick_retention_runs`, com cutoff, sessões preservadas, quantidade a remover e removida, linhas preservadas e tamanho antes/depois.
-
-**Segurança:**
-
-- com menos de 5 pregões, nada é apagado;
-- somente `trade_bridge_ticks` é tocada.
+- `trade_tick_retention_plan` é a prévia somente leitura.
+- `trade_tick_retention_run` só registra o que **seria** removido, diariamente às 19:45 BRT via pg_cron, em `trade_tick_retention_runs`.
+- Uma chamada sem dry-run é recusada com `TICK_DELETION_DISABLED`.
+- Ativar a exclusão será uma migration futura e explícita.
 
 **Dependências auditadas:** a ingestão lê só o último tick; o LAB lê uma janela de ≤120 s dentro do horizonte de 240 min. Scanner, replay, PAPER, REAL e auditorias usam candles, estado e comandos.
 
@@ -251,6 +244,3 @@ O capital operacional é um número de planejamento; não é o saldo da corretor
 - `trade_bridge_status` (estado + tick, sem candles) passa a ser usado pelo contexto REAL, pelo health, pela checagem de preço do PAPER e pelo diagnóstico.
 - O `execution-status` sempre devolve as dimensões, e o erro aparece com código, operação e HTTP.
 
-## Retenção de ticks nesta fase
-
-O agendamento roda **só em dry-run**: registra diariamente o que seria removido, sem apagar nada. Ativar a deleção é uma decisão explícita futura.

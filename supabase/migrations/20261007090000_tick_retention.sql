@@ -10,8 +10,11 @@
 --
 -- A session is a Sao Paulo calendar date (on the normalized market clock) with at least p_min_ticks
 -- ticks. Stray test ticks therefore never count as a session. The cutoff is the start (00:00 BRT) of
--- the oldest preserved session; only ticks strictly before it are deleted, in bounded batches per
--- call. Fewer sessions than required → nothing is deleted.
+-- the oldest preserved session; only ticks strictly before it would be removed.
+--
+-- THIS PHASE IS AUDIT-ONLY: no deletion function exists. trade_tick_retention_run records, once a day
+-- after the close, exactly which interval WOULD be removed (DRY_RUN). Enabling deletion is a separate,
+-- explicit future migration after the audit trail has been reviewed.
 
 create table public.trade_tick_retention_runs (
  id bigint generated always as identity primary key,
@@ -74,66 +77,43 @@ begin
   'preserved',case when p_count then (select count(*) from public.trade_bridge_ticks where bridge_id=p_bridge and time_msc>=cutoff) end);
 end $$;
 
--- One bounded batch. Only rows strictly before the cutoff of this bridge; returns rows deleted.
-create function public.trade_tick_retention_batch(p_bridge text,p_cutoff_raw_ms bigint,p_batch int) returns int language plpgsql security invoker set search_path='' as $$
-declare n int;
-begin
- if p_cutoff_raw_ms is null or p_batch<1 or p_batch>100000 then raise exception 'Invalid retention batch';end if;
- delete from public.trade_bridge_ticks t where t.ctid=any(array(
-  select x.ctid from public.trade_bridge_ticks x where x.bridge_id=p_bridge and x.time_msc<p_cutoff_raw_ms limit p_batch));
- get diagnostics n=row_count;
- return n;
-end $$;
-
--- Scheduled entry point: one bounded, short transaction per call (at most p_max_batches × p_batch rows),
--- re-planned every call (idempotent), market hours skipped unless forced, every call audited. Large
--- backlogs are drained by successive scheduled calls after the close.
-create function public.trade_tick_retention_run(p_dry_run boolean default false,p_force boolean default false,p_sessions int default 5,p_min_ticks int default 1000,p_batch int default 20000,p_max_batches int default 10)
+-- Scheduled entry point (audit-only): re-plans every call, skips market hours unless forced and records
+-- the plan. A call without dry-run is refused: deletion is not enabled in this phase.
+create function public.trade_tick_retention_run(p_dry_run boolean default true,p_force boolean default false,p_sessions int default 5,p_min_ticks int default 1000)
 returns jsonb language plpgsql security invoker set search_path='' as $$
 declare
- b text; plan jsonb; got int; total bigint; batches int; st text; before bigint; brt timestamp:=now() at time zone 'America/Sao_Paulo'; out jsonb:='[]'::jsonb;
+ b text; plan jsonb; st text; brt timestamp:=now() at time zone 'America/Sao_Paulo'; out jsonb:='[]'::jsonb;
 begin
- if p_max_batches<1 or p_max_batches>50 then raise exception 'Invalid retention batches';end if;
- -- Bridges come from the small configuration tables (never a scan of the tick table).
+ if p_dry_run is distinct from true then raise exception 'TICK_DELETION_DISABLED: retenção em modo auditoria; nenhuma exclusão nesta fase.';end if;
  for b in select bridge_id from public.trade_bridge_state union select bridge_id from public.trade_bridge_clock_settings loop
   if not p_force and extract(isodow from brt)<=5 and brt::time between time '08:30' and time '18:45' then
-   insert into public.trade_tick_retention_runs(bridge_id,status,dry_run,finished_at,notes)values(b,'SKIPPED_MARKET_HOURS',p_dry_run,clock_timestamp(),'Pregão em andamento (08:30–18:45 BRT).');
+   insert into public.trade_tick_retention_runs(bridge_id,status,dry_run,finished_at,notes)values(b,'SKIPPED_MARKET_HOURS',true,clock_timestamp(),'Pregão em andamento (08:30–18:45 BRT).');
    out:=out||jsonb_build_object('bridge',b,'status','SKIPPED_MARKET_HOURS');
    continue;
   end if;
   plan:=public.trade_tick_retention_plan(b,p_sessions,p_min_ticks,true);
-  total:=0; batches:=0; got:=0; before:=pg_total_relation_size('public.trade_bridge_ticks');
-  st:=case when plan->>'status'<>'READY' then plan->>'status' when p_dry_run then 'DRY_RUN' else 'DONE' end;
-  if st='DONE' then
-   loop
-    got:=public.trade_tick_retention_batch(b,(plan->>'cutoffRawMs')::bigint,p_batch);
-    total:=total+got; batches:=batches+1;
-    exit when got<p_batch or batches>=p_max_batches;
-   end loop;
-   if got>=p_batch then st:='PARTIAL';end if;
-  end if;
-  insert into public.trade_tick_retention_runs(bridge_id,status,dry_run,finished_at,sessions,cutoff_raw_ms,cutoff_brt,oldest_brt,to_delete,deleted,preserved,size_before,size_after,notes)
-  values(b,st,p_dry_run,clock_timestamp(),plan->'sessions',(plan->>'cutoffRawMs')::bigint,(plan->>'cutoffBrt')::timestamp,(plan->>'oldestBrt')::timestamp,(plan->>'toDelete')::bigint,total,
-   (plan->>'preserved')::bigint,before,pg_total_relation_size('public.trade_bridge_ticks'),
-   case when total>0 then 'Espaço liberado é reutilizado pelo autovacuum; o arquivo não encolhe sem VACUUM FULL.' end);
-  out:=out||jsonb_build_object('bridge',b,'status',st,'cutoffBrt',plan->'cutoffBrt','toDelete',plan->'toDelete','deleted',total,'preserved',plan->'preserved');
+  st:=case when plan->>'status'<>'READY' then plan->>'status' else 'DRY_RUN' end;
+  insert into public.trade_tick_retention_runs(bridge_id,status,dry_run,finished_at,sessions,cutoff_raw_ms,cutoff_brt,oldest_brt,to_delete,deleted,preserved,size_before,size_after)
+  values(b,st,true,clock_timestamp(),plan->'sessions',(plan->>'cutoffRawMs')::bigint,(plan->>'cutoffBrt')::timestamp,(plan->>'oldestBrt')::timestamp,(plan->>'toDelete')::bigint,0,
+   (plan->>'preserved')::bigint,pg_total_relation_size('public.trade_bridge_ticks'),pg_total_relation_size('public.trade_bridge_ticks'));
+  out:=out||jsonb_build_object('bridge',b,'status',st,'cutoffBrt',plan->'cutoffBrt','toDelete',plan->'toDelete','preserved',plan->'preserved');
  end loop;
  return out;
 end $$;
 
-revoke all on function public.trade_tick_offset(text,bigint),public.trade_tick_retention_plan(text,int,int,boolean),public.trade_tick_retention_batch(text,bigint,int) from public,anon,authenticated;
-grant execute on function public.trade_tick_offset(text,bigint),public.trade_tick_retention_plan(text,int,int,boolean),public.trade_tick_retention_batch(text,bigint,int) to service_role;
-revoke all on function public.trade_tick_retention_run(boolean,boolean,int,int,int,int) from public,anon,authenticated;
-grant execute on function public.trade_tick_retention_run(boolean,boolean,int,int,int,int) to service_role;
+revoke all on function public.trade_tick_offset(text,bigint),public.trade_tick_retention_plan(text,int,int,boolean) from public,anon,authenticated;
+grant execute on function public.trade_tick_offset(text,bigint),public.trade_tick_retention_plan(text,int,int,boolean) to service_role;
+revoke all on function public.trade_tick_retention_run(boolean,boolean,int,int) from public,anon,authenticated;
+grant execute on function public.trade_tick_retention_run(boolean,boolean,int,int) to service_role;
 
 -- AUDIT-ONLY schedule: the job runs the plan in DRY-RUN (nothing is deleted) once a day after the close
 -- and records what WOULD be removed in trade_tick_retention_runs. Turning deletion on is a separate,
--- explicit decision (reschedule with p_dry_run=>false); it is not done by this migration. Environments without
+-- explicit decision in a future migration; it is not possible with this one. Environments without
 -- pg_cron (tests) simply keep the procedure for manual calls.
 do $$ begin
  if exists(select 1 from pg_available_extensions where name='pg_cron') then
   create extension if not exists pg_cron with schema pg_catalog;
   perform cron.unschedule(jobid) from cron.job where jobname in ('trade-tick-retention','trade-tick-retention-audit');
-  perform cron.schedule('trade-tick-retention-audit','45 22 * * 1-5','select public.trade_tick_retention_run(p_dry_run=>true)');
+  perform cron.schedule('trade-tick-retention-audit','45 22 * * 1-5','select public.trade_tick_retention_run()');
  end if;
 end $$;
