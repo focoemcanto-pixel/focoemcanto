@@ -21,7 +21,11 @@ export function feedStatus(data: any, env: BridgeEnv, now = Date.now()) {
     ? Math.max(0, now - Date.parse(data.receivedAt))
     : null;
   const ageMs = lastTick ? now - lastTick.timeMsc : null;
+  const producerOffset = data?.state?.marketClock?.utcOffsetSeconds;
+  const configuredOffset = lastTick?.rawTimeMsc !== undefined ? (lastTick.rawTimeMsc-lastTick.timeMsc)/1000 : 0;
+  const clockMatches = producerOffset === undefined || (Number.isInteger(producerOffset) && Math.abs(producerOffset-configuredOffset)<=2);
   const live =
+    clockMatches &&
     lastTick?.symbol === c.symbol &&
     !!data?.state?.connected &&
     ageMs !== null &&
@@ -34,10 +38,12 @@ export function feedStatus(data: any, env: BridgeEnv, now = Date.now()) {
   return {
     source: 'XP / MetaTrader 5',
     symbol: c.symbol,
-    status: live ? 'LIVE' : lastTick?.symbol === c.symbol && data?.state?.connected === true && receivedAge !== null && Number.isFinite(receivedAge) && receivedAge <= c.maxAgeMs ? 'STALE' : 'OFFLINE',
+    status: live ? 'LIVE' : clockMatches && lastTick?.symbol === c.symbol && data?.state?.connected === true && receivedAge !== null && Number.isFinite(receivedAge) && receivedAge <= c.maxAgeMs ? 'STALE' : 'OFFLINE',
     quality:candleQuality(data?.candles||[],c.symbol),
     maxAgeMs: c.maxAgeMs,
     ageMs,
+    clock: {...(data?.marketClock || {sourceTimezone:'UTC'}), verifiedProducerOffset:producerOffset ?? null, configuredOffsetSeconds:configuredOffset, matches:clockMatches},
+    clockDiagnostics: {...data?.clockDiagnostics, serverEpochMs:now, tickEpochMs:lastTick?.timeMsc ?? null, tickIso:lastTick ? new Date(lastTick.timeMsc).toISOString() : null, differenceMs:ageMs},
     receivedAgeMs: receivedAge,
     receivedAt: data?.receivedAt || null,
     lastTick,

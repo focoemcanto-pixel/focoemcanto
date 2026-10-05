@@ -1,5 +1,5 @@
 #property strict
-#property version "2.03"
+#property version "2.04"
 #property description "Foco Trade XP/MT5 bridge. Execution disabled by default."
 input string ApiOrigin="https://focoemcanto.com";
 input string BridgeToken="";
@@ -102,11 +102,18 @@ bool RecoverLegacyPending(){
  // No cursor rewind, no new batch/session, no ledger/refs/seen/events deletion.
  Print("Legacy pending transport upgraded to protocol 2; batch/events/watermark preserved; execution locked");return true;
 }
+string ResponseShape(string reply){
+ if(reply=="")return "BRIDGE_RESPONSE_EMPTY";
+ if(StringFind(reply,"OK\n")==0)return "BRIDGE_RESPONSE_OK";
+ if(StringFind(reply,"{")==0)return "BRIDGE_RESPONSE_JSON_UNKNOWN";
+ if(StringFind(reply,"<")>=0)return "BRIDGE_RESPONSE_HTML";
+ return "BRIDGE_RESPONSE_TEXT";
+}
 string BackendErrorCode(string reply){
  string code=JsonField(reply,"errorCode");
  // Only known, non-secret codes are logged. Never print the response body.
  string allowed="|BRIDGE_UNAUTHORIZED|BRIDGE_JSON_INVALID|BRIDGE_CONFIG_INVALID|BRIDGE_TRANSPORT_ERROR|BRIDGE_IDENTITY_INVALID|BRIDGE_ID_MISMATCH|BRIDGE_SYMBOL_MISMATCH|BRIDGE_SESSION_INVALID|BRIDGE_BATCH_INVALID|BRIDGE_ACCOUNT_MISMATCH|BRIDGE_BATCH_SIZE|BRIDGE_TICK_INVALID|BRIDGE_CANDLES_INVALID|BRIDGE_CANDLE_UNCLOSED_OR_SYMBOL|BRIDGE_STATE_INVALID|BRIDGE_POSITION_ORDER_INVALID|BRIDGE_TICK_SIZE_INVALID|BRIDGE_EVENT_INVALID|CONFIGURATION_MISSING|SCHEMA_MISSING|ACCESS_DENIED|PERSISTENCE_UNAVAILABLE|BRIDGE_SESSION_LEASE_CONFLICT|";
- return code!="" && StringFind(allowed,"|"+code+"|")>=0?code:"BRIDGE_RESPONSE_UNCLASSIFIED";
+ return code!="" && StringFind(allowed,"|"+code+"|")>=0?code:ResponseShape(reply);
 }
 string Tag(string id) { StringReplace(id,"-",""); return "FT"+StringSubstr(id,0,24); }
 string CommandIdFor(string tag) { for(int i=0;i<ArraySize(commands);i++){string p[]; if((StringSplit(commands[i],'|',p)==10 || ArraySize(p)==15) && Tag(p[1])==tag)return p[1];}return ""; }
@@ -136,7 +143,7 @@ string OrdersJson() {
  }return j+"]";
 }
 bool ExecutionAllowed(){return EnableExecution && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
-string StateJson(){HistoryHealth();ProtectionHealth();return "{\"protocolVersion\":2,\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"accountTradeMode\":"+(string)AccountInfoInteger(ACCOUNT_TRADE_MODE)+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
+string StateJson(){HistoryHealth();ProtectionHealth();return "{\"marketClock\":{\"basis\":\"broker-wall\",\"serverNowSeconds\":"+(string)(long)TimeTradeServer()+",\"utcNowSeconds\":"+(string)(long)TimeGMT()+",\"utcOffsetSeconds\":"+(string)((long)TimeTradeServer()-(long)TimeGMT())+"},\"protocolVersion\":2,\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"accountTradeMode\":"+(string)AccountInfoInteger(ACCOUNT_TRADE_MODE)+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
 string CandlesJson(){MqlRates rates[];int count;datetime closed=iTime(TradeSymbol,PERIOD_M1,1);
  if(lastBar==0)count=CopyRates(TradeSymbol,PERIOD_M1,1,HistoryBars,rates);else count=CopyRates(TradeSymbol,PERIOD_M1,lastBar,closed,rates);
  if(count>0)lastBar=rates[count-1].time;string j="[";
@@ -269,7 +276,7 @@ int OnInit(){
  if(!Save(prefix+"ledger.txt",durable))return INIT_FAILED;FileDelete(prefix+"reply.txt",FILE_COMMON);
  }
  if(pending!="" && JsonField(JsonField(pending,"state"),"protocolVersion")!="2")Print("Legacy pending detected; safe transport upgrade scheduled");
- Print("Foco Trade v2.03; execution enabled: ",EnableExecution);
+ Print("Foco Trade v2.04; execution enabled: ",EnableExecution);
  EventSetTimer(PollSeconds);return INIT_SUCCEEDED;
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);}
@@ -294,7 +301,7 @@ void OnTimer(){
  ResetLastError();
  int status=WebRequest("POST",ApiOrigin+"/api/trade/bridge/exchange","Authorization: Bearer "+BridgeToken+"\r\nContent-Type: application/json\r\n",HttpTimeoutMs,body,response,headers);
  int networkError=GetLastError();string reply=CharArrayToString(response,0,WHOLE_ARRAY,CP_UTF8);
- if(status!=200){lastExchangeHttpStatus=status;Print("Foco Trade exchange HTTP ",status,": ",BackendErrorCode(reply),status<0?"; network error "+(string)networkError:"","; session ",StringSubstr(JsonField(pending,"session"),0,12),"; batch ",JsonField(pending,"batch"),". Retrying same durable batch.");return;}
+ if(status!=200){lastExchangeHttpStatus=status;Print("Foco Trade response shape: ",ResponseShape(reply),"; bytes: ",ArraySize(response),"; content type JSON: ",StringFind(headers,"application/json")>=0);Print("Foco Trade exchange HTTP ",status,": ",BackendErrorCode(reply),status<0?"; network error "+(string)networkError:"","; session ",StringSubstr(JsonField(pending,"session"),0,12),"; batch ",JsonField(pending,"batch"),". Retrying same durable batch.");return;}
  if(StringFind(reply,"OK\n")!=0){Print("Invalid bridge response; retaining batch");return;}
  if(!Save(prefix+"reply.txt",reply)){Print("Cannot persist response; no order sent");return;}
  string lines[];StringSplit(reply,'\n',lines);for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"CMD2|")==0)Execute(lines[i]);

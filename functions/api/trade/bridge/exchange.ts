@@ -1,3 +1,4 @@
+import { feedStatus } from '../../../../trade/bridge/mt5';
 import {
   exchangeDiagnostic,
   type ExchangeStage,
@@ -160,6 +161,15 @@ export async function onRequestPost({
           p_payload: receipt,
         }).catch(() => {}),
       );
+      waitUntil((async()=>{
+        try {
+          const persisted=await rpc(env,'trade_bridge_read',{p_bridge:c.bridgeId});
+          const feed=feedStatus(persisted,env);
+          const proof={kind:'FEED_CLOCK_VERIFIED',bridgeId:c.bridgeId,symbol:c.symbol,status:feed.status,ageMs:feed.ageMs,receivedAgeMs:feed.receivedAgeMs,clock:feed.clock,clockDiagnostics:feed.clockDiagnostics,executionEnabled:c.execution,killSwitch:feed.killSwitch,timestamp:new Date().toISOString()};
+          console.info('trade_bridge_feed',JSON.stringify(proof));
+          await rpc(env,'trade_real_audit',{p_bridge:c.bridgeId,p_payload:proof});
+        } catch { /* Diagnostic sampling cannot affect the durable ACK. */ }
+      })());
     }
     return new Response(wire, {
       headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' },
