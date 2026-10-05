@@ -126,12 +126,14 @@ grant execute on function public.trade_tick_offset(text,bigint),public.trade_tic
 revoke all on function public.trade_tick_retention_run(boolean,boolean,int,int,int,int) from public,anon,authenticated;
 grant execute on function public.trade_tick_retention_run(boolean,boolean,int,int,int,int) to service_role;
 
--- Every 10 minutes from 19:00 to 23:50 BRT (22:00–02:50 UTC) when pg_cron exists; each call is short. Environments without
+-- AUDIT-ONLY schedule: the job runs the plan in DRY-RUN (nothing is deleted) once a day after the close
+-- and records what WOULD be removed in trade_tick_retention_runs. Turning deletion on is a separate,
+-- explicit decision (reschedule with p_dry_run=>false); it is not done by this migration. Environments without
 -- pg_cron (tests) simply keep the procedure for manual calls.
 do $$ begin
  if exists(select 1 from pg_available_extensions where name='pg_cron') then
   create extension if not exists pg_cron with schema pg_catalog;
-  perform cron.unschedule(jobid) from cron.job where jobname='trade-tick-retention';
-  perform cron.schedule('trade-tick-retention','*/10 22,23,0,1,2 * * *','select public.trade_tick_retention_run()');
+  perform cron.unschedule(jobid) from cron.job where jobname in ('trade-tick-retention','trade-tick-retention-audit');
+  perform cron.schedule('trade-tick-retention-audit','45 22 * * 1-5','select public.trade_tick_retention_run(p_dry_run=>true)');
  end if;
 end $$;

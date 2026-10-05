@@ -197,12 +197,23 @@ O capital operacional é um número de planejamento; não é o saldo da corretor
 - se 0, a proposta é RISK_BLOCKED;
 - o stop técnico nunca muda.
 
-**Limites diários (dia em BRT).** Só operações PAPER aceitas consomem os limites. Desfechos hipotéticos, LIVE_DETECTED e propostas descartadas, expiradas ou bloqueadas não consomem.
+**Limites diários (dia em BRT, política `GROSS_LOSSES_PLUS_OPEN_RISK_V1`).** Só operações PAPER aceitas no mercado LIVE (fonte `mt5`) consomem os limites. Replay é treino; LIVE_DETECTED e desfechos hipotéticos nunca consomem.
 
-- Perda do dia = máx(0, −soma de `resultBRL` das PAPER fechadas aceitas hoje).
-- Novas entradas são bloqueadas quando a perda do dia atinge o limite, ou quando o número de operações atinge o máximo.
-- Uma entrada também é recusada se a soma de perda do dia + risco em aberto + risco da nova operação ultrapassar o limite.
+- Orçamento consumido = soma das **perdas** realizadas do dia, em valor absoluto. Um ganho posterior **não** devolve o orçamento; o P&L líquido é mostrado à parte.
+- Risco aberto = risco inicial integral de cada posição PAPER aberta. O PAPER não move stop nem faz parcial, então nada reduz esse risco.
+- Uma entrada é recusada quando: perdas do dia ≥ limite; operações do dia ≥ máximo; ou perdas + risco aberto + risco da nova entrada > limite.
 - Scanner, hipóteses e LAB continuam funcionando.
+
+**Quantidade.**
+
+- **Sugerida** = mín(⌊1R / risco por contrato⌋, máximo de contratos).
+- **Redução:** o usuário pode diminuí-la na confirmação (`trade_paper_quantity` guarda a sugerida e a escolhida), nunca aumentá-la. Ao tentar, a recusa explica: "3 contratos arriscariam R$ 114,00, acima do seu limite de R$ 100,00."
+
+**Mudança de configuração.**
+
+- A proposta pendente ou bloqueada criada com uma versão anterior é substituída automaticamente por uma nova, já redimensionada, enquanto o setup continua válido.
+- A pendente é expirada. A bloqueada é terminal por desenho e permanece como registro de estudo.
+- No diário fica `SUBSTITUIDA_GESTAO_RISCO`.
 
 **Autoridade.** No aceite PAPER, `trade_paper_entry_check` exige:
 
@@ -211,3 +222,35 @@ O capital operacional é um número de planejamento; não é o saldo da corretor
 - limites diários disponíveis.
 
 **Histórico.** Cada proposta guarda `payload.riskSettings` (versão, hash, capital, 1R e limites). Mudanças futuras nunca reescrevem esse registro.
+
+## Readiness (fonte única)
+
+`trade/bridge/readiness.ts` separa as dimensões:
+
+| Dimensão | Valores |
+|---|---|
+| Dados de mercado | LIVE / STALE / OFFLINE |
+| Bridge | conectado / desconectado |
+| EA | conectado / desconectado |
+| Execução no EA | habilitada / desabilitada |
+| Execução no backend | habilitada / desabilitada |
+| Sessão REAL | armada / não armada |
+| Policy | válida / inválida / ausente |
+| Kill switch | ativo / liberado |
+| Estratégia | autorizada / não autorizada |
+| Conta | verificada / não verificada |
+
+- O dado de mercado usa o mesmo `feedStatus` do header.
+- Um EA conectado com EnableExecution=false aparece como **CONECTADO + EXECUÇÃO DESABILITADA**.
+- Contexto indisponível aparece como **DESCONHECIDO**, nunca como OFFLINE.
+
+**Causa do erro "Não foi possível acessar a persistência Trade".** `trade_bridge_read` (e `trade_real_context`, que o usava) devolvia cerca de 344 KB por chamada, com 2.000 candles. Isso dava média de 443 ms e picos de 7 s na borda. Somado a uma janela de deploy antes da migration (404 de `trade_real_session_check`), fazia o painel REAL cair em "Feed OFFLINE / desconectado".
+
+**Correção.**
+
+- `trade_bridge_status` (estado + tick, sem candles) passa a ser usado pelo contexto REAL, pelo health, pela checagem de preço do PAPER e pelo diagnóstico.
+- O `execution-status` sempre devolve as dimensões, e o erro aparece com código, operação e HTTP.
+
+## Retenção de ticks nesta fase
+
+O agendamento roda **só em dry-run**: registra diariamente o que seria removido, sem apagar nada. Ativar a deleção é uma decisão explícita futura.

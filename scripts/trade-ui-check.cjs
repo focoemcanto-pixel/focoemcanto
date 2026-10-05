@@ -46,8 +46,6 @@ let simulateMissingBridge=false;
     '20261007100000_paper_risk_settings.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
-  // PAPER risk management v1 (1R = R$100, 1 contract). Without it PAPER proposals are RISK_BLOCKED.
-  await db.query('select public.trade_risk_settings_save($1,$2)', ['focoos-admin', { capitalBRL: 10000, riskModel: 'FIXED_BRL', riskValue: 100, dailyLossUnit: 'R', dailyLossValue: 5, maxContracts: 1, maxTradesPerDay: 20 }]);
   // Fixture ticks are stamped in real UTC; the production broker-wall clock is covered in real-session.test.ts.
   await db.exec('delete from trade_bridge_clock_settings');
   globalThis.fetch = async (url, init) => {
@@ -250,6 +248,27 @@ let simulateMissingBridge=false;
       .evaluate((el) => el === document.activeElement),
     true,
   );
+  // GESTÃO DE RISCO: nothing preconfigured. The proposal stays RISK_BLOCKED (no hardcoded fallback)
+  // until the user fills capital, 1R rule and limits; the 1R preview updates while typing.
+  await page.locator('.trade-risk summary').getByText('GESTÃO DE RISCO NÃO CONFIGURADA').waitFor();
+  assert.equal((await db.query('select count(*)::int n from trade_risk_settings_versions')).rows[0].n, 0);
+  assert.equal(await page.getByRole('button', { name: 'SALVAR CONFIGURAÇÃO', exact: true }).isDisabled(), true);
+  for (const label of ['Capital operacional (R$) — planejamento, não é o saldo da XP', 'Risco por operação (% do capital)', 'Limite de perda diária (R)', 'Máximo de operações por dia', 'Máximo de contratos por operação'])
+    assert.equal(await page.getByLabel(label).inputValue(), '', `${label} must start empty`);
+  await page.getByLabel('Capital operacional (R$) — planejamento, não é o saldo da XP').fill('10.000,00');
+  await page.getByLabel('Percentual do capital').check();
+  await page.getByLabel('Risco por operação (% do capital)').fill('0,5');
+  await page.locator('[data-risk-preview="one-r"]').getByText('R$ 50,00').waitFor();
+  await page.getByLabel('Risco por operação (% do capital)').fill('1');
+  await page.locator('[data-risk-preview="one-r"]').getByText('R$ 100,00').waitFor();
+  await page.getByLabel('Limite de perda diária (R)').fill('5');
+  await page.locator('.trade-risk-summary').getByText('5R · R$ 500,00').waitFor();
+  await page.getByLabel('Máximo de operações por dia').fill('20');
+  await page.getByLabel('Máximo de contratos por operação').fill('1');
+  assert.equal((await db.query('select count(*)::int n from trade_risk_settings_versions')).rows[0].n, 0); // typing never saves
+  await page.screenshot({ path: '.trade-qa/risk-form.png', fullPage: false });
+  await page.getByRole('button', { name: 'SALVAR CONFIGURAÇÃO', exact: true }).click();
+  await page.getByText(/^Versão 1 salva\./).waitFor();
   await page
     .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
     .waitFor();
@@ -257,6 +276,9 @@ let simulateMissingBridge=false;
     .getByRole('button', { name: 'REAL INDISPONÍVEL', exact: true })
     .click();
   await page.locator('.trade-real-checklist summary').waitFor();
+  // ONE proposal, two destinations: REAL shows the Copilot's proposal with ENTRAR REAL blocked.
+  assert.equal(await page.locator('[data-destination="real"] button').isDisabled(), true);
+  await page.locator('.trade-real-inspection summary').click();
   assert.equal(
     await page
       .getByRole('button', { name: 'Preparar proposta REAL', exact: true })
@@ -286,8 +308,15 @@ let simulateMissingBridge=false;
   assert.match(await page.locator('[data-risk="usage"]').textContent(), /%/);
   await page.locator('.trade-risk summary').getByText('1R = R$ 100,00').waitFor();
   await page
-    .getByRole('button', { name: 'ENTRAR NO PAPER', exact: true })
+    .getByRole('button', { name: 'ENTRAR EM PAPER', exact: true })
     .click();
+  // Confirmation: quantity may only go down; nothing executes before CONFIRMAR.
+  await page.getByLabel('Quantidade da entrada PAPER').fill('2');
+  await page.getByRole('alert').getByText(/2 contratos arriscariam/).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'CONFIRMAR ENTRADA PAPER', exact: true }).isDisabled(), true);
+  await page.getByLabel('Quantidade da entrada PAPER').fill('1');
+  assert.equal((await db.query("select count(*)::int n from trade_operation_proposals where state='CONFIRMADA'")).rows[0].n, 0);
+  await page.getByRole('button', { name: 'CONFIRMAR ENTRADA PAPER', exact: true }).click();
   await page.getByRole('heading', { name: 'ENVIANDO', exact: true }).waitFor();
   await page
     .getByRole('button', { name: 'Próximo candle', exact: true })
@@ -299,11 +328,11 @@ let simulateMissingBridge=false;
   );
   // GESTÃO DE RISCO: a new version via the form (R$5.000 × 1% = R$50); history is not rewritten.
   await page.locator('.trade-risk > summary').click();
-  await page.getByLabel('Capital operacional (R$) — não é o saldo da corretora').fill('5000');
-  await page.getByLabel('Modelo de 1R').selectOption('PCT_CAPITAL');
+  await page.getByLabel('Capital operacional (R$) — planejamento, não é o saldo da XP').fill('5000');
+  await page.getByLabel('Percentual do capital').check();
   await page.getByLabel('Risco por operação (% do capital)').fill('1');
-  await page.getByRole('button', { name: 'SALVAR GESTÃO DE RISCO', exact: true }).click();
-  await page.getByText('Versão 2 salva. Propostas já criadas mantêm o risco original.').waitFor();
+  await page.getByRole('button', { name: 'SALVAR CONFIGURAÇÃO', exact: true }).click();
+  await page.getByText(/^Versão 2 salva\./).waitFor();
   await page.locator('.trade-risk summary').getByText('1R = R$ 50,00').waitFor();
   assert.equal(
     (await db.query("select count(*)::int n from trade_operation_proposals where payload->'riskSettings'->>'version'='2'")).rows[0].n,
@@ -495,6 +524,7 @@ let simulateMissingBridge=false;
   await page.setViewportSize({width:1440,height:1100});
   await page.getByRole('combobox',{name:'Fonte de mercado'}).selectOption('mt5');
   await page.getByRole('button',{name:'REAL INDISPONÍVEL',exact:true}).click();
+  await page.locator('.trade-real-inspection summary').click();
   const prepareButton=page.getByRole('button',{name:'Preparar proposta REAL',exact:true});
   await prepareButton.waitFor();await page.waitForFunction(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent==='Preparar proposta REAL');return b&&!b.disabled;});
   await prepareButton.click();await page.getByRole('button',{name:'REVISAR PROPOSTA REAL',exact:true}).click();

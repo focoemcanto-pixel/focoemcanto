@@ -31,6 +31,10 @@ export type LabObservation = {
   /** Opportunity identity (scope + confirmation candle). */
   scope?: string;
   marketAsOf?: number;
+  /** Sizing of the linked proposal (risk version, 1R, quantity, risk) — evidence only, never feedback. */
+  risk?: { oneRBRL?: number | null; riskBRL?: number | null; riskPerContractBRL?: number | null; suggestedQuantity?: number | null; chosenQuantity?: number | null; blockCode?: string | null; riskSettingsVersion?: number | null } | null;
+  /** PAPER entry refusals recorded by the risk gate (codes). */
+  refusals?: string[];
   /** Other strategies proven CONFIRMED on the same candle in the same dedup group (analytic credit only). */
   participants?: { strategyId: string; version: string; configHash?: string }[];
 };
@@ -204,6 +208,32 @@ export function labAnalytics(observations: LabObservation[], p = labParameters) 
       })
       .sort((a, b) => b.observations - a.observations),
     opportunities: [...global].map(([dataset, g]) => ({ dataset, opportunities: g.n, metrics: metrics(g.resolved, p) })),
+  };
+}
+/**
+ * Risk evidence (LIVE only): how many setups the risk budget blocked and what would have happened to
+ * them, how much of 1R accepted proposals used, and why PAPER entries were refused. Descriptive only:
+ * it is never used to raise risk automatically.
+ */
+export function riskSummary(observations: LabObservation[]) {
+  const live = observations.filter((o) => o.source === 'LIVE'),
+    blocked = live.filter((o) => o.lifecycle === 'BLOCKED_RISK' || o.risk?.blockCode === 'RISK_LIMIT_EXCEEDED'),
+    outcome = (st: string) => blocked.filter((o) => o.outcome?.status === st).length,
+    sized = live.filter((o) => (o.risk?.chosenQuantity ?? 0) > 0 && (o.risk?.oneRBRL ?? 0) > 0 && typeof o.risk?.riskBRL === 'number'),
+    refusals: Record<string, number> = {};
+  for (const o of live) for (const c of o.refusals || []) refusals[c] = (refusals[c] || 0) + 1;
+  return {
+    liveSetups: live.length,
+    blockedByRisk: blocked.length,
+    blockedOutcomes: { targetFirst: outcome('TARGET_FIRST'), stopFirst: outcome('STOP_FIRST'), ambiguous: outcome('AMBIGUOUS'), expired: outcome('EXPIRED'), open: blocked.filter((o) => !o.outcome || o.outcome.status === 'OPEN').length },
+    sizedProposals: sized.length,
+    avgOneRUsage: mean(sized.map((o) => o.risk!.riskBRL! / o.risk!.oneRBRL!)),
+    avgRiskBRL: mean(sized.map((o) => o.risk!.riskBRL!)),
+    avgQuantity: mean(sized.map((o) => o.risk!.chosenQuantity!)),
+    reducedByUser: sized.filter((o) => (o.risk!.chosenQuantity ?? 0) < (o.risk!.suggestedQuantity ?? 0)).length,
+    refusals,
+    refusedDailyLoss: (refusals.DAILY_LOSS_LIMIT_REACHED || 0) + (refusals.DAILY_LOSS_LIMIT_WOULD_EXCEED || 0),
+    refusedMaxTrades: refusals.DAILY_TRADE_LIMIT_REACHED || 0,
   };
 }
 /** Today's funnel: what the scanner found and what happened to it, traded or not. */

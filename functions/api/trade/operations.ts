@@ -322,24 +322,49 @@ export async function onRequestPost({
       );
     }
     if (p.mode === 'PAPER' && body.action === 'confirm') {
-      // Price validity on the live quote: a proposal whose market moved away is not chased.
+      // Every refusal is recorded (journal + LAB event) with a clear reason; nothing is executed.
+      const refuse = async (code: string, message: string): Promise<never> => {
+        await rpc(env, 'trade_paper_refusal', { p_owner: owner, p_id: p.id, p_code: code, p_message: message }).catch(() => {});
+        throw new Error(`${code}: ${message}`);
+      };
+      // Price validity on the live quote (feed must be LIVE): a market that moved away is not chased.
       if (p.source === 'mt5') {
-        const live = await new MT5MarketDataProvider(env).read(),
-          act = assessActionability({ direction: p.direction, entry: p.entry, stop: p.sl, target: p.tp, expiresAt: p.expiresAt }, live?.tick ?? null);
+        const live = await new MT5MarketDataProvider(env).status(),
+          quote = live && feedStatus(live, env).status === 'LIVE' ? live.tick : null,
+          act = assessActionability({ direction: p.direction, entry: p.entry, stop: p.sl, target: p.tp, expiresAt: p.expiresAt }, quote ?? null);
         if (act.status !== 'ACTIONABLE')
-          throw new Error(`${act.status}: ${act.reasons.join(' ')} Proposta não aceita; o setup segue acompanhado no LAB.`);
+          await refuse(act.status, `${act.reasons.join(' ') || 'Feed não está LIVE.'} Proposta não aceita; o setup segue acompanhado no LAB.`);
       }
-      // Authoritative PAPER gate (database): settings version unchanged, risk ≤ 1R, quantity within
-      // limits, daily loss/trade limits. The stored proposal is used — nothing from the client.
+      // Manual quantity: may only REDUCE the risk-sized suggestion (validated and persisted in SQL).
+      let chosen: Proposal = p;
+      if (body.quantity !== undefined && body.quantity !== null && Number(body.quantity) !== p.quantity) {
+        try {
+          const updated = await rpc(env, 'trade_paper_quantity', { p_owner: owner, p_id: p.id, p_quantity: Math.trunc(Number(body.quantity)) });
+          chosen = updated.payload;
+        } catch (e) {
+          const m = e instanceof Error ? e.message : '';
+          throw new Error(/QUANTITY_/.test(m) ? m : 'QUANTITY_INVALID: quantidade não aceita.');
+        }
+      }
+      // Authoritative PAPER gate (database): risk-settings version unchanged, risk <= 1R, daily loss
+      // (gross losses + open risk + this trade) and trade-count limits. Uses the stored proposal only.
       const gate = await rpc(env, 'trade_paper_entry_check', {
         p_owner: owner,
-        p_risk_brl: p.riskBRL,
-        p_settings_version: p.riskSettings?.version ?? null,
+        p_risk_brl: chosen.riskBRL,
+        p_settings_version: chosen.riskSettings?.version ?? null,
       });
-      if (!gate?.allowed) throw new Error(`${gate?.code || 'RISK_GATE'}: ${gate?.message || 'Entrada PAPER bloqueada pela gestão de risco.'}`);
-      if (p.quantity > Number(gate.settings?.maxContracts))
-        throw new Error('RISK_MAX_CONTRACTS: quantidade acima do máximo configurado.');
-      return Response.json(await new PaperExecutionProvider(env).approve(p));
+      if (!gate?.allowed)
+        await refuse(
+          gate?.code || 'RISK_GATE',
+          gate?.code === 'RISK_SETTINGS_CHANGED'
+            ? 'Sua gestão de risco mudou desde que esta proposta foi criada. A proposta precisa ser recalculada; se o setup continuar válido, uma nova proposta aparece automaticamente.'
+            : gate?.code === 'RISK_SETTINGS_MISSING'
+              ? 'Gestão de risco não configurada. Configure capital, regra de 1R e limites antes de operar PAPER.'
+              : gate?.message || 'Entrada PAPER bloqueada pela gestão de risco.',
+        );
+      if (chosen.quantity > Number(gate.settings?.maxContracts))
+        await refuse('RISK_MAX_CONTRACTS', 'Quantidade acima do máximo de contratos configurado.');
+      return Response.json(await new PaperExecutionProvider(env).approve(chosen));
     }
     return Response.json(
       await rpc(env, 'trade_confirm', {
@@ -487,6 +512,15 @@ export async function onRequestGet({
         }
       }
     }
+    // Price validity of each pending live proposal, decided by the server on the LIVE quote only
+    // (WAITING/ACTIONABLE/MISSED/INVALIDATED/EXPIRED/NO_QUOTE). The UI never offers ENTRAR otherwise.
+    const liveQuote = data && feedStatus(data, env).status === 'LIVE' ? data.tick : null;
+    for (const row of rows as any[])
+      if (row.state === 'AGUARDANDO CONFIRMAÇÃO' && row.payload?.source === 'mt5')
+        row.actionability = assessActionability(
+          { direction: row.payload.direction, entry: row.payload.entry, stop: row.payload.sl, target: row.payload.tp, expiresAt: row.payload.expiresAt },
+          liveQuote ?? null,
+        );
     return Response.json(rows);
   } catch (e) {
     return Response.json(persistenceFailure(e), { status: 503 });

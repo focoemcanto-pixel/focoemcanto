@@ -134,7 +134,7 @@ test('daily limit: LIVE_DETECTED/hypothetical never consume it; a PAPER loss doe
     assert.deepEqual([s.tradesToday, s.lossTodayBRL, s.blocked], [0, 0, null]);
     // A PAPER trade actually executed today and closed at a loss consumes the PAPER limit.
     await w.q(`insert into trade_operation_proposals(id,owner_id,bridge_id,payload,state,expires_at,confirmed_at,execution)
-      values(gen_random_uuid(),'${owner}','b','{"mode":"PAPER","riskBRL":100}','CONFIRMADA',now(),now(),'{"exitTime":1,"resultBRL":-320,"resultR":-1.6}')`);
+      values(gen_random_uuid(),'${owner}','b','{"mode":"PAPER","source":"mt5","riskBRL":100}','CONFIRMADA',now(),now(),'{"exitTime":1,"resultBRL":-320,"resultR":-1.6}')`);
     s = await w.status();
     assert.equal(s.tradesToday, 1);
     assert.equal(s.lossTodayBRL, 320);
@@ -168,9 +168,9 @@ test('daily trade count and "loss + open risk + new risk" are enforced by the ba
   try {
     const s = await seedRisk(w.db, { ...base, riskModel: 'FIXED_BRL', riskValue: 100, dailyLossValue: 2, maxTradesPerDay: 2 }); // limit R$200
     await w.q(`insert into trade_operation_proposals(id,owner_id,bridge_id,payload,state,expires_at,confirmed_at,execution)
-      values(gen_random_uuid(),'${owner}','b','{"mode":"PAPER","riskBRL":100}','CONFIRMADA',now(),now(),'{"exitTime":1,"resultBRL":-60}')`);
+      values(gen_random_uuid(),'${owner}','b','{"mode":"PAPER","source":"mt5","riskBRL":100}','CONFIRMADA',now(),now(),'{"exitTime":1,"resultBRL":-60}')`);
     await w.q(`insert into trade_operation_proposals(id,owner_id,bridge_id,payload,state,expires_at,confirmed_at,execution)
-      values(gen_random_uuid(),'${owner}','b','{"mode":"PAPER","riskBRL":100}','CONFIRMADA',now(),now(),null)`);
+      values(gen_random_uuid(),'${owner}','b','{"mode":"PAPER","source":"mt5","riskBRL":100}','CONFIRMADA',now(),now(),null)`);
     let g = (await w.q('select public.trade_paper_entry_check($1,$2,$3) g', [owner, 40, Number(s.version)]))[0].g;
     assert.equal(g.code, 'DAILY_TRADE_LIMIT_REACHED');
     await seedRisk(w.db, { ...base, riskModel: 'FIXED_BRL', riskValue: 100, dailyLossValue: 2, maxTradesPerDay: 10 });
@@ -246,7 +246,11 @@ test('frontend manipulation cannot bypass the backend and saving settings can ne
     const r: any = await runScanner(w.env as any, 'replay', 30, 'forge');
     const tp = r.technicalProposals.find((t: any) => t.proposal.proposalState === 'READY');
     const row = (await w.read(30)).find((x: any) => x.payload.setupObservationId === tp.observationId);
-    const c = await w.post({ action: 'confirm', id: row.id, cursor: 30, mode: 'PAPER', quantity: 99, riskBRL: 1, riskSettings: { version: 999 } });
+    // A forged larger quantity is refused with the explicit risk reason; forged risk/settings are ignored.
+    const forged = await w.post({ action: 'confirm', id: row.id, cursor: 30, mode: 'PAPER', quantity: 99, riskBRL: 1, riskSettings: { version: 999 } });
+    assert.equal(forged.status, 409);
+    assert.match((await forged.json()).error, /QUANTITY_ABOVE_RISK: 99 contratos arriscariam R\$ [\d,]+, acima do seu limite de R\$ 100,00\./);
+    const c = await w.post({ action: 'confirm', id: row.id, cursor: 30, mode: 'PAPER', riskBRL: 1, riskSettings: { version: 999 } });
     assert.equal(c.status, 200, await c.clone().text());
     const done = (await w.q('select payload from trade_operation_proposals where id=$1', [row.id]))[0].payload;
     assert.equal(done.quantity, row.payload.quantity);

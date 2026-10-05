@@ -201,6 +201,31 @@ export default function LabPanel() {
           {t.outcomes.ambiguous} ambíguo · {t.outcomes.expired} sem desfecho · {t.outcomes.open} em acompanhamento.
         </p>
       </section>
+      {data.risk && (
+        <section aria-label="Risco" className="trade-lab-funnel" data-section="risk">
+          <span className="trade-eyebrow">RISCO · EVIDÊNCIA (LIVE, NÃO ALTERA O RISCO)</span>
+          <dl>
+            <dt>Bloqueados por risco</dt>
+            <dd>{data.risk.blockedByRisk}</dd>
+            <dt>…teriam atingido alvo / stop</dt>
+            <dd>
+              {data.risk.blockedOutcomes.targetFirst} / {data.risk.blockedOutcomes.stopFirst}
+            </dd>
+            <dt>Uso médio do 1R</dt>
+            <dd>{data.risk.avgOneRUsage == null ? '—' : `${Math.round(data.risk.avgOneRUsage * 100)}%`}</dd>
+            <dt>Risco médio · quantidade média</dt>
+            <dd>
+              {data.risk.avgRiskBRL == null ? '—' : data.risk.avgRiskBRL.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ·{' '}
+              {data.risk.avgQuantity == null ? '—' : data.risk.avgQuantity.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+            </dd>
+            <dt>Recusadas por limite diário / máx. operações</dt>
+            <dd>
+              {data.risk.refusedDailyLoss} / {data.risk.refusedMaxTrades}
+            </dd>
+          </dl>
+          <p>Resultados de setups bloqueados são HIPOTÉTICOS: servem de evidência, nunca para aumentar o risco automaticamente.</p>
+        </section>
+      )}
       <section aria-label="Estratégias" className="trade-lab-strategies">
         <span className="trade-eyebrow">ESTRATÉGIAS · POR VERSÃO E ORIGEM</span>
         {(data.analytics.opportunities || [])

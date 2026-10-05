@@ -20,6 +20,11 @@ export type RiskStatus = {
   day?: string;
   tradesToday: number;
   realizedTodayBRL: number;
+  /** Net P&L of today's live PAPER trades (gains included). Reported only; never restores the budget. */
+  netPnlTodayBRL: number;
+  /** Policy GROSS_LOSSES_PLUS_OPEN_RISK_V1: sum of today's realized losses (absolute). */
+  policy?: string;
+  openPositions?: number;
   lossTodayBRL: number;
   lossTodayR: number | null;
   openRiskBRL: number;

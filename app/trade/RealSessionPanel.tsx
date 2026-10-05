@@ -52,6 +52,10 @@ export default function RealSessionPanel({
   }, []);
   const state: 'ARMED' | 'BLOCKED' | 'UNAVAILABLE' =
     source !== 'mt5' ? 'UNAVAILABLE' : real?.state || 'UNAVAILABLE';
+  // Readiness dimensions (single source): CONNECTED EA with execution DISABLED is not "disconnected".
+  const d = real?.dimensions ?? null,
+    label = (v: string | undefined, fallback: unknown) =>
+      v === 'CONNECTED' ? 'CONECTADO' : v === 'DISCONNECTED' ? 'DESCONECTADO' : v === 'UNKNOWN' ? 'DESCONHECIDO' : fallback ? 'CONECTADO' : 'DESCONECTADO';
   const o = real?.overview || {},
     limits = real?.limits || {},
     max = o.maxSessionMinutes || 120,
@@ -115,16 +119,35 @@ export default function RealSessionPanel({
         <dd>{o.accountMatches ? 'fingerprint confere' : 'fingerprint não confere / não configurado'}{o.accountTradeMode === 2 ? ' · conta REAL' : o.accountTradeMode == null ? '' : ' · conta não-REAL'}</dd>
         <dt>Símbolo</dt>
         <dd>{o.symbol || '—'}</dd>
-        <dt>Feed</dt>
-        <dd>
-          {o.feedStatus || 'OFFLINE'}
-          {o.feedAgeMs != null && ` · ${Math.max(0, Math.round(o.feedAgeMs / 1000))}s`}
+        <dt>Feed (dados de mercado)</dt>
+        <dd data-readiness="market">
+          {d?.marketData ?? o.feedStatus ?? 'DESCONHECIDO'}
+          {(d?.feedAgeMs ?? o.feedAgeMs) != null && ` · ${Math.max(0, Math.round((d?.feedAgeMs ?? o.feedAgeMs) / 1000))}s`}
         </dd>
-        <dt>Bridge · EA</dt>
-        <dd>
-          {o.bridgeConnected ? 'conectado' : 'desconectado'} ·{' '}
-          {o.eaExecutionAllowed ? 'EA apto' : 'EA sem execução'}
+        <dt>Bridge</dt>
+        <dd data-readiness="bridge">{label(d?.bridgeTransport, o.bridgeConnected)}</dd>
+        <dt>EA</dt>
+        <dd data-readiness="ea">
+          {label(d?.ea, o.bridgeConnected)}
+          {d?.eaVersion ? ` · v${d.eaVersion}` : ''}
         </dd>
+        <dt>Execução no EA</dt>
+        <dd data-readiness="ea-execution">{d ? (d.eaExecution === 'ENABLED' ? 'HABILITADA' : d.eaExecution === 'DISABLED' ? 'DESABILITADA' : 'DESCONHECIDA') : o.eaExecutionAllowed ? 'HABILITADA' : 'DESABILITADA'}</dd>
+        <dt>Sessão REAL · kill switch</dt>
+        <dd data-readiness="session">
+          {d?.realSession === 'ARMED' ? 'ARMADA' : d?.realSession === 'NOT_ARMED' ? 'NÃO ARMADA' : 'DESCONHECIDA'} · kill switch{' '}
+          {d?.killSwitch === 'OFF' ? 'LIBERADO' : 'ATIVO'}
+        </dd>
+        {real?.error && (
+          <>
+            <dt>Erro do contexto REAL</dt>
+            <dd className="trade-operation-error" data-readiness="error">
+              {real.error.error} · {real.error.code}
+              {real.error.operation ? ` · ${real.error.operation}` : ''}
+              {real.error.httpStatus ? ` · HTTP ${real.error.httpStatus}` : ''}
+            </dd>
+          </>
+        )}
         <dt>Policy</dt>
         <dd>{o.policyLoaded ? 'carregada' : 'não configurada'}</dd>
         <dt>Limite por operação</dt>

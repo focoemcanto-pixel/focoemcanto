@@ -138,7 +138,7 @@ export async function rpc(
     if(name.startsWith('trade_inspection_') && data?.code==='P0001' && ['Inspection proposal invalid','Inspection nonce already consumed','Inspection confirmation invalid or expired'].includes(data?.message))
       throw new Error('Confirmação de inspeção inválida, reutilizada ou expirada. Gere uma nova proposta.');
     // Deliberate REAL-session/configuration refusals carry a safe, explicit code for the operator.
-    if(data?.code==='P0001' && typeof data?.message==='string' && /^(ARM_BLOCKED|POLICY_|AUTHORIZATION_|Kill switch is released|RISK_SETTINGS_INVALID)/.test(data.message))
+    if(data?.code==='P0001' && typeof data?.message==='string' && /^(ARM_BLOCKED|POLICY_|AUTHORIZATION_|Kill switch is released|RISK_SETTINGS_INVALID|QUANTITY_)/.test(data.message))
       throw new Error(data.message.slice(0,300));
     const code =
       data?.code === 'P0001' && data?.message === 'Another EA session owns the lease'
