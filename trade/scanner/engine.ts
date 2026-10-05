@@ -6,6 +6,34 @@ import type { MarketSnapshot } from '../core/types';
 import { calculateFeatures } from './features';
 import { strategyRegistry, scannerParameters } from './strategies';
 import { buildHypotheses, deskSummary } from './proximity';
+import type { MarketFeatures } from './features';
+import type { FrameContext, MarketContextSnapshot } from './types';
+/** Versioned, objective subset of the features already computed by the scanner (nothing inferred). */
+export const marketContextVersion = 'context-v1';
+function marketContext(features: MarketFeatures, snapshot: MarketSnapshot): MarketContextSnapshot {
+  const frame = (tf: '1m' | '5m' | '15m'): FrameContext => {
+    const f = features.frames[tf],
+      bars = snapshot.candles[tf] || [],
+      recent = bars.slice(-20);
+    return {
+      bars: f?.count ?? 0,
+      close: f?.last?.close ?? null,
+      emaFast: f?.emaFast ?? null,
+      emaSlow: f?.emaSlow ?? null,
+      atr: f?.atr ?? null,
+      rsi: f?.rsi ?? null,
+      macd: f?.macd ?? null,
+      signal: f?.signal ?? null,
+      support: f?.support ?? null,
+      resistance: f?.resistance ?? null,
+      volumeRatio: f?.volumeRatio ?? null,
+      momentum: f?.momentum ?? null,
+      rangeHigh: recent.length ? Math.max(...recent.map((c) => c.high)) : null,
+      rangeLow: recent.length ? Math.min(...recent.map((c) => c.low)) : null,
+    };
+  };
+  return { version: marketContextVersion, regimes: features.regimes, frames: { '1m': frame('1m'), '5m': frame('5m'), '15m': frame('15m') } };
+}
 import type {
   ScannerResult,
   StrategyEvaluator,
@@ -136,6 +164,7 @@ export function scanMarket(
     summary,
     hypotheses,
     desk: deskSummary(hypotheses, candidates, feedBlocked),
+    context: marketContext(features, snapshot),
   };
 }
 const transitions: Record<WatchState, WatchState[]> = {

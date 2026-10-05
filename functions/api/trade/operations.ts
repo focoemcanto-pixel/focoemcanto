@@ -37,6 +37,7 @@ import { instrumentValue } from '../../../trade/bridge/instruments';
 import { scannerParameters } from '../../../trade/scanner/strategies';
 import { scanMarket } from '../../../trade/scanner/engine';
 import { validateCommand } from '../../../trade/bridge/protocol';
+import { assessActionability } from '../../../trade/lab/actionability';
 const owner = 'focoos-admin'; // Existing admin-session middleware, never client supplied.
 async function market(
   env: BridgeEnv,
@@ -318,6 +319,13 @@ export async function onRequestPost({
       );
     }
     if (p.mode === 'PAPER' && body.action === 'confirm') {
+      // Price validity on the live quote: a proposal whose market moved away is not chased.
+      if (p.source === 'mt5') {
+        const live = await new MT5MarketDataProvider(env).read(),
+          act = assessActionability({ direction: p.direction, entry: p.entry, stop: p.sl, target: p.tp, expiresAt: p.expiresAt }, live?.tick ?? null);
+        if (act.status !== 'ACTIONABLE')
+          throw new Error(`${act.status}: ${act.reasons.join(' ')} Proposta não aceita; o setup segue acompanhado no LAB.`);
+      }
       const limit = paperRiskLimit(env);
       if (limit.maxRiskBRL === null || p.riskBRL > limit.maxRiskBRL + 1e-9)
         throw new Error(

@@ -17,6 +17,7 @@
     "core/**/*.ts",
     "bridge/**/*.ts",
     "scanner/**/*.ts",
+    "lab/**/*.ts",
     "../functions/api/trade/**/*.ts",
     "../tests/trade/**/*.ts"
   ]

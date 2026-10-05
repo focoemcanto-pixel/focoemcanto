@@ -14,6 +14,9 @@ import {
 import { scannerParameters } from './strategies';
 import { instrumentValue } from '../bridge/instruments';
 import type { SetupWatch, ScannerResult } from './types';
+import { buildSetupSnapshot, observationId } from '../lab/snapshot';
+import { assessActionability } from '../lab/actionability';
+import { trackOutcome, resolveWithTicks } from '../lab/outcome';
 export const tradeOwner = 'focoos-admin';
 export function scannerScope(source: string, symbol: string, run = 'default') {
   if (!/^[a-zA-Z0-9_-]{1,80}$/.test(run)) throw new Error('Sessão inválida');
@@ -81,11 +84,42 @@ export async function runScanner(
    * exceeds the limit is persisted as RISK_BLOCKED (quantity 0) for hypothetical study; it is
    * never sent to the PAPER provider and never becomes an order. Idempotent per watch.
    */
-  const propose = async (watches: SetupWatch[], regimes: string[]) => {
+  // Current quote: XP tick (normalized UTC) live; replay has no book, so the last close stands in.
+  const lastClose = candles.at(-1)?.close,
+    quote =
+      source === 'mt5'
+        ? data?.tick
+          ? { bid: data.tick.bid, ask: data.tick.ask, last: data.tick.last, timeMsc: data.tick.timeMsc }
+          : null
+        : lastClose
+          ? { bid: lastClose, ask: lastClose, last: lastClose }
+          : null;
+  /**
+   * LAB: every confirmed setup is recorded once (dedup by watch) with an immutable snapshot, before
+   * and independently of any proposal. A setup whose price already moved away is MISSED, never chased.
+   */
+  const observe = async (w: SetupWatch, scan: ScannerResult) => {
+    const id = observationId(scope, w.id),
+      snap = buildSetupSnapshot(w, scan, { source: source === 'mt5' ? 'LIVE' : 'REPLAY', scope, quote, pointValue }),
+      act = assessActionability({ direction: snap.direction as 'BUY' | 'SELL', entry: snap.entry, stop: snap.stop, target: snap.target }, quote);
+    const row = await rpc(env, 'trade_setup_observe', {
+      p_owner: tradeOwner,
+      p_observation: { id, scope, source: snap.source, snapshot: snap, actionability: act },
+    });
+    if (w.candidate.analysis.conflicts.length)
+      await rpc(env, 'trade_setup_lifecycle', { p_owner: tradeOwner, p_id: id, p_state: 'CANCELLED', p_payload: { reason: 'DIRECTION_CONFLICT', conflicts: w.candidate.analysis.conflicts } });
+    else if (act.status === 'MISSED' || act.status === 'INVALIDATED')
+      await rpc(env, 'trade_setup_lifecycle', { p_owner: tradeOwner, p_id: id, p_state: act.status, p_payload: act });
+    return { id, actionability: act, lifecycle: row?.lifecycle as string | undefined };
+  };
+  const propose = async (watches: SetupWatch[], scan: ScannerResult) => {
+    const regimes = scan.regimes;
     const technicalProposals: {
         setupWatchId: string;
         strategy: string;
         proposal: Proposal;
+        observationId?: string;
+        actionability?: ReturnType<typeof assessActionability>;
       }[] = [],
       proposalBlocks: { setupWatchId: string; strategy: string; reason: string }[] = [];
     if (!available) return { technicalProposals, proposalBlocks };
@@ -93,11 +127,21 @@ export async function runScanner(
       if (
         !['CONFIRMED', 'PROPOSED', 'RISK_BLOCKED'].includes(w.state) ||
         w.lastAsOf !== snapshot.asOf ||
-        w.candidate.analysis.conflicts.length ||
         !w.candidate.analysis.setup
       )
         continue;
       const strategy = w.candidate.definition.id;
+      let obs: Awaited<ReturnType<typeof observe>> | undefined;
+      try {
+        obs = await observe(w, scan);
+      } catch (e) {
+        proposalBlocks.push({ setupWatchId: w.id, strategy, reason: 'LAB: ' + (e instanceof Error ? e.message.slice(0, 200) : 'observação indisponível') });
+      }
+      if (w.candidate.analysis.conflicts.length) continue;
+      if (obs && ['MISSED', 'INVALIDATED'].includes(obs.actionability.status) && w.state === 'CONFIRMED') {
+        proposalBlocks.push({ setupWatchId: w.id, strategy, reason: `${obs.actionability.status}: ${obs.actionability.reasons.join(' ')}` });
+        continue;
+      }
       try {
         const contract = instrumentValue(symbol, 'PAPER', data?.state),
           technical = buildTechnicalProposal(w.candidate.analysis, {
@@ -123,14 +167,18 @@ export async function runScanner(
             ...p,
             scope,
             setupWatchId: w.id,
+            setupObservationId: obs?.id,
             participants: w.participants,
             regimes,
           },
         });
+        const proposal = (saved?.payload as Proposal) || p;
         technicalProposals.push({
           setupWatchId: w.id,
           strategy,
-          proposal: (saved?.payload as Proposal) || p,
+          proposal,
+          observationId: obs?.id,
+          actionability: assessActionability({ direction: proposal.direction, entry: proposal.entry, stop: proposal.sl, target: proposal.tp, expiresAt: proposal.expiresAt }, quote),
         });
       } catch (e) {
         proposalBlocks.push({
@@ -142,6 +190,28 @@ export async function runScanner(
     }
     return { technicalProposals, proposalBlocks };
   };
+  /**
+   * Outcome tracking for every open observation of this scope, traded or not. Causal (bars after
+   * confirmation only); a bar touching stop and target is settled by ticks when they exist, else AMBIGUOUS.
+   */
+  const track = async () => {
+    const open: any[] = await rpc(env, 'trade_setup_open', { p_owner: tradeOwner, p_scope: scope, p_limit: 50 });
+    let updated = 0;
+    for (const o of open || []) {
+      const plan = { direction: o.direction === 'BUY' ? ('long' as const) : ('short' as const), entry: Number(o.entry), stop: Number(o.stop), target: Number(o.target), asOf: Number(o.marketAsOf) };
+      let outcome = trackOutcome(plan, candles);
+      if (outcome.status === 'AMBIGUOUS' && source === 'mt5' && outcome.exitTimestamp !== null) {
+        const ticks = await rpc(env, 'trade_bridge_ticks_window', { p_bridge: c.bridgeId, p_symbol: symbol, p_from_ms: outcome.exitTimestamp * 1000, p_to_ms: outcome.exitTimestamp * 1000 + 60000 }).catch(() => []);
+        const order = resolveWithTicks(ticks || [], plan);
+        if (order) outcome = trackOutcome(plan, candles, () => order);
+      }
+      if (outcome.barsTracked === 0 && outcome.status === 'OPEN') continue;
+      if (JSON.stringify(outcome) === JSON.stringify(o.outcome)) continue;
+      await rpc(env, 'trade_setup_outcome', { p_owner: tradeOwner, p_id: o.id, p_outcome: outcome });
+      updated++;
+    }
+    return updated;
+  };
   if (old.asOf === snapshot.asOf) {
     const scan = scanMarket(snapshot, undefined, available);
     return {
@@ -150,7 +220,8 @@ export async function runScanner(
       feedLive: available,
       scope,
       riskPolicy,
-      ...(await propose(old.watches || [], scan.regimes)),
+      ...(await propose(old.watches || [], scan)),
+      outcomesUpdated: await track().catch(() => 0),
     };
   }
   let watches: SetupWatch[] = old.watches || [],
@@ -190,7 +261,8 @@ export async function runScanner(
       feedLive: available,
     },
   });
-  const proposals = await propose(saved.watches || [], scan.regimes);
+  const proposals = await propose(saved.watches || [], scan);
+  const outcomesUpdated = await track().catch(() => 0);
   return {
     ...(await rpc(env, 'trade_scanner_read', {
       p_owner: tradeOwner,
@@ -200,5 +272,6 @@ export async function runScanner(
     scope,
     riskPolicy,
     ...proposals,
+    outcomesUpdated,
   };
 }
