@@ -1,5 +1,5 @@
 #property strict
-#property version "2.00"
+#property version "2.01"
 #property description "Foco Trade XP/MT5 bridge. Execution disabled by default."
 input string ApiOrigin="https://focoemcanto.com";
 input string BridgeToken="";
@@ -32,6 +32,7 @@ string brokerRefs="";
 ulong eventSequence=0;
 bool historyReady=false,protectionFault=false;
 long historyAsOfMsc=0; double loss24hBRL=0;
+int lastExchangeHttpStatus=0;long lastExchangeAckAt=0;
 string Q(string s) { StringReplace(s,"\\","\\\\"); StringReplace(s,"\"","\\\""); StringReplace(s,"\r","\\r"); StringReplace(s,"\n","\\n"); return "\""+s+"\""; }
 string N(double n) { return DoubleToString(n,8); }
 string B(bool b) { return b?"true":"false"; }
@@ -63,6 +64,50 @@ void ProtectionHealth(){
 }
 bool Save(string filename,string body) { int f=FileOpen(filename+".tmp",FILE_WRITE|FILE_TXT|FILE_ANSI|FILE_COMMON,0,CP_UTF8); if(f==INVALID_HANDLE)return false; uint n=FileWriteString(f,body); FileFlush(f); FileClose(f); if(n==0 && body!="")return false; return FileMove(filename+".tmp",FILE_COMMON,filename,FILE_COMMON|FILE_REWRITE); }
 string Load(string filename) { int f=FileOpen(filename,FILE_READ|FILE_TXT|FILE_ANSI|FILE_COMMON,0,CP_UTF8); if(f==INVALID_HANDLE)return ""; string s=""; while(!FileIsEnding(f)){string line=FileReadString(f); s+=line; if(!FileIsEnding(f))s+="\n";} FileClose(f); return s; }
+// Minimal structural JSON reader for our durable transport envelope; no order execution.
+int JsonEnd(string j,int start){
+ bool quoted=false,escaped=false;int depth=0;
+ for(int i=start;i<StringLen(j);i++){
+  ushort ch=StringGetCharacter(j,i);
+  if(quoted){if(escaped)escaped=false;else if(ch==92)escaped=true;else if(ch==34){quoted=false;if(depth==0)return i+1;}continue;}
+  if(ch==34){quoted=true;continue;}if(ch==123 || ch==91)depth++;
+  else if(ch==125 || ch==93){if(depth==0)return i;depth--;if(depth==0)return i+1;}
+  else if(ch==44 && depth==0)return i;
+ }return quoted || depth!=0?-1:StringLen(j);
+}
+int JsonSkip(string j,int pos){while(pos<StringLen(j)){ushort c=StringGetCharacter(j,pos);if(c!=32 && c!=9 && c!=10 && c!=13)break;pos++;}return pos;}
+bool JsonMember(string j,string name,int &a,int &b){
+ int pos=JsonSkip(j,0);if(pos>=StringLen(j) || StringGetCharacter(j,pos)!=123)return false;pos++;
+ while(pos<StringLen(j)){
+  pos=JsonSkip(j,pos);if(pos>=StringLen(j) || StringGetCharacter(j,pos)!=34)return false;
+  int end=JsonEnd(j,pos);if(end<0)return false;string key=StringSubstr(j,pos+1,end-pos-2);
+  pos=JsonSkip(j,end);if(pos>=StringLen(j) || StringGetCharacter(j,pos)!=58)return false;
+  a=JsonSkip(j,pos+1);b=JsonEnd(j,a);if(b<0)return false;
+  if(key==name)return true;pos=JsonSkip(j,b);if(pos>=StringLen(j) || StringGetCharacter(j,pos)!=44)return false;pos++;
+ }return false;
+}
+string JsonField(string j,string name){int a,b;if(!JsonMember(j,name,a,b))return "";string v=StringSubstr(j,a,b-a);StringTrimRight(v);if(StringLen(v)>=2 && StringGetCharacter(v,0)==34)return StringSubstr(v,1,StringLen(v)-2);return v;}
+bool RecoverLegacyPending(){
+ if(pending=="")return true;int a,b;if(!JsonMember(pending,"state",a,b)){Print("PENDING_STATE_INVALID: transport quarantined; evidence preserved");return false;}
+ string oldState=StringSubstr(pending,a,b-a),version=JsonField(oldState,"protocolVersion");
+ if(version=="2")return true;
+ if(version!="" && version!="1"){Print("PENDING_PROTOCOL_UNSUPPORTED: transport quarantined");return false;}
+ if(JsonField(pending,"bridgeId")!=BridgeId || JsonField(pending,"symbol")!=TradeSymbol || JsonField(pending,"accountHash")!=accountHash){Print("PENDING_IDENTITY_MISMATCH: preserve files and review identity; no order sent");return false;}
+ if(EnableExecution || SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE)<=0){Print("PENDING_RECOVERY_NOT_READY: requires execution disabled and symbol metadata");return false;}
+ string backup=prefix+"pending_upgrade_"+Hash(pending)+".txt";
+ if(Load(backup)=="" && !Save(backup,pending)){Print("Cannot preserve legacy pending; recovery blocked");return false;}
+ string upgraded=StringSubstr(pending,0,a)+StateJson()+StringSubstr(pending,b);
+ if(!Save(prefix+"pending.txt",upgraded)){Print("Cannot persist upgraded pending; original backup preserved");return false;}
+ pending=upgraded;
+ // No cursor rewind, no new batch/session, no ledger/refs/seen/events deletion.
+ Print("Legacy pending transport upgraded to protocol 2; batch/events/watermark preserved; execution locked");return true;
+}
+string BackendErrorCode(string reply){
+ string code=JsonField(reply,"errorCode");
+ // Only known, non-secret codes are logged. Never print the response body.
+ string allowed="|BRIDGE_UNAUTHORIZED|BRIDGE_JSON_INVALID|BRIDGE_CONFIG_INVALID|BRIDGE_TRANSPORT_ERROR|BRIDGE_IDENTITY_INVALID|BRIDGE_ID_MISMATCH|BRIDGE_SYMBOL_MISMATCH|BRIDGE_SESSION_INVALID|BRIDGE_BATCH_INVALID|BRIDGE_ACCOUNT_MISMATCH|BRIDGE_BATCH_SIZE|BRIDGE_TICK_INVALID|BRIDGE_CANDLES_INVALID|BRIDGE_CANDLE_UNCLOSED_OR_SYMBOL|BRIDGE_STATE_INVALID|BRIDGE_POSITION_ORDER_INVALID|BRIDGE_TICK_SIZE_INVALID|BRIDGE_EVENT_INVALID|CONFIGURATION_MISSING|SCHEMA_MISSING|ACCESS_DENIED|PERSISTENCE_UNAVAILABLE|";
+ return code!="" && StringFind(allowed,"|"+code+"|")>=0?code:"BRIDGE_RESPONSE_UNCLASSIFIED";
+}
 string Tag(string id) { StringReplace(id,"-",""); return "FT"+StringSubstr(id,0,24); }
 string CommandIdFor(string tag) { for(int i=0;i<ArraySize(commands);i++){string p[]; if((StringSplit(commands[i],'|',p)==10 || ArraySize(p)==15) && Tag(p[1])==tag)return p[1];}return ""; }
 bool QueueEvent(string id,string kind,string commandId,string fields="") {
@@ -91,7 +136,7 @@ string OrdersJson() {
  }return j+"]";
 }
 bool ExecutionAllowed(){return EnableExecution && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
-string StateJson(){HistoryHealth();ProtectionHealth();return "{\"protocolVersion\":2,\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
+string StateJson(){HistoryHealth();ProtectionHealth();return "{\"protocolVersion\":2,\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
 string CandlesJson(){MqlRates rates[];int count;datetime closed=iTime(TradeSymbol,PERIOD_M1,1);
  if(lastBar==0)count=CopyRates(TradeSymbol,PERIOD_M1,1,HistoryBars,rates);else count=CopyRates(TradeSymbol,PERIOD_M1,lastBar,closed,rates);
  if(count>0)lastBar=rates[count-1].time;string j="[";
@@ -200,11 +245,13 @@ int OnInit(){
  string cursor=Load(prefix+"cursor.txt"),parts[];if(StringSplit(cursor,'|',parts)==3){lastMsc=StringToInteger(parts[0]);sameMscCount=(int)StringToInteger(parts[1]);batch=StringToInteger(parts[2]);}
  // A persisted response is quarantined on restart, NEVER replayed into OrderSend.
  string interrupted=Load(prefix+"reply.txt");if(interrupted!=""){
- string lines[];StringSplit(interrupted,'\n',lines);for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"CMD2|")==0){int n=ArraySize(commands);ArrayResize(commands,n+1);commands[n]=lines[i];}
+ if(!Save(prefix+"reply_quarantine_"+Hash(interrupted)+".txt",interrupted))return INIT_FAILED;
+ string lines[];StringSplit(interrupted,'\n',lines);for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"CMD2|")==0 || StringFind(lines[i],"CMD|")==0){int n=ArraySize(commands);ArrayResize(commands,n+1);commands[n]=lines[i];}
  string durable="";for(int i=0;i<ArraySize(commands);i++)durable+=commands[i]+"\n";
  if(!Save(prefix+"ledger.txt",durable))return INIT_FAILED;FileDelete(prefix+"reply.txt",FILE_COMMON);
  }
- Print("Foco Trade v2; execution enabled: ",EnableExecution);
+ if(pending!="" && JsonField(JsonField(pending,"state"),"protocolVersion")!="2")Print("Legacy pending detected; safe transport upgrade scheduled");
+ Print("Foco Trade v2.01; execution enabled: ",EnableExecution);
  EventSetTimer(PollSeconds);return INIT_SUCCEEDED;
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);}
@@ -216,6 +263,7 @@ string TakeEvents(string &remaining){
  start=boundary+2;count++;}
 }
 void OnTimer(){
+ if(!RecoverLegacyPending())return;
  if(pending==""){
  Reconcile();string ticks=TicksJson();string remainingEvents;string batchEvents=TakeEvents(remainingEvents);
  pending="{\"bridgeId\":"+Q(BridgeId)+",\"symbol\":"+Q(TradeSymbol)+",\"session\":"+Q(session)+",\"batch\":"+(string)batch+",\"accountHash\":"+Q(accountHash)+",\"ticks\":"+ticks+",\"candles\":"+CandlesJson()+",\"state\":"+StateJson()+",\"events\":["+batchEvents+"]}";
@@ -225,12 +273,15 @@ void OnTimer(){
  batch++;events=remainingEvents;Save(prefix+"events.txt",events);
  }
  char body[],response[];StringToCharArray(pending,body,0,WHOLE_ARRAY,CP_UTF8);ArrayResize(body,ArraySize(body)-1);string headers;
+ ResetLastError();
  int status=WebRequest("POST",ApiOrigin+"/api/trade/bridge/exchange","Authorization: Bearer "+BridgeToken+"\r\nContent-Type: application/json\r\n",HttpTimeoutMs,body,response,headers);
- if(status!=200){Print("Foco Trade exchange HTTP ",status,"; error ",GetLastError(),". Retrying same durable batch.");return;}
- string reply=CharArrayToString(response,0,WHOLE_ARRAY,CP_UTF8);
+ int networkError=GetLastError();string reply=CharArrayToString(response,0,WHOLE_ARRAY,CP_UTF8);
+ if(status!=200){lastExchangeHttpStatus=status;Print("Foco Trade exchange HTTP ",status,": ",BackendErrorCode(reply),status<0?"; network error "+(string)networkError:"",". Retrying same durable batch.");return;}
  if(StringFind(reply,"OK\n")!=0){Print("Invalid bridge response; retaining batch");return;}
  if(!Save(prefix+"reply.txt",reply)){Print("Cannot persist response; no order sent");return;}
  string lines[];StringSplit(reply,'\n',lines);for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"CMD2|")==0)Execute(lines[i]);
+ if(lastExchangeHttpStatus!=200)Print("Foco Trade exchange HTTP 200 OK; execution gate: ",EnableExecution?"ARMED":"LOCKED");
+ lastExchangeHttpStatus=200;lastExchangeAckAt=(long)TimeGMT()*1000;
  FileDelete(prefix+"reply.txt",FILE_COMMON);pending="";FileDelete(prefix+"pending.txt",FILE_COMMON);
  Comment("Foco Trade\n",TradeSymbol," / XP-MT5\nHTTP 200\nExecution gate: ",EnableExecution?"ARMED":"LOCKED","\nLast tick ms: ",lastMsc);
 }

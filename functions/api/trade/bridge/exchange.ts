@@ -1,4 +1,7 @@
-import { exchangeDiagnostic, type ExchangeStage } from '../../../../trade/bridge/diagnostics';
+import {
+  exchangeDiagnostic,
+  type ExchangeStage,
+} from '../../../../trade/bridge/diagnostics';
 import {
   authenticateBridge,
   config,
@@ -10,7 +13,8 @@ import { validateBatch, commandWire } from '../../../../trade/bridge/protocol';
 import { runScanner } from '../../../../trade/scanner/service';
 import { onRequestGet as observePaper } from '../operations';
 let lastBackgroundAt = 0;
-const rejectionLoggedAt = new Map<string,number>();
+let acceptedLoggedAt = 0;
+const rejectionLoggedAt = new Map<string, number>();
 // This cache is diagnostics only; market data is always persisted by the exchange RPC.
 let operationsProbe:
   | { origin: string; checkedAt: number; available: boolean; code?: string }
@@ -51,8 +55,16 @@ export async function onRequestPost({
   waitUntil?: (task: Promise<unknown>) => void;
 }) {
   if (!(await authenticateBridge(request, env)))
-    return Response.json({error:'Bridge não autorizado',errorCode:'BRIDGE_UNAUTHORIZED',stage:'authenticate'},{status:401,headers:{'Cache-Control':'no-store'}});
-  let stage:ExchangeStage='parse',value:any;
+    return Response.json(
+      {
+        error: 'Bridge não autorizado',
+        errorCode: 'BRIDGE_UNAUTHORIZED',
+        stage: 'authenticate',
+      },
+      { status: 401, headers: { 'Cache-Control': 'no-store' } },
+    );
+  let stage: ExchangeStage = 'parse',
+    value: any;
   try {
     if (
       request.headers.get('Content-Type')?.split(';')[0] !== 'application/json'
@@ -60,10 +72,12 @@ export async function onRequestPost({
       throw new Error('JSON obrigatório');
     const raw = await request.text();
     if (raw.length > 1000000) throw new Error('Lote excede limite');
-    value=JSON.parse(raw);
-    stage='config';const c=config(env);
-    stage='validateBatch';const batch=validateBatch(value,env);
-    stage='probeOperations';
+    value = JSON.parse(raw);
+    stage = 'config';
+    const c = config(env);
+    stage = 'validateBatch';
+    const batch = validateBatch(value, env);
+    stage = 'probeOperations';
     const operationsStatus = await probeOperations(env);
     batch.state = {
       ...batch.state,
@@ -78,7 +92,10 @@ export async function onRequestPost({
         verifiedAt: new Date().toISOString(),
       },
     };
-    stage=batch.state.protocolVersion===2?'trade_bridge_exchange_v2':'trade_bridge_exchange';
+    stage =
+      batch.state.protocolVersion === 2
+        ? 'trade_bridge_exchange_v2'
+        : 'trade_bridge_exchange';
     const result = await rpc(
       env,
       batch.state.protocolVersion === 2
@@ -111,20 +128,66 @@ export async function onRequestPost({
         })(),
       );
     }
-    stage='commandWire';
+    stage = 'commandWire';
     // Defense in depth: a disarmed backend never puts a command on the wire.
-    return new Response(commandWire(c.execution ? result.command : null), {
+    const wire = commandWire(c.execution ? result.command : null);
+    if (waitUntil && Date.now() - acceptedLoggedAt >= 30000) {
+      acceptedLoggedAt = Date.now();
+      const receipt = {
+        kind: 'TRANSPORT_ACCEPTED',
+        httpStatus: 200,
+        stage: 'commandWire',
+        bridgeId: batch.bridgeId,
+        symbol: batch.symbol,
+        protocolVersion: batch.state.protocolVersion ?? 1,
+        batch: batch.batch,
+        ticks: batch.ticks.length,
+        candles: batch.candles.length,
+        events: batch.events.length,
+        responsePrefix: 'OK',
+        commandCount: wire.split('\n').filter((line) => line.startsWith('CMD'))
+          .length,
+        executionEnabled: c.execution,
+        timestamp: new Date().toISOString(),
+      };
+      console.info('trade_bridge_transport', JSON.stringify(receipt));
+      waitUntil(
+        rpc(env, 'trade_real_audit', {
+          p_bridge: c.bridgeId,
+          p_payload: receipt,
+        }).catch(() => {}),
+      );
+    }
+    return new Response(wire, {
       headers: { 'Content-Type': 'text/plain', 'Cache-Control': 'no-store' },
     });
   } catch (e) {
-    const diagnostic=exchangeDiagnostic(stage,e,value,env);
-    console.error('trade_bridge_transport',JSON.stringify(diagnostic));
-    const key=[diagnostic.stage,diagnostic.errorCode,diagnostic.bridgeId,diagnostic.symbol,diagnostic.batch].join(':');
-    if(Date.now()-(rejectionLoggedAt.get(key)||0)>=30000){
-      if(rejectionLoggedAt.size>100)rejectionLoggedAt.clear();rejectionLoggedAt.set(key,Date.now());
-      const audit=rpc(env,'trade_real_audit',{p_bridge:diagnostic.bridgeId||'transport',p_payload:{kind:'TRANSPORT_REJECTED',...diagnostic,timestamp:new Date().toISOString()}}).catch(()=>{});
-      if(waitUntil)waitUntil(audit);else await audit;
+    const diagnostic = exchangeDiagnostic(stage, e, value, env);
+    console.error('trade_bridge_transport', JSON.stringify(diagnostic));
+    const key = [
+      diagnostic.stage,
+      diagnostic.errorCode,
+      diagnostic.bridgeId,
+      diagnostic.symbol,
+      diagnostic.batch,
+    ].join(':');
+    if (Date.now() - (rejectionLoggedAt.get(key) || 0) >= 30000) {
+      if (rejectionLoggedAt.size > 100) rejectionLoggedAt.clear();
+      rejectionLoggedAt.set(key, Date.now());
+      const audit = rpc(env, 'trade_real_audit', {
+        p_bridge: diagnostic.bridgeId || 'transport',
+        p_payload: {
+          kind: 'TRANSPORT_REJECTED',
+          ...diagnostic,
+          timestamp: new Date().toISOString(),
+        },
+      }).catch(() => {});
+      if (waitUntil) waitUntil(audit);
+      else await audit;
     }
-    return Response.json(diagnostic,{status:400,headers:{'Cache-Control':'no-store'}});
+    return Response.json(diagnostic, {
+      status: 400,
+      headers: { 'Cache-Control': 'no-store' },
+    });
   }
 }

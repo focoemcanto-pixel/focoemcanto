@@ -124,7 +124,15 @@ export async function rpc(
             ['PGRST202', 'PGRST205', '42P01', '42883'].includes(data?.code)
           ? 'SCHEMA_MISSING'
           : 'PERSISTENCE_UNAVAILABLE';
-    throw new PersistenceError(code, name, response.status, typeof data?.code==='string' && /^(?:[A-Z0-9]{5}|PGRST[0-9]{3})$/.test(data.code) ? data.code : undefined);
+    throw new PersistenceError(
+      code,
+      name,
+      response.status,
+      typeof data?.code === 'string' &&
+      /^(?:[A-Z0-9]{5}|PGRST[0-9]{3})$/.test(data.code)
+        ? data.code
+        : undefined,
+    );
   }
   try {
     return await response.json();

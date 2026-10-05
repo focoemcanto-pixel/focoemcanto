@@ -104,3 +104,5 @@ Veja [parâmetros](./parameters.md), [conectar WIN/B3](./live-b3.md) e [validaç
 Fluxo obrigatório de operação, modos PAPER/REAL, persistência e migration: [human-approval.md](human-approval.md). Nenhuma entrada pode seguir pelo endpoint de comandos diretos; somente proposta confirmada.
 
 Pipeline PAPER/REAL, confirmação final, gates, EA v2 e instalação no Mac: [real-execution.md](real-execution.md). REAL permanece desarmado.
+
+Diagnóstico HTTP 400, identidade do Worker, transporte v2.01 e pending legado: [transport-homologation.md](transport-homologation.md).
