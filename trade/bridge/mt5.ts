@@ -35,10 +35,28 @@ export function feedStatus(data: any, env: BridgeEnv, now = Date.now()) {
     Number.isFinite(receivedAge) &&
     now - Date.parse(data.receivedAt) >= -2000 &&
     receivedAge <= c.maxAgeMs;
+  const status = live ? 'LIVE' : clockMatches && lastTick?.symbol === c.symbol && data?.state?.connected === true && receivedAge !== null && Number.isFinite(receivedAge) && receivedAge <= c.maxAgeMs ? 'STALE' : 'OFFLINE';
+  // Diagnosis only — never promotes a feed to LIVE. Ages use the normalized (UTC) tick/candle times.
+  const lastCandle = (data?.candles || []).filter((x: any) => x.symbol === c.symbol).at(-1),
+    candleAgeMs = lastCandle ? now - (lastCandle.timestamp + 60) * 1000 : null;
+  const staleReason =
+    status !== 'STALE'
+      ? null
+      : !clockMatches
+        ? 'CLOCK_MISMATCH'
+        : ageMs !== null && ageMs < -2000
+          ? 'TICK_IN_FUTURE'
+          : candleAgeMs !== null && candleAgeMs <= 180000
+            ? 'TICK_BACKLOG' // heartbeat and closed M1 bars are current; the EA is still replaying old ticks
+            : 'NO_RECENT_TICKS';
   return {
     source: 'XP / MetaTrader 5',
     symbol: c.symbol,
-    status: live ? 'LIVE' : clockMatches && lastTick?.symbol === c.symbol && data?.state?.connected === true && receivedAge !== null && Number.isFinite(receivedAge) && receivedAge <= c.maxAgeMs ? 'STALE' : 'OFFLINE',
+    status,
+    staleReason,
+    candleAgeMs,
+    eaVersion: data?.state?.eaVersion ?? null,
+    tickGap: data?.state?.tickGap?.toMsc ? data.state.tickGap : null,
     quality:candleQuality(data?.candles||[],c.symbol),
     maxAgeMs: c.maxAgeMs,
     ageMs,

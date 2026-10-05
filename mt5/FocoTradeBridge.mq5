@@ -32,6 +32,7 @@ string brokerRefs="";
 ulong eventSequence=0;
 bool historyReady=false,protectionFault=false;
 long historyAsOfMsc=0; double loss24hBRL=0;
+long tickGapFromMsc=0,tickGapToMsc=0,tickGapAtMsc=0; // last backlog skipped (broker-wall ms), reported in state
 int lastExchangeHttpStatus=0;long lastExchangeAckAt=0;
 string Q(string s) { StringReplace(s,"\\","\\\\"); StringReplace(s,"\"","\\\""); StringReplace(s,"\r","\\r"); StringReplace(s,"\n","\\n"); return "\""+s+"\""; }
 string N(double n) { return DoubleToString(n,8); }
@@ -143,13 +144,21 @@ string OrdersJson() {
  }return j+"]";
 }
 bool ExecutionAllowed(){return EnableExecution && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
-string StateJson(){HistoryHealth();ProtectionHealth();return "{\"marketClock\":{\"basis\":\"broker-wall\",\"serverNowSeconds\":"+(string)(long)TimeTradeServer()+",\"utcNowSeconds\":"+(string)(long)TimeGMT()+",\"utcOffsetSeconds\":"+(string)((long)TimeTradeServer()-(long)TimeGMT())+"},\"protocolVersion\":2,\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"accountTradeMode\":"+(string)AccountInfoInteger(ACCOUNT_TRADE_MODE)+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
+string StateJson(){HistoryHealth();ProtectionHealth();return "{\"marketClock\":{\"basis\":\"broker-wall\",\"serverNowSeconds\":"+(string)(long)TimeTradeServer()+",\"utcNowSeconds\":"+(string)(long)TimeGMT()+",\"utcOffsetSeconds\":"+(string)((long)TimeTradeServer()-(long)TimeGMT())+"},\"protocolVersion\":2,\"eaVersion\":\"2.06\",\"tickGap\":{\"fromMsc\":"+(string)tickGapFromMsc+",\"toMsc\":"+(string)tickGapToMsc+",\"atMsc\":"+(string)tickGapAtMsc+"},\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"accountTradeMode\":"+(string)AccountInfoInteger(ACCOUNT_TRADE_MODE)+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
 string CandlesJson(){MqlRates rates[];int count;datetime closed=iTime(TradeSymbol,PERIOD_M1,1);
  if(lastBar==0)count=CopyRates(TradeSymbol,PERIOD_M1,1,HistoryBars,rates);else count=CopyRates(TradeSymbol,PERIOD_M1,lastBar,closed,rates);
  if(count>0)lastBar=rates[count-1].time;string j="[";
  for(int i=0;i<count;i++){if(i>0)j+=",";j+="{\"symbol\":"+Q(TradeSymbol)+",\"timestamp\":"+(string)(long)rates[i].time+",\"timeframe\":\"1m\",\"open\":"+N(rates[i].open)+",\"high\":"+N(rates[i].high)+",\"low\":"+N(rates[i].low)+",\"close\":"+N(rates[i].close)+",\"volume\":"+N((double)rates[i].real_volume)+"}";}return j+"]";}
 string TicksJson(){MqlTick ticks[];MqlTick latest;if(!SymbolInfoTick(TradeSymbol,latest))return "[]";
  if(lastMsc==0)lastMsc=MathMax(0,latest.time_msc-(long)TickRecoverySeconds*1000);
+ // v2.06: a persisted cursor older than the recovery window (MT5/Mac closed for hours) is NOT replayed
+ // tick by tick, which kept the feed hours behind. The gap is reported explicitly in state.tickGap and
+ // streaming resumes at the recovery window; M1 candles keep the history. No tick is invented.
+ if(latest.time_msc-lastMsc>(long)TickRecoverySeconds*1000){
+ tickGapFromMsc=lastMsc;tickGapToMsc=latest.time_msc-(long)TickRecoverySeconds*1000;tickGapAtMsc=(long)TimeGMT()*1000;
+ Print("TICK_BACKLOG_SKIPPED: ",tickGapFromMsc," -> ",tickGapToMsc," (",(tickGapToMsc-tickGapFromMsc)/1000,"s)");
+ lastMsc=tickGapToMsc;sameMscCount=0;
+ }
  int count=CopyTicksRange(TradeSymbol,ticks,COPY_TICKS_ALL,(ulong)lastMsc,(ulong)latest.time_msc);
  string j="[";int emitted=0,skipped=0;long original=lastMsc;int originalCount=sameMscCount;
  for(int i=0;i<count && emitted<MaxTickBatch;i++){
@@ -278,7 +287,7 @@ int OnInit(){
  if(!Save(prefix+"ledger.txt",durable))return INIT_FAILED;FileDelete(prefix+"reply.txt",FILE_COMMON);
  }
  if(pending!="" && JsonField(JsonField(pending,"state"),"protocolVersion")!="2")Print("Legacy pending detected; safe transport upgrade scheduled");
- Print("Foco Trade v2.05; execution enabled: ",EnableExecution);
+ Print("Foco Trade v2.06; execution enabled: ",EnableExecution);
  EventSetTimer(PollSeconds);return INIT_SUCCEEDED;
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);}
