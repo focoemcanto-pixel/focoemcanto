@@ -707,7 +707,7 @@ export default function ScannerPanel({
                   <strong>
                     {blocked
                       ? tp.riskBlock?.code === 'RISK_LIMIT_NOT_CONFIGURED'
-                        ? 'NÃO EXECUTÁVEL · LIMITE DE RISCO NÃO CONFIGURADO'
+                        ? 'NÃO EXECUTÁVEL · GESTÃO DE RISCO NÃO CONFIGURADA'
                         : 'NÃO EXECUTÁVEL COM O LIMITE ATUAL'
                       : act?.status === 'EXPIRED' || (act?.status === 'ACTIONABLE' && !entry.available)
                         ? 'ENTRADA EXPIRADA · não perseguir preço · setup segue acompanhado no LAB'
@@ -749,11 +749,8 @@ export default function ScannerPanel({
                       </p>
                     )}
                     <p>
-                      Limite:{' '}
-                      {source === 'compat-default'
-                        ? 'valor de compatibilidade do laboratório PAPER — defina TRADE_PAPER_MAX_RISK_BRL para torná-lo explícito'
-                        : source || '—'}
-                      .
+                      1R (orçamento de risco por operação):{' '}
+                      {source || '—'}. Configure em GESTÃO DE RISCO, na mesa PAPER.
                     </p>
                   </details>
                 </div>

@@ -59,6 +59,8 @@ export type Proposal = TechnicalProposal & {
   riskPerContractBRL?: number;
   sizing?: ProposalSizing;
   riskBlock?: RiskBlock;
+  /** PAPER: immutable copy of the risk-management version used to size this proposal. */
+  riskSettings?: import('./risk-settings').RiskSnapshot | null;
 };
 export interface ExecutionApprovalProvider {
   approve(

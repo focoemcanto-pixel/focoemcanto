@@ -3,7 +3,6 @@ import {
   rpc,
   persistenceFailure,
   PersistenceError,
-  paperRiskLimit,
   realRiskLimit,
   type BridgeEnv,
 } from '../../../trade/bridge/config';
@@ -38,6 +37,7 @@ import { scannerParameters } from '../../../trade/scanner/strategies';
 import { scanMarket } from '../../../trade/scanner/engine';
 import { validateCommand } from '../../../trade/bridge/protocol';
 import { assessActionability } from '../../../trade/lab/actionability';
+import { paperRiskStatus, paperRiskPolicy, riskSnapshot } from '../../../trade/bridge/risk-settings';
 const owner = 'focoos-admin'; // Existing admin-session middleware, never client supplied.
 async function market(
   env: BridgeEnv,
@@ -150,16 +150,19 @@ export async function onRequestPost({
         },
       );
       // REAL never borrows the PAPER limit: no approved policy limit means RISK_BLOCKED.
-      const limit = body.mode === 'REAL' ? realRiskLimit(ctx) : paperRiskLimit(env);
-      const p = sizeProposal(technical, {
+      const riskStatus = body.mode === 'REAL' ? null : await paperRiskStatus(env),
+        paperPolicy = riskStatus ? paperRiskPolicy(riskStatus) : null;
+      const limit = body.mode === 'REAL' ? realRiskLimit(ctx) : paperPolicy!;
+      const sized = sizeProposal(technical, {
         pointValue: contract.pointValue,
         currency: contract.currency,
         pointValueSource: contract.source,
-        maxContracts: c.maxContracts,
+        maxContracts: paperPolicy ? paperPolicy.maxContracts : c.maxContracts,
         maxRiskBRL: limit.maxRiskBRL,
         maxRiskSource: limit.source,
         requestedQuantity: body.quantity ?? undefined,
       });
+      const p = riskStatus ? { ...sized, riskSettings: riskSnapshot(riskStatus) } : sized;
       audit = {
         ...audit,
         proposalState: p.proposalState,
@@ -326,11 +329,16 @@ export async function onRequestPost({
         if (act.status !== 'ACTIONABLE')
           throw new Error(`${act.status}: ${act.reasons.join(' ')} Proposta não aceita; o setup segue acompanhado no LAB.`);
       }
-      const limit = paperRiskLimit(env);
-      if (limit.maxRiskBRL === null || p.riskBRL > limit.maxRiskBRL + 1e-9)
-        throw new Error(
-          'RISK_LIMIT_CHANGED: o risco desta proposta excede o limite PAPER atual. Gere uma nova proposta.',
-        );
+      // Authoritative PAPER gate (database): settings version unchanged, risk ≤ 1R, quantity within
+      // limits, daily loss/trade limits. The stored proposal is used — nothing from the client.
+      const gate = await rpc(env, 'trade_paper_entry_check', {
+        p_owner: owner,
+        p_risk_brl: p.riskBRL,
+        p_settings_version: p.riskSettings?.version ?? null,
+      });
+      if (!gate?.allowed) throw new Error(`${gate?.code || 'RISK_GATE'}: ${gate?.message || 'Entrada PAPER bloqueada pela gestão de risco.'}`);
+      if (p.quantity > Number(gate.settings?.maxContracts))
+        throw new Error('RISK_MAX_CONTRACTS: quantidade acima do máximo configurado.');
       return Response.json(await new PaperExecutionProvider(env).approve(p));
     }
     return Response.json(

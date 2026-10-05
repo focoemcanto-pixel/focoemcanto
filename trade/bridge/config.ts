@@ -8,31 +8,9 @@ export type BridgeEnv = {
   TRADE_EXECUTION_ENABLED?: string;
   TRADE_MAX_CONTRACTS?: string;
   TRADE_FEED_MAX_AGE_MS?: string;
-  /** PAPER per-trade risk limit in BRL. Preferred over TRADE_MAX_RISK_BRL. */
-  TRADE_PAPER_MAX_RISK_BRL?: string;
-  /** Shared per-trade risk limit in BRL, PAPER fallback only. REAL reads the database policy. */
-  TRADE_MAX_RISK_BRL?: string;
 };
-/**
- * Legacy PAPER laboratory default, kept so existing deployments keep proposing. It is reported as
- * 'compat-default' everywhere it is used and never applies to REAL.
- */
-export const paperCompatMaxRiskBRL = 100;
-/** PAPER per-trade risk limit. Invalid explicit values fail closed (no quantity), never fall back. */
-export function paperRiskLimit(env: BridgeEnv): {
-  maxRiskBRL: number | null;
-  source: string;
-} {
-  for (const key of ['TRADE_PAPER_MAX_RISK_BRL', 'TRADE_MAX_RISK_BRL'] as const) {
-    const raw = env[key];
-    if (raw === undefined || raw === '') continue;
-    const value = Number(raw);
-    return Number.isFinite(value) && value > 0
-      ? { maxRiskBRL: value, source: key }
-      : { maxRiskBRL: null, source: `${key} inválido` };
-  }
-  return { maxRiskBRL: paperCompatMaxRiskBRL, source: 'compat-default' };
-}
+// PAPER risk comes only from the persisted, versioned risk settings (trade/bridge/risk-settings.ts).
+// There is no hardcoded or environment fallback: without settings a PAPER proposal is RISK_BLOCKED.
 /** REAL per-trade risk limit: the approved policy, tightened by the EA local limit. No defaults. */
 export function realRiskLimit(ctx: any): {
   maxRiskBRL: number | null;
@@ -160,7 +138,7 @@ export async function rpc(
     if(name.startsWith('trade_inspection_') && data?.code==='P0001' && ['Inspection proposal invalid','Inspection nonce already consumed','Inspection confirmation invalid or expired'].includes(data?.message))
       throw new Error('Confirmação de inspeção inválida, reutilizada ou expirada. Gere uma nova proposta.');
     // Deliberate REAL-session/configuration refusals carry a safe, explicit code for the operator.
-    if(data?.code==='P0001' && typeof data?.message==='string' && /^(ARM_BLOCKED|POLICY_|AUTHORIZATION_|Kill switch is released)/.test(data.message))
+    if(data?.code==='P0001' && typeof data?.message==='string' && /^(ARM_BLOCKED|POLICY_|AUTHORIZATION_|Kill switch is released|RISK_SETTINGS_INVALID)/.test(data.message))
       throw new Error(data.message.slice(0,300));
     const code =
       data?.code === 'P0001' && data?.message === 'Another EA session owns the lease'

@@ -179,3 +179,35 @@ Nenhuma leitura do LAB seleciona `account_hash`, token ou fingerprint. Nenhuma e
 - Ticks não são copiados.
 - `trade_strategy_evaluations` grava uma linha por estratégia por candle (~8,5 mil/dia).
 - `trade_bridge_ticks` já passa de 790 MB e não tem retenção. Recomenda-se uma política de arquivamento (fora do escopo desta fase).
+
+## Gestão de risco PAPER (`20261007100000_paper_risk_settings.sql`)
+
+**Origem.** Substitui o limite fixo de compatibilidade de R$100 (`paperCompatMaxRiskBRL`, origem `compat-default`). Não há mais fallback por código nem por variável de ambiente: sem configuração salva, a proposta PAPER fica RISK_BLOCKED.
+
+**Persistência.** A configuração fica em `trade_risk_settings_versions`, uma tabela só de inserções (append-only): cada gravação é uma versão nova, com `config_hash`. O banco valida tudo e calcula o 1R:
+
+- `FIXED_BRL`: 1R = valor fixo em R$;
+- `PCT_CAPITAL`: 1R = capital × % / 100, com no máximo 10% e 1R ≤ capital.
+
+O capital operacional é um número de planejamento; não é o saldo da corretora.
+
+**Quantidade.** O Risk Engine usa o 1R persistido como orçamento de risco por operação:
+
+- quantidade = min(⌊1R / risco por contrato⌋, máximo de contratos);
+- se 0, a proposta é RISK_BLOCKED;
+- o stop técnico nunca muda.
+
+**Limites diários (dia em BRT).** Só operações PAPER aceitas consomem os limites. Desfechos hipotéticos, LIVE_DETECTED e propostas descartadas, expiradas ou bloqueadas não consomem.
+
+- Perda do dia = máx(0, −soma de `resultBRL` das PAPER fechadas aceitas hoje).
+- Novas entradas são bloqueadas quando a perda do dia atinge o limite, ou quando o número de operações atinge o máximo.
+- Uma entrada também é recusada se a soma de perda do dia + risco em aberto + risco da nova operação ultrapassar o limite.
+- Scanner, hipóteses e LAB continuam funcionando.
+
+**Autoridade.** No aceite PAPER, `trade_paper_entry_check` exige:
+
+- a mesma versão da configuração usada para dimensionar a proposta;
+- risco ≤ 1R;
+- limites diários disponíveis.
+
+**Histórico.** Cada proposta guarda `payload.riskSettings` (versão, hash, capital, 1R e limites). Mudanças futuras nunca reescrevem esse registro.

@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import type { Proposal } from '../../trade/bridge/approval';
 import { remainingPositionRiskBRL } from '../../trade/core/risk-engine';
 import RealSessionPanel from './RealSessionPanel';
+import RiskSettingsPanel from './RiskSettingsPanel';
 import { entryWindow, serverSkew } from './decision-view';
 const num = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
@@ -152,6 +153,7 @@ export default function OperationsPanel({
   const ready = readiness?.canExecute === true && source === 'mt5',
     preview = !!p && p.mode !== mode;
   const entry = entryWindow(p?.expiresAt, now, skew),
+    dailyBlocked = mode === 'PAPER' ? p?.riskSettings?.dailyBlocked ?? null : null,
     awaiting = row?.state === 'AGUARDANDO CONFIRMAÇÃO' && !riskBlocked;
   const priority =
     awaiting && entry.available
@@ -228,6 +230,7 @@ export default function OperationsPanel({
           ? 'SIMULAÇÃO — SEM DINHEIRO REAL'
           : 'CONTA REAL — ORDENS PODEM ENVOLVER DINHEIRO REAL'}
       </p>
+      {mode === 'PAPER' && <RiskSettingsPanel onChanged={() => load().catch(() => {})} />}
       {mode === 'REAL' && (
         <RealSessionPanel
           real={readiness}
@@ -364,29 +367,34 @@ export default function OperationsPanel({
                 {num(p.potentialPoints)} pts
                 {!riskBlocked && ` · ${money(p.potentialBRL)}`}
               </dd>
-              {riskBlocked && (
-                <>
-                  <dt>Risco mínimo · 1 contrato</dt>
-                  <dd>{money(p.riskPerContractBRL)}</dd>
-                  <dt>Limite configurado</dt>
-                  <dd>
-                    {p.sizing?.maxRiskBRL != null
-                      ? money(p.sizing.maxRiskBRL)
-                      : 'ausente'}
-                  </dd>
-                </>
-              )}
               <dt>Risco/retorno</dt>
               <dd>1 : {num(p.rr)}</dd>
-              {p.sizing && !riskBlocked && (
-                <>
-                  <dt>Tamanho pelo risco</dt>
-                  <dd>
-                    {p.quantity} contrato(s) · {money(p.sizing.riskPerContractBRL)}{' '}
-                    por contrato · limite {money(p.sizing.maxRiskBRL)}
-                  </dd>
-                </>
-              )}
+              {(() => {
+                // Sizing as recorded in THIS proposal (immutable): later 1R changes never rewrite it.
+                const oneR = p.riskSettings?.oneRBRL ?? p.sizing?.maxRiskBRL ?? null;
+                return (
+                  <>
+                    <dt>1R configurado</dt>
+                    <dd data-risk="one-r">
+                      {oneR != null ? money(oneR) : 'não configurado'}
+                      {p.riskSettings ? ` · gestão v${p.riskSettings.version}` : ''}
+                    </dd>
+                    <dt>Risco por contrato</dt>
+                    <dd data-risk="per-contract">{money(p.riskPerContractBRL)}</dd>
+                    <dt>Quantidade</dt>
+                    <dd data-risk="quantity">{p.quantity} contrato(s)</dd>
+                    <dt>Risco total</dt>
+                    <dd data-risk="total">{money(p.riskBRL)}</dd>
+                    <dt>% do 1R utilizado</dt>
+                    <dd data-risk="usage">
+                      {oneR ? `${num((p.riskBRL / oneR) * 100)}%` : '—'}
+                      {riskBlocked && p.riskPerContractBRL != null && oneR
+                        ? ` · 1 contrato exigiria ${num((p.riskPerContractBRL / oneR) * 100)}% do 1R`
+                        : ''}
+                    </dd>
+                  </>
+                );
+              })()}
               <dt>Snapshot · validade</dt>
               <dd>
                 {new Date(p.asOf * 1000).toLocaleTimeString('pt-BR')} · até{' '}
@@ -442,7 +450,12 @@ export default function OperationsPanel({
                 ENTRADA EXPIRADA · não perseguir preço. O setup segue acompanhado no LAB como resultado HIPOTÉTICO.
               </p>
             )}
-            {!preview && awaiting && entry.available && (
+            {!preview && awaiting && entry.available && dailyBlocked && (
+              <p className="trade-operation-error" role="status" data-entry="daily-blocked">
+                {dailyBlocked === 'DAILY_LOSS_LIMIT_REACHED' ? 'PERDA MÁXIMA DIÁRIA ATINGIDA' : dailyBlocked === 'DAILY_TRADE_LIMIT_REACHED' ? 'MÁXIMO DE OPERAÇÕES DO DIA ATINGIDO' : 'GESTÃO DE RISCO BLOQUEIA ENTRADAS'} · nova entrada PAPER bloqueada. O setup segue no LAB como resultado HIPOTÉTICO.
+              </p>
+            )}
+            {!preview && awaiting && entry.available && !dailyBlocked && (
               <div className="trade-operation-actions">
                 <span className="trade-operation-countdown" role="timer" aria-live="off" data-entry="available">
                   {entry.label}

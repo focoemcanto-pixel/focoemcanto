@@ -1,4 +1,5 @@
-import { config, rpc, paperRiskLimit, type BridgeEnv } from '../bridge/config';
+import { config, rpc, type BridgeEnv } from '../bridge/config';
+import { paperRiskStatus, paperRiskPolicy, riskSnapshot } from '../bridge/risk-settings';
 import { MT5MarketDataProvider, feedStatus } from '../bridge/mt5';
 import {
   generateMockCandles,
@@ -66,7 +67,9 @@ export async function runScanner(
     throw new Error(
       'Replay voltou no tempo. Inicie uma nova sessão para preservar o histórico anterior.',
     );
-  const risk = paperRiskLimit(env),
+  // PAPER risk = persisted, versioned risk management (1R, max contracts, daily limits). No fallback.
+  const riskStatus = await paperRiskStatus(env),
+    risk = paperRiskPolicy(riskStatus),
     pointValue = (() => {
       try {
         return instrumentValue(symbol, 'PAPER', data?.state).pointValue;
@@ -76,8 +79,9 @@ export async function runScanner(
     })(),
     riskPolicy = {
       paper: risk,
-      maxContracts: c.maxContracts,
+      maxContracts: risk.maxContracts,
       pointValue,
+      status: riskStatus,
     };
   /**
    * Confirmed setup → technical proposal → central Risk Engine. A setup whose single contract
@@ -156,7 +160,7 @@ export async function runScanner(
             pointValue: contract.pointValue,
             currency: contract.currency,
             pointValueSource: contract.source,
-            maxContracts: c.maxContracts,
+            maxContracts: risk.maxContracts,
             maxRiskBRL: risk.maxRiskBRL,
             maxRiskSource: risk.source,
           });
@@ -165,6 +169,7 @@ export async function runScanner(
           p_bridge: c.bridgeId,
           p_proposal: {
             ...p,
+            riskSettings: riskSnapshot(riskStatus),
             scope,
             setupWatchId: w.id,
             setupObservationId: obs?.id,

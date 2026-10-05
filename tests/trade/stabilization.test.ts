@@ -10,6 +10,7 @@ import { runScanner } from '../../trade/scanner/service';
 import { labAnalytics, type LabObservation } from '../../trade/lab/analytics';
 import { participantEvidence } from '../../trade/lab/snapshot';
 import { entryWindow, serverSkew } from '../../app/trade/decision-view';
+import { seedRisk } from './risk-fixture';
 
 const migrations = readdirSync('supabase/migrations').filter((f) => f >= '20261003035402' && f.endsWith('.sql')).sort();
 async function world() {
@@ -18,6 +19,7 @@ async function world() {
     called: string[] = [];
   await db.exec('create role anon;create role authenticated;create role service_role bypassrls;');
   for (const m of migrations) await db.exec(readFileSync('supabase/migrations/' + m, 'utf8'));
+  await seedRisk(db);
   globalThis.fetch = (async (u: any, init: any) => {
     const url = new URL(String(u));
     // V — the only reachable host is the local fixture.

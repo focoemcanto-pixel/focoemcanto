@@ -18,6 +18,7 @@ const operations = require('../functions/api/trade/operations.ts');
 const scanner = require('../functions/api/trade/scanner.ts');
 const strategyMetrics = require('../functions/api/trade/strategy-metrics.ts');
 const lab = require('../functions/api/trade/lab.ts');
+const risk = require('../functions/api/trade/risk.ts');
 const health = require('../functions/api/trade/health.ts');
 const executionStatus = require('../functions/api/trade/execution-status.ts');
 let operationReadFailures = 1;
@@ -42,8 +43,11 @@ let simulateMissingBridge=false;
     '20261006130000_lab_notes_index.sql',
     '20261007090000_tick_retention.sql',
     '20261007091000_lab_participant_attribution.sql',
+    '20261007100000_paper_risk_settings.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
+  // PAPER risk management v1 (1R = R$100, 1 contract). Without it PAPER proposals are RISK_BLOCKED.
+  await db.query('select public.trade_risk_settings_save($1,$2)', ['focoos-admin', { capitalBRL: 10000, riskModel: 'FIXED_BRL', riskValue: 100, dailyLossUnit: 'R', dailyLossValue: 5, maxContracts: 1, maxTradesPerDay: 20 }]);
   // Fixture ticks are stamped in real UTC; the production broker-wall clock is covered in real-session.test.ts.
   await db.exec('delete from trade_bridge_clock_settings');
   globalThis.fetch = async (url, init) => {
@@ -121,6 +125,8 @@ let simulateMissingBridge=false;
                 ? scanner[
                     request.method === 'POST' ? 'onRequestPost' : 'onRequestGet'
                   ]({ request, env })
+                : url.pathname.endsWith('/api/trade/risk')
+                  ? risk[request.method === 'POST' ? 'onRequestPost' : 'onRequestGet']({ request, env })
                 : url.pathname.endsWith('/api/trade/lab')
                   ? lab[request.method === 'POST' ? 'onRequestPost' : 'onRequestGet']({ request, env })
                 : url.pathname.endsWith('strategy-metrics')
@@ -275,6 +281,10 @@ let simulateMissingBridge=false;
   const countdown = page.locator('[data-entry="available"]');
   await countdown.waitFor();
   assert.match(await countdown.textContent(), /^ENTRADA DISPONÍVEL · \d+s$/);
+  // The proposal shows the risk it was sized with (immutable snapshot).
+  assert.match(await page.locator('[data-risk="one-r"]').textContent(), /R\$\s?100,00 · gestão v1/);
+  assert.match(await page.locator('[data-risk="usage"]').textContent(), /%/);
+  await page.locator('.trade-risk summary').getByText('1R = R$ 100,00').waitFor();
   await page
     .getByRole('button', { name: 'ENTRAR NO PAPER', exact: true })
     .click();
@@ -287,6 +297,20 @@ let simulateMissingBridge=false;
     (await db.query('select * from trade_bridge_commands')).rows.length,
     0,
   );
+  // GESTÃO DE RISCO: a new version via the form (R$5.000 × 1% = R$50); history is not rewritten.
+  await page.locator('.trade-risk > summary').click();
+  await page.getByLabel('Capital operacional (R$) — não é o saldo da corretora').fill('5000');
+  await page.getByLabel('Modelo de 1R').selectOption('PCT_CAPITAL');
+  await page.getByLabel('Risco por operação (% do capital)').fill('1');
+  await page.getByRole('button', { name: 'SALVAR GESTÃO DE RISCO', exact: true }).click();
+  await page.getByText('Versão 2 salva. Propostas já criadas mantêm o risco original.').waitFor();
+  await page.locator('.trade-risk summary').getByText('1R = R$ 50,00').waitFor();
+  assert.equal(
+    (await db.query("select count(*)::int n from trade_operation_proposals where payload->'riskSettings'->>'version'='2'")).rows[0].n,
+    0,
+  );
+  await page.screenshot({ path: '.trade-qa/risk.png', fullPage: false });
+  assert.equal((await db.query('select * from trade_bridge_commands')).rows.length, 0);
   await page.waitForFunction(
     () =>
       document.querySelector('.trade-progress small')?.textContent ===
