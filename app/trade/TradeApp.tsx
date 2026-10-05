@@ -8,6 +8,7 @@ import {
   type FormEvent,
 } from 'react';
 import ScannerPanel from './ScannerPanel';
+import LabPanel from './LabPanel';
 import type { ScannerResult } from '../../trade/scanner/types';
 import OperationsPanel from './OperationsPanel';
 import type { runReplay } from '../../trade/core/engine';
@@ -835,7 +836,7 @@ export default function TradeApp() {
       {!hide && (
         <section className="trade-bottom">
           <nav aria-label="Painéis inferiores">
-            {['Estratégias', 'Histórico de sinais', 'Resultados', 'Diário'].map(
+            {['Estratégias', 'Histórico de sinais', 'Resultados', 'Diário', 'LAB'].map(
               (t) => (
                 <button
                   className={bottom === t ? 'active' : ''}
@@ -860,6 +861,7 @@ export default function TradeApp() {
               />
             </div>
           )}
+          {bottom === 'LAB' && <LabPanel />}
           {bottom === 'Histórico de sinais' && (
             <div className="trade-history">
               {state?.signals.length ? (

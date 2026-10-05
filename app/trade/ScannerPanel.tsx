@@ -98,6 +98,8 @@ export default function ScannerPanel({
         setupWatchId: string;
         strategy: string;
         proposal: Proposal;
+        observationId?: string;
+        actionability?: { status: string; reasons: string[]; driftPoints: number | null };
       }[];
       riskPolicy?: {
         paper: { maxRiskBRL: number | null; source: string };
@@ -634,9 +636,11 @@ export default function ScannerPanel({
             error = data?.proposalBlocks?.find(
               (x) => x.strategy === c.definition.id,
             ),
-            tp = data?.technicalProposals?.find(
+            tpEntry = data?.technicalProposals?.find(
               (x) => x.strategy === c.definition.id,
-            )?.proposal,
+            ),
+            tp = tpEntry?.proposal,
+            act = tpEntry?.actionability,
             blocked = tp?.proposalState === 'RISK_BLOCKED',
             perContract =
               tp?.riskPerContractBRL ??
@@ -697,7 +701,13 @@ export default function ScannerPanel({
                       ? tp.riskBlock?.code === 'RISK_LIMIT_NOT_CONFIGURED'
                         ? 'NÃO EXECUTÁVEL · LIMITE DE RISCO NÃO CONFIGURADO'
                         : 'NÃO EXECUTÁVEL COM O LIMITE ATUAL'
-                      : `PRONTA · ${tp.quantity} contrato(s)`}
+                      : act?.status === 'EXPIRED'
+                        ? 'PROPOSTA EXPIRADA · setup segue acompanhado no LAB'
+                        : act?.status === 'MISSED'
+                          ? 'PERDIDA · preço se afastou da referência (não perseguir)'
+                          : act?.status === 'INVALIDATED'
+                            ? 'INVALIDADA · preço além do stop técnico'
+                            : `EXECUTÁVEL EM PAPER · ${tp.quantity} contrato(s)`}
                   </strong>
                   <small>
                     Risco mínimo · 1 contrato ={' '}

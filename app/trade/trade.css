@@ -2538,3 +2538,52 @@
 .trade-real-order-line[data-direction='SELL'] {
   color: #f09a83;
 }
+
+/* LAB: evidence base (progressive disclosure, single-series charts, tables as accessible views). */
+.trade-lab { display: grid; gap: 22px; padding: 6px 0 24px; }
+.trade-lab-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.trade-lab-head h3 { margin: 6px 0; font-size: 18px; }
+.trade-lab-head p { font-size: 12px; color: #90a0ae; max-width: 640px; line-height: 1.6; }
+.trade-lab-funnel dl, .trade-lab-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 6px 14px; margin: 10px 0; }
+.trade-lab-funnel dt, .trade-lab-metrics dt { font-size: 10px; letter-spacing: 0.8px; color: #7f8e9b; text-transform: uppercase; }
+.trade-lab-funnel dd, .trade-lab-metrics dd { margin: 0 0 6px; font-size: 15px; color: #dfe6ec; }
+.trade-lab-funnel p { font-size: 12px; color: #90a0ae; }
+.trade-lab-metrics[data-enough='false'] dd { color: #8893a7; }
+.trade-lab-card, .trade-lab-obs { border-top: 1px solid #1d2933; padding: 12px 0; }
+.trade-lab-card > summary, .trade-lab-obs > summary { cursor: pointer; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; list-style: none; }
+.trade-lab-card > summary::-webkit-details-marker, .trade-lab-obs > summary::-webkit-details-marker { display: none; }
+.trade-lab-card summary strong { color: #dfe6ec; font-weight: 500; }
+.trade-lab-card summary small, .trade-lab-obs summary span { font-size: 11px; color: #90a0ae; grid-column: 1 / -1; }
+.trade-lab-card summary em { font-style: normal; font-size: 10px; letter-spacing: 1px; padding: 2px 8px; border: 1px solid #2b3945; border-radius: 10px; color: #b9c4cd; }
+.trade-lab-card[data-status='PROMISSORA'] summary em { border-color: #5f8f74; color: #96c8af; }
+.trade-lab-card[data-status='DEGRADANDO'] summary em { border-color: #8a5a4a; color: #f09a83; }
+.trade-lab-reason, .trade-lab-insufficient { font-size: 12px; color: #90a0ae; margin: 8px 0; }
+.trade-lab-insufficient { color: #d8b681; }
+.trade-lab-chart { margin: 12px 0; }
+.trade-lab-chart figcaption { font-size: 11px; color: #7f8e9b; margin-bottom: 6px; }
+.trade-lab-chart svg { width: 100%; max-width: 520px; height: auto; display: block; }
+.trade-lab-line { fill: none; stroke: #d5b57a; stroke-width: 2; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+.trade-lab-zero { stroke: #2b3945; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.trade-lab-cross { stroke: #4a5a68; stroke-width: 1; vector-effect: non-scaling-stroke; }
+.trade-lab-dot { fill: #d5b57a; stroke: #131815; stroke-width: 2; }
+.trade-lab-tooltip { font-size: 11px; color: #b9c4cd; margin: 4px 0 0; min-height: 16px; }
+.trade-lab-bars { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; height: 70px; align-items: end; max-width: 520px; }
+.trade-lab-bars > div { display: flex; flex-direction: column; justify-content: flex-end; height: 100%; }
+.trade-lab-bars span { display: block; background: #d5b57a; border-radius: 4px 4px 0 0; min-height: 1px; }
+.trade-lab-bars small { font-size: 10px; color: #7f8e9b; text-align: center; margin-top: 3px; }
+.trade-lab-table { width: 100%; border-collapse: collapse; font-size: 11px; margin: 8px 0; color: #b9c4cd; }
+.trade-lab-table caption { text-align: left; color: #7f8e9b; padding: 4px 0; }
+.trade-lab-table th, .trade-lab-table td { text-align: left; padding: 4px 8px 4px 0; border-top: 1px solid #17222b; font-weight: 400; }
+.trade-lab-table tr[data-sufficient='false'] td { color: #6f7f8d; }
+.trade-lab-obs-body dl { display: grid; grid-template-columns: minmax(0, 200px) minmax(0, 1fr); gap: 4px 12px; font-size: 12px; margin: 10px 0; }
+.trade-lab-obs-body dt { color: #7f8e9b; }
+.trade-lab-obs-body dd { margin: 0; color: #dfe6ec; overflow-wrap: anywhere; }
+.trade-lab-obs-body form { display: grid; gap: 6px; font-size: 12px; color: #90a0ae; }
+.trade-lab-obs-body textarea { min-height: 60px; background: #0f1a22; color: #dfe6ec; border: 1px solid #2b3945; border-radius: 6px; padding: 8px; }
+.trade-lab-models { font-size: 12px; color: #90a0ae; line-height: 1.6; }
+@media (max-width: 720px) { .trade-lab-obs-body dl { grid-template-columns: 1fr; } }
+.trade-lab-card > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.trade-lab-card > summary small { flex-basis: 100%; }
+.trade-lab-card > summary em { margin-left: auto; }
+.trade-lab-head select { background: #0f1a22; color: #dfe6ec; border: 1px solid #2b3945; border-radius: 6px; padding: 4px 8px; font-size: 12px; }
+.trade-lab-head label { font-size: 12px; color: #90a0ae; }

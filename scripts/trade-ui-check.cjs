@@ -17,6 +17,7 @@ const { PGlite } = require('@electric-sql/pglite');
 const operations = require('../functions/api/trade/operations.ts');
 const scanner = require('../functions/api/trade/scanner.ts');
 const strategyMetrics = require('../functions/api/trade/strategy-metrics.ts');
+const lab = require('../functions/api/trade/lab.ts');
 const health = require('../functions/api/trade/health.ts');
 const executionStatus = require('../functions/api/trade/execution-status.ts');
 let operationReadFailures = 1;
@@ -37,6 +38,7 @@ let simulateMissingBridge=false;
     '20261005122031_bridge_market_clock.sql',
     '20261005150000_risk_blocked_technical_proposal.sql',
     '20261006090000_real_session_arming.sql',
+    '20261006120000_setup_observation_lab.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   // Fixture ticks are stamped in real UTC; the production broker-wall clock is covered in real-session.test.ts.
@@ -116,6 +118,8 @@ let simulateMissingBridge=false;
                 ? scanner[
                     request.method === 'POST' ? 'onRequestPost' : 'onRequestGet'
                   ]({ request, env })
+                : url.pathname.endsWith('/api/trade/lab')
+                  ? lab[request.method === 'POST' ? 'onRequestPost' : 'onRequestGet']({ request, env })
                 : url.pathname.endsWith('strategy-metrics')
                   ? strategyMetrics.onRequestGet({ env })
                   : url.pathname.endsWith('operations')
@@ -330,6 +334,11 @@ let simulateMissingBridge=false;
     .getByRole('button', { name: 'Salvar no diário', exact: true })
     .click();
   await page.getByText('Nota salva.', { exact: true }).waitFor();
+  // LAB: evidence base renders from the deterministic analytics endpoint.
+  await page.getByRole('button', { name: 'LAB', exact: true }).click();
+  await page.getByRole('heading', { name: 'Setups, resultados e estatística por estratégia', exact: true }).waitFor();
+  await page.getByText('HOJE · XP/MT5 LIVE', { exact: true }).waitFor();
+  await page.screenshot({ path: '.trade-qa/lab.png', fullPage: true });
   await page.getByRole('button', { name: 'Copiloto', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Estratégias', exact: true }).click();
