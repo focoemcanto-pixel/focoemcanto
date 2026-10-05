@@ -35,7 +35,8 @@ export class PersistenceError extends Error {
       | 'CONFIGURATION_MISSING'
       | 'SCHEMA_MISSING'
       | 'ACCESS_DENIED'
-      | 'PERSISTENCE_UNAVAILABLE',
+      | 'PERSISTENCE_UNAVAILABLE'
+      | 'BRIDGE_SESSION_LEASE_CONFLICT',
     readonly operation: string,
     readonly httpStatus?: number,
     readonly databaseCode?: string,
@@ -48,6 +49,8 @@ export class PersistenceError extends Error {
           'Estrutura/RPC Trade ausente ou desatualizada. Verifique as migrations do módulo.',
         ACCESS_DENIED:
           'A credencial do backend não tem acesso à persistência Trade. Verifique a chave service role.',
+        BRIDGE_SESSION_LEASE_CONFLICT:
+          'Outra sessão EA mantém a reserva deste bridge. Preserve o pending e aguarde a reserva expirar.',
         PERSISTENCE_UNAVAILABLE:
           'Não foi possível acessar a persistência Trade. Tente novamente.',
       }[code],
@@ -116,7 +119,9 @@ export async function rpc(
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     const code =
-      response.status === 401 ||
+      data?.code === 'P0001' && data?.message === 'Another EA session owns the lease'
+        ? 'BRIDGE_SESSION_LEASE_CONFLICT'
+        : response.status === 401 ||
       response.status === 403 ||
       data?.code === '42501'
         ? 'ACCESS_DENIED'

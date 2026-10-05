@@ -306,3 +306,21 @@ test('v2 API/Postgres persists heartbeat and historical feed once across retry w
     await db.close();
   }
 });
+
+test('RPC lease conflict is explicit, sanitized and never acknowledged as execution', async () => {
+ const original=globalThis.fetch,log=console.error;
+ globalThis.fetch=async(u)=>String(u).endsWith('trade_bridge_exchange_v2')?Response.json({code:'P0001',message:'Another EA session owns the lease'},{status:400}):Response.json([]);
+ console.error=()=>{};
+ try{const r=await exchange({env,request:request(batch())});const d:any=await r.json();assert.equal(r.status,400);assert.equal(d.errorCode,'BRIDGE_SESSION_LEASE_CONFLICT');assert.equal(d.stage,'trade_bridge_exchange_v2');assert.equal(d.sessionTag,'fixture');assert.ok(!JSON.stringify(d).includes(env.TRADE_SUPABASE_SERVICE_KEY));}
+ finally{globalThis.fetch=original;console.error=log;}
+});
+
+test('disarmed restart resumes verified pending lease without changing evidence or event namespace',async()=>{
+ const {resumeDisarmedSession}=await import('../../trade/bridge/transport-recovery');const p=batch();p.session='a'.repeat(32);const before=structuredClone(p);const fresh='b'.repeat(32);
+ assert.equal(resumeDisarmedSession(p,p,'',fresh,false),p.session);assert.deepEqual(p,before);
+ assert.equal(resumeDisarmedSession(null,p,p.session,fresh,false),p.session);
+ assert.equal(resumeDisarmedSession(p,p,p.session,fresh,true),fresh);
+ assert.throws(()=>resumeDisarmedSession({...p,accountHash:'wrong'},p,'',fresh,false),/IDENTITY/);
+ assert.throws(()=>resumeDisarmedSession({...p,session:'invalid'},p,'',fresh,false),/SESSION/);
+ const {readFileSync}=await import('node:fs');const ea=readFileSync('mt5/FocoTradeBridge.mq5','utf8');assert.ok(ea.includes('"tx_"+eventSession+'));assert.ok(ea.includes('if(!EnableExecution){'));
+});

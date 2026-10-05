@@ -33,3 +33,16 @@ export function upgradePendingTransport(
     pending: { ...structuredClone(p), state: structuredClone(current.state) },
   };
 }
+
+/** Disarmed restart keeps the transport lease; transactions use a separate fresh namespace. */
+export function resumeDisarmedSession(pending:any,current:{bridgeId:string;symbol:string;accountHash:string},stored:string,newSession:string,executionEnabled:boolean){
+ if(executionEnabled)return newSession;
+ let session=stored;
+ if(pending){
+  if(pending.bridgeId!==current.bridgeId||pending.symbol!==current.symbol||pending.accountHash!==current.accountHash)throw new Error('PENDING_IDENTITY_MISMATCH');
+  if(![undefined,1,2].includes(pending.state?.protocolVersion))throw new Error('PENDING_PROTOCOL_UNSUPPORTED');
+  session=pending.session;
+ }
+ if(session&&!/^[a-f0-9]{32}$/.test(session))throw new Error('PENDING_SESSION_INVALID');
+ return session||newSession;
+}

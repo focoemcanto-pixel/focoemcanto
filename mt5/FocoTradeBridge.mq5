@@ -1,5 +1,5 @@
 #property strict
-#property version "2.01"
+#property version "2.02"
 #property description "Foco Trade XP/MT5 bridge. Execution disabled by default."
 input string ApiOrigin="https://focoemcanto.com";
 input string BridgeToken="";
@@ -22,7 +22,7 @@ input int HttpTimeoutMs=5000;
 input int MaxDeviationPoints=10;
 // One bridge instance per terminal AND FILE_COMMON namespace. Never delete ledger.
 int lockHandle=INVALID_HANDLE;
-string prefix,session,accountHash,pending="",events="";
+string prefix,session,eventSession,accountHash,pending="",events="";
 long batch=0,lastMsc=0;
 datetime lastBar=0;
 int sameMscCount=0;
@@ -105,7 +105,7 @@ bool RecoverLegacyPending(){
 string BackendErrorCode(string reply){
  string code=JsonField(reply,"errorCode");
  // Only known, non-secret codes are logged. Never print the response body.
- string allowed="|BRIDGE_UNAUTHORIZED|BRIDGE_JSON_INVALID|BRIDGE_CONFIG_INVALID|BRIDGE_TRANSPORT_ERROR|BRIDGE_IDENTITY_INVALID|BRIDGE_ID_MISMATCH|BRIDGE_SYMBOL_MISMATCH|BRIDGE_SESSION_INVALID|BRIDGE_BATCH_INVALID|BRIDGE_ACCOUNT_MISMATCH|BRIDGE_BATCH_SIZE|BRIDGE_TICK_INVALID|BRIDGE_CANDLES_INVALID|BRIDGE_CANDLE_UNCLOSED_OR_SYMBOL|BRIDGE_STATE_INVALID|BRIDGE_POSITION_ORDER_INVALID|BRIDGE_TICK_SIZE_INVALID|BRIDGE_EVENT_INVALID|CONFIGURATION_MISSING|SCHEMA_MISSING|ACCESS_DENIED|PERSISTENCE_UNAVAILABLE|";
+ string allowed="|BRIDGE_UNAUTHORIZED|BRIDGE_JSON_INVALID|BRIDGE_CONFIG_INVALID|BRIDGE_TRANSPORT_ERROR|BRIDGE_IDENTITY_INVALID|BRIDGE_ID_MISMATCH|BRIDGE_SYMBOL_MISMATCH|BRIDGE_SESSION_INVALID|BRIDGE_BATCH_INVALID|BRIDGE_ACCOUNT_MISMATCH|BRIDGE_BATCH_SIZE|BRIDGE_TICK_INVALID|BRIDGE_CANDLES_INVALID|BRIDGE_CANDLE_UNCLOSED_OR_SYMBOL|BRIDGE_STATE_INVALID|BRIDGE_POSITION_ORDER_INVALID|BRIDGE_TICK_SIZE_INVALID|BRIDGE_EVENT_INVALID|CONFIGURATION_MISSING|SCHEMA_MISSING|ACCESS_DENIED|PERSISTENCE_UNAVAILABLE|BRIDGE_SESSION_LEASE_CONFLICT|";
  return code!="" && StringFind(allowed,"|"+code+"|")>=0?code:"BRIDGE_RESPONSE_UNCLASSIFIED";
 }
 string Tag(string id) { StringReplace(id,"-",""); return "FT"+StringSubstr(id,0,24); }
@@ -233,6 +233,7 @@ void Execute(string line){
  if(res.retcode==0 || res.retcode==TRADE_RETCODE_TIMEOUT || res.retcode==TRADE_RETCODE_CONNECTION){QueueEvent("unknown_"+id,"unknown",id,",\"retcode\":"+(string)res.retcode);return;}
  ResultEvent(id,possible?"submitted":"rejected",res.retcode,res.order,res.deal);
 }
+bool HexSession(string v){for(int i=0;i<StringLen(v);i++)if(StringFind("0123456789abcdef",StringSubstr(v,i,1))<0)return false;return true;}
 int OnInit(){
  if(StringFind(ApiOrigin,"https://")!=0 || StringLen(BridgeToken)<32 || PollSeconds<1 || HistoryBars<1 || HistoryBars>2000 || MaxTickBatch<1 || MaxTickBatch>1000 || MaxContracts<1 || MagicNumber!=706032601 || _Symbol!=TradeSymbol)return INIT_PARAMETERS_INCORRECT;
  if(!SymbolSelect(TradeSymbol,true))return INIT_FAILED;
@@ -240,8 +241,25 @@ int OnInit(){
  lockHandle=FileOpen(prefix+"lock.bin",FILE_READ|FILE_WRITE|FILE_BIN|FILE_COMMON);if(lockHandle==INVALID_HANDLE){Print("Another Foco Trade EA owns this bridge");return INIT_FAILED;}
  accountHash=Hash((string)AccountInfoInteger(ACCOUNT_LOGIN)+"@"+AccountInfoString(ACCOUNT_SERVER));
  session=StringSubstr(Hash((string)TimeLocal()+"_"+(string)GetMicrosecondCount()),0,32);
+ eventSession=session; // Event namespace remains fresh even when disarmed transport resumes.
  string ledger=Load(prefix+"ledger.txt");if(ledger!="")StringSplit(ledger,'\n',commands);
  brokerRefs=Load(prefix+"refs.txt");seenEvents=Load(prefix+"seen.txt");events=Load(prefix+"events.txt");pending=Load(prefix+"pending.txt");
+ // Resume only a verified, disarmed transport identity. Do not rewrite pending or commands.
+ if(!EnableExecution){
+ string savedSession=Load(prefix+"transport_session.txt");
+ if(pending!=""){
+ if(JsonField(pending,"bridgeId")!=BridgeId || JsonField(pending,"symbol")!=TradeSymbol || JsonField(pending,"accountHash")!=accountHash){Print("PENDING_IDENTITY_MISMATCH: evidence preserved");return INIT_FAILED;}
+ string version=JsonField(JsonField(pending,"state"),"protocolVersion");
+ if(version!="" && version!="1" && version!="2"){Print("PENDING_PROTOCOL_UNSUPPORTED");return INIT_FAILED;}
+ savedSession=JsonField(pending,"session");
+ }
+ if(savedSession!=""){
+ if(StringLen(savedSession)!=32 || !HexSession(savedSession)){Print("PENDING_SESSION_INVALID: evidence preserved");return INIT_FAILED;}
+ session=savedSession;
+ }
+ if(!Save(prefix+"transport_session.txt",session))return INIT_FAILED;
+ }
+ Print("Foco Trade transport session ",StringSubstr(session,0,12),"; durable pending batch ",pending==""?"none":JsonField(pending,"batch"));
  string cursor=Load(prefix+"cursor.txt"),parts[];if(StringSplit(cursor,'|',parts)==3){lastMsc=StringToInteger(parts[0]);sameMscCount=(int)StringToInteger(parts[1]);batch=StringToInteger(parts[2]);}
  // A persisted response is quarantined on restart, NEVER replayed into OrderSend.
  string interrupted=Load(prefix+"reply.txt");if(interrupted!=""){
@@ -251,7 +269,7 @@ int OnInit(){
  if(!Save(prefix+"ledger.txt",durable))return INIT_FAILED;FileDelete(prefix+"reply.txt",FILE_COMMON);
  }
  if(pending!="" && JsonField(JsonField(pending,"state"),"protocolVersion")!="2")Print("Legacy pending detected; safe transport upgrade scheduled");
- Print("Foco Trade v2.01; execution enabled: ",EnableExecution);
+ Print("Foco Trade v2.02; execution enabled: ",EnableExecution);
  EventSetTimer(PollSeconds);return INIT_SUCCEEDED;
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);}
@@ -276,7 +294,7 @@ void OnTimer(){
  ResetLastError();
  int status=WebRequest("POST",ApiOrigin+"/api/trade/bridge/exchange","Authorization: Bearer "+BridgeToken+"\r\nContent-Type: application/json\r\n",HttpTimeoutMs,body,response,headers);
  int networkError=GetLastError();string reply=CharArrayToString(response,0,WHOLE_ARRAY,CP_UTF8);
- if(status!=200){lastExchangeHttpStatus=status;Print("Foco Trade exchange HTTP ",status,": ",BackendErrorCode(reply),status<0?"; network error "+(string)networkError:"",". Retrying same durable batch.");return;}
+ if(status!=200){lastExchangeHttpStatus=status;Print("Foco Trade exchange HTTP ",status,": ",BackendErrorCode(reply),status<0?"; network error "+(string)networkError:"","; session ",StringSubstr(JsonField(pending,"session"),0,12),"; batch ",JsonField(pending,"batch"),". Retrying same durable batch.");return;}
  if(StringFind(reply,"OK\n")!=0){Print("Invalid bridge response; retaining batch");return;}
  if(!Save(prefix+"reply.txt",reply)){Print("Cannot persist response; no order sent");return;}
  string lines[];StringSplit(reply,'\n',lines);for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"CMD2|")==0)Execute(lines[i]);
@@ -289,5 +307,5 @@ void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &
  // No network in callback. Durable event + next-heartbeat history reconciliation.
  if(trans.symbol!=TradeSymbol && request.symbol!=TradeSymbol)return;
  string id=CommandIdFor(request.comment);
- QueueEvent("tx_"+session+"_"+(string)(eventSequence++),"transaction",id,",\"type\":"+(string)trans.type+",\"order\":"+Q((string)trans.order)+",\"deal\":"+Q((string)trans.deal)+",\"position\":"+Q((string)trans.position)+",\"price\":"+N(trans.price)+",\"volume\":"+N(trans.volume)+",\"orderState\":"+(string)trans.order_state+",\"retcode\":"+(string)result.retcode);
+ QueueEvent("tx_"+eventSession+"_"+(string)(eventSequence++),"transaction",id,",\"type\":"+(string)trans.type+",\"order\":"+Q((string)trans.order)+",\"deal\":"+Q((string)trans.deal)+",\"position\":"+Q((string)trans.position)+",\"price\":"+N(trans.price)+",\"volume\":"+N(trans.volume)+",\"orderState\":"+(string)trans.order_state+",\"retcode\":"+(string)result.retcode);
 }

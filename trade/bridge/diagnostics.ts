@@ -56,6 +56,7 @@ export function exchangeDiagnostic(
     protocolVersion: Number.isInteger(value?.state?.protocolVersion)
       ? value.state.protocolVersion
       : null,
+    sessionTag: typeof value?.session === 'string' && /^[a-zA-Z0-9_-]{1,80}$/.test(value.session) ? value.session.slice(0,12) : null,
     batch: Number.isSafeInteger(value?.batch) ? value.batch : null,
     ticks: count(value?.ticks),
     candles: count(value?.candles),

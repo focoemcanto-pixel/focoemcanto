@@ -33,3 +33,15 @@ Instalar 2.01: baixar o .mq5 atualizado, F4/MetaEditor, F7 (0 errors), recarrega
 TRADE_EXECUTION_ENABLED=false; EnableExecution=false; kill_switch=true; política enabled=false; live_authorized=false. Nenhum teste cria comandos ou envia BUY/SELL/OrderSend à XP. Testes de API usam fixtures locais; teste real de RPC é revertido, sem inventar feed atual no banco de produção.
 
 Validação desta correção: 114 testes Trade aprovados, typecheck strict, build Pages Functions e Next/export aprovados. Transporte de produção ainda requer corrigir o binding e comprovar ACK/batches sucessivos; não foi marcado concluído por testes locais.
+
+## 2026-10-05: session handoff and terminal ACK
+
+Production accepted batch 8883 after the bridge identity binding correction, but later requests intermittently failed in the exchange RPC with P0001. The exchange function raises `Another EA session owns the lease` when a different session arrives within 15 seconds of the last accepted heartbeat. This protection remains unchanged. Frequent session changes were observed in persisted batches; server acceptance does not identify which terminal window the user is viewing.
+
+The API now allowlists this precise RPC message as `BRIDGE_SESSION_LEASE_CONFLICT`, logs a short session tag for rejected and accepted requests, and records the client's previous ACK status/time when supplied. It never logs arbitrary RPC messages or credentials. HTTP errors are not converted into success and command delivery remains blocked.
+
+EA v2.02 resumes the verified pending's transport session only when EnableExecution=false, and persists that session for subsequent disarmed restarts. It preserves pending bytes, cursor, ledger, reply quarantine, refs, seen and events. Fresh transaction event namespaces remain separate from the resumed transport session to avoid resetting event IDs. Armed starts still generate a new session and retain all existing financial gates. FILE_COMMON exclusive locking and the backend session lease are not removed.
+
+Install v2.02 in MetaEditor, compile, then reload the EA with the same identity/token and EnableExecution=false. Keep AlgoTrading disabled. Do not delete transport or broker evidence files. The Experts log includes the session tag/batch on errors and prints HTTP 200 OK on recovery; the chart also shows HTTP 200. Match that session tag against production diagnostics and confirm a subsequent heartbeat carries lastExchangeHttpStatus=200 before declaring this installed EA homologated. MQL5 compilation must be performed in the user's MetaEditor; the repository's TypeScript tests are not a substitute.
+
+No migration or production policy change is required. Market freshness is validated separately during the market session.
