@@ -26,6 +26,10 @@ A auditoria encontrou Next.js 14 App Router com export estático, Cloudflare Pag
 | `TRADE_ACCOUNT_HASH` | Deixe vazio no primeiro teste de feed; antes de execução precisa ser o fingerprint exibido pelo EA em Experts |
 | `TRADE_MAX_CONTRACTS` | Inteiro; default conservador `1` |
 | `TRADE_FEED_MAX_AGE_MS` | Default `15000`; máximo `60000` |
+| `TRADE_PAPER_MAX_RISK_BRL` | Limite de risco por operação PAPER em BRL (ex.: `100`). Recomendado definir explicitamente |
+| `TRADE_MAX_RISK_BRL` | Fallback do limite PAPER quando `TRADE_PAPER_MAX_RISK_BRL` não existe. Nunca usado no REAL |
+
+Sem `TRADE_PAPER_MAX_RISK_BRL`/`TRADE_MAX_RISK_BRL`, o PAPER usa R$ 100 identificado como `compat-default`; valor inválido bloqueia em vez de cair no default. O limite REAL vem apenas de `trade_execution_policy.max_risk_brl` (ausente = REAL bloqueado por risco). Veja [hypothesis-to-proposal-2026-10-05.md](hypothesis-to-proposal-2026-10-05.md).
 
 Marque token e chave Supabase como **secrets**. Nenhuma variável `NEXT_PUBLIC_*`. Repita o deploy depois de configurar. REST `/rpc` deve estar habilitado no Supabase; tabelas e funções só concedem acesso a `service_role`, RLS habilitado, sem grants para anon/authenticated. O FocoOS continua autenticando usuários no backend.
 

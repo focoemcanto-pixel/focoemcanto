@@ -28,7 +28,7 @@ Todas são hipóteses candidatas RESEARCH/PAPER; atividade na biblioteca signifi
 | macd_structure_confirmation_v1 | MACD12/26/9 cruza na direção M5 com confirmação de preço. |
 | structure_trend_activity_v1 | EMA M5, rompimento estrutural M1 e atividade relativa convergem. |
 
-Os 14 novos avaliadores usam M5 + M1; o original declara M15 + M5 + M1. Não existe timeframe global obrigatório. São 15 implementações avaliáveis + 2 entradas indisponíveis, total 17.
+Desde a RuleStrategy **v1.2.0**, cada regra declara `dataRequirements` e espera somente os timeframes que lê: oito regras são só-M1 (22 barras M1 da sessão atual); reversão, continuação/cruzamento EMA, confluência e range também exigem 22 barras M5; MACD exige 35 barras M1. O original declara M15 + M5 + M1. Não existe timeframe global obrigatório. São 15 implementações avaliáveis + 2 entradas indisponíveis, total 17.
 
 ## Famílias indisponíveis
 
@@ -52,9 +52,9 @@ Agrupamento: mesma direção/estado, entradas distantes até 6 ticks e stops at�
 
 ## Scanner e estados
 
-A cada novo fechamento, features → todos os avaliadores → resultados com condições e razões → agrupamento → watches. Estados do avaliador: REJECTED, INSUFFICIENT_DATA, UNAVAILABLE_DATA, FORMING, WAITING_TRIGGER, CONFIRMED, DISABLED. Não existe score arbitrário.
+A cada novo fechamento, features → todos os avaliadores → resultados com condições e razões → agrupamento → watches. Estados do avaliador: REJECTED, INSUFFICIENT_DATA, UNAVAILABLE_DATA, FORMING, WAITING_TRIGGER, CONFIRMED, DISABLED. A confirmação nunca depende de score. O diagnóstico `hypotheses` (estágios CONFIRMED, WAITING_TRIGGER, FORMING, FAR, REJECTED, WARMING_UP, UNAVAILABLE_DATA, DISABLED) mostra uma pontuação explicada por fatores apenas para ordenar a proximidade do gatilho.
 
-Estados persistidos: DETECTED → FORMING/WAITING_TRIGGER → CONFIRMED → PROPOSED → ACCEPTED → OPEN_PAPER → CLOSED_PAPER. Recusa humana é REJECTED_BY_USER; invalidação técnica/contexto é INVALIDATED; limite temporal é EXPIRED. Transições de domínio são explícitas e testadas. SQL registra também as transições relacionadas à aprovação e PAPER. Descartar uma observação é uma decisão de acompanhamento; NÃO ENTRAR decide uma proposta e preserva seu estudo hipotético.
+Estados persistidos: DETECTED → FORMING/WAITING_TRIGGER → CONFIRMED → PROPOSED → ACCEPTED → OPEN_PAPER → CLOSED_PAPER. Quando o Risk Engine não libera nem 1 contrato, a proposta técnica é registrada como `BLOQUEADA POR RISCO` e a watch vai de CONFIRMED para **RISK_BLOCKED** (terminal, quantidade 0, observação hipotética para estudo; nunca ACCEPTED/OPEN_PAPER). Recusa humana é REJECTED_BY_USER; invalidação técnica/contexto é INVALIDATED; limite temporal é EXPIRED. Transições de domínio são explícitas e testadas. SQL registra também as transições relacionadas à aprovação e PAPER. Descartar uma observação é uma decisão de acompanhamento; NÃO ENTRAR decide uma proposta e preserva seu estudo hipotético.
 
 `detectedAt`, `validUntil`, `confirmedAt`, `invalidatedAt`, `expiredAt`, versão, condições e participantes são preservados. Confirmações requerem fechamento; microticks não criam ordens antecipadas.
 
