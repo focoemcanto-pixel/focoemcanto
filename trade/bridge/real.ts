@@ -89,6 +89,7 @@ export function realReadiness(
     'Conta/fingerprint autorizado',
     /^[a-f0-9]{64}$/.test(c.accountHash) &&
       b?.accountHash === c.accountHash &&
+      s.accountTradeMode === 2 && policy.account_trade_mode === 2 &&
       policy.account_hash === c.accountHash,
     'Conta autorizada não configurada ou divergente.',
   );
@@ -104,7 +105,7 @@ export function realReadiness(
   add(
     'symbol',
     'Símbolo autorizado',
-    policy.symbol === c.symbol && (!p || p.symbol === c.symbol),
+    b?.bridgeId === c.bridgeId && b?.symbol === c.symbol && policy.symbol === c.symbol && (!p || p.symbol === c.symbol),
     'Símbolo da proposta/política/bridge divergente.',
   );
   add(
@@ -160,6 +161,7 @@ export function realReadiness(
   );
   const meta =
     s.currency === 'BRL' &&
+    [0,1,2].includes(s.marginMode) &&
     pos(s.tickSize) &&
     pos(s.tickValue) &&
     pos(s.volumeMin) &&
@@ -220,7 +222,11 @@ export function realReadiness(
       s.orders.length === 0,
     'Nova entrada exige conta sem posições/ordens para evitar netting e risco não mensurado.',
   );
+  add('frequency','Limites de frequência',Number.isInteger(policy.max_orders_per_session) && policy.max_orders_per_session>0 && Number.isInteger(policy.max_orders_per_day) && policy.max_orders_per_day>0 && Number.isInteger(ctx?.ordersSession) && ctx.ordersSession<policy.max_orders_per_session && Number.isInteger(ctx?.ordersDay) && ctx.ordersDay<policy.max_orders_per_day,'Limites por sessão/dia ausentes ou atingidos.');
+  add('exposure','Limites de exposição',Number.isInteger(policy.max_position_contracts) && policy.max_position_contracts>0 && pos(policy.max_notional_brl),'Defina exposição máxima em contratos e valor nocional.');
   if (p) {
+    add('inspection','Proposta habilitada para execução',p.inspectionOnly !== true,'Esta proposta é somente para inspeção; nunca se transforma em ordem. Gere outra após futura autorização.');
+    add('notional','Exposição da proposta',p.quantity<=policy.max_position_contracts && pos(price) && pos(value) && price*value*p.quantity<=policy.max_notional_brl,'Exposição excede política ou limite não configurado.');
     const aligned = (v: number) =>
       pos(s.tickSize) &&
       Math.abs(v / s.tickSize - Math.round(v / s.tickSize)) < 1e-7;
@@ -298,6 +304,10 @@ export function realReadiness(
       maxRiskBRL: policy.max_risk_brl ?? null,
       maxDailyLossBRL: policy.max_daily_loss_brl ?? null,
       maxPositions: policy.max_positions ?? null,
+      maxPositionContracts: policy.max_position_contracts ?? null,
+      maxOrdersPerSession: policy.max_orders_per_session ?? null,
+      maxOrdersPerDay: policy.max_orders_per_day ?? null,
+      maxNotionalBRL: policy.max_notional_brl ?? null,
     },
   };
 }

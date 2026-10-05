@@ -27,6 +27,7 @@ export type Proposal = {
   asOf: number;
   expiresAt: number;
   cursor: number;
+  inspectionOnly?: boolean;
   scope?: string;
   setupWatchId?: string;
 };
@@ -50,6 +51,7 @@ export function makeProposal(
     cursor: number;
     asOf: number;
     liveAuthorized: boolean;
+    inspectionOnly?: boolean;
   },
   now = Date.now(),
 ): Proposal {
@@ -64,8 +66,8 @@ export function makeProposal(
   if (
     options.mode === 'REAL' &&
     (options.source !== 'mt5' ||
-      !options.liveAuthorized ||
-      a.stage !== 'live-monitoring')
+      (!options.inspectionOnly && (!options.liveAuthorized ||
+      a.stage !== 'live-monitoring')))
   )
     throw new Error('Estratégia não autorizada para operação real');
   if (
@@ -91,6 +93,7 @@ export function makeProposal(
     throw new Error('Níveis inválidos');
   return {
     id: crypto.randomUUID(),
+    ...(options.inspectionOnly ? { inspectionOnly: true } : {}),
     mode: options.mode,
     source: options.source,
     symbol: options.symbol,

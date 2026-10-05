@@ -128,7 +128,7 @@ export async function onRequestPost({
             a.strategy_id === m.analysis.strategy &&
             a.version === m.analysis.version,
         );
-      if (body.mode === 'REAL') assertReady(realReadiness(ctx, env));
+      const inspectionOnly = body.mode === 'REAL' && !realReadiness(ctx, env).canExecute;
       const p = makeProposal(
         body.mode === 'REAL'
           ? { ...m.analysis, stage: auth?.stage || m.analysis.stage }
@@ -145,9 +145,10 @@ export async function onRequestPost({
           cursor: body.source === 'mt5' ? m.snapshot.asOf : body.cursor,
           asOf: m.snapshot.asOf,
           liveAuthorized: auth?.live_authorized === true,
+          inspectionOnly,
         },
       );
-      if (body.mode === 'REAL') assertReady(realReadiness(ctx, env, p));
+      if (body.mode === 'REAL' && !inspectionOnly) assertReady(realReadiness(ctx, env, p));
       return Response.json(
         await rpc(env, 'trade_propose', {
           p_owner: owner,
@@ -162,6 +163,7 @@ export async function onRequestPost({
       row = rows.find((r: any) => r.id === body.id);
     if (!row) throw new Error('Proposta inexistente');
     const p: Proposal = row.payload;
+    if (body.mode && body.mode !== p.mode) throw new Error('Modo/proposta divergente. Gere uma proposta própria para o modo selecionado.');
     if (p.mode === 'REAL') body.mode = 'REAL';
     audit = {
       proposalId: p.id,
@@ -180,6 +182,18 @@ export async function onRequestPost({
       riskBRL: p.riskBRL,
       riskPoints: p.riskPoints,
     };
+    if (p.mode === 'REAL' && p.inspectionOnly && ['prepare-real','confirm'].includes(body.action)) {
+      const ctx=await realContext(env),readiness=realReadiness(ctx,env,p);
+      const snapshot={...audit,inspectionOnly:true,gates:readiness.gates,policy:readiness.limits,feed:{symbol:ctx.bridge?.symbol,receivedAt:ctx.bridge?.receivedAt},strategy:p.setup.strategy,version:p.setup.version};
+      if(body.action==='prepare-real'){
+        const nonce=crypto.randomUUID()+crypto.randomUUID();
+        const prepared=await rpc(env,'trade_inspection_prepare',{p_owner:owner,p_id:p.id,p_hash:await nonceHash(nonce),p_snapshot:snapshot});
+        return Response.json({nonce,expiresAt:prepared.expiresAt,proposal:p,inspectionOnly:true,readiness});
+      }
+      if(body.confirmation!=='CONFIRMAR ORDEM REAL'||typeof body.nonce!=='string'||body.nonce.length>100)throw new Error('Segunda confirmação humana REAL obrigatória');
+      const blocked=await rpc(env,'trade_inspection_confirm',{p_owner:owner,p_id:p.id,p_hash:await nonceHash(body.nonce),p_snapshot:snapshot});
+      return Response.json({...blocked,gates:readiness.gates},{status:409});
+    }
     let command = null;
     if (
       ['confirm', 'prepare-real'].includes(body.action) &&
@@ -295,6 +309,7 @@ export async function onRequestPost({
             (typeof body.id === 'string' ? body.id.slice(0, 36) : null),
           action: String(body.action).slice(0, 30),
           status: 'BLOCKED',
+          reason: e instanceof PersistenceError ? e.code : e instanceof Error ? e.message.slice(0,500) : 'Operação bloqueada',
           timestamp: new Date().toISOString(),
         },
       }).catch(() => {});

@@ -122,7 +122,7 @@ test('price freshness requires both terminal and tick freshness; closed market i
       env,
       now,
     ).status,
-    'OFFLINE',
+    'STALE',
   );
   assert.equal(feedStatus(null, env, now).status, 'OFFLINE');
 });
@@ -282,4 +282,12 @@ test('rollover never labels an old-contract tick as live for the new symbol', ()
     ).status,
     'OFFLINE',
   );
+});
+
+test('connected heartbeat with old ticks is STALE; candle gaps are visible without invented bars',async()=>{
+ const {candleQuality}=await import('../../trade/bridge/mt5');const now=Date.now(),b=batch(now);
+ const data={state:b.state,tick:{...b.ticks[0],timeMsc:now-60000},receivedAt:new Date(now).toISOString()};
+ assert.equal(feedStatus(data,env,now).status,'STALE');
+ assert.equal(feedStatus({...data,receivedAt:'invalid'},env,now).status,'OFFLINE');
+ const cs=[{symbol:'WINV26',timestamp:60},{symbol:'WINV26',timestamp:180},{symbol:'WINV26',timestamp:180}];const quality=candleQuality(cs,'WINV26');assert.equal(quality.gaps,1);assert.equal(quality.duplicates,1);assert.equal(quality.candles,2);assert.equal(cs.length,3);
 });

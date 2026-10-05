@@ -426,7 +426,7 @@ export default function TradeApp() {
         </select>
         <span>
           <i />{' '}
-          {source === 'mt5' ? (live ? 'LIVE' : 'OFFLINE') : 'DADOS SIMULADOS'}
+          {source === 'mt5' ? (live ? 'LIVE' : feed?.status === 'STALE' ? 'STALE' : 'OFFLINE') : 'REPLAY'}
         </span>
         <p>
           {source === 'mt5'
@@ -813,6 +813,9 @@ export default function TradeApp() {
                   source={source}
                   cursor={cursor}
                   complete={analysis?.status === 'complete'}
+                  paperComplete={state?.paperAnalysis?.status === 'complete' || analysis?.status === 'complete'}
+                  realComplete={state?.scanner?.candidates.some(c=>c.analysis.status==='complete' && c.analysis.conflicts.length===0)}
+                  realStrategy={state?.scanner?.candidates.find(c=>c.analysis.status==='complete' && c.analysis.conflicts.length===0)?.definition.id}
                   setupId={analysis?.setup?.id}
                 />
                 <ScannerPanel

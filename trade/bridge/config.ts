@@ -118,6 +118,8 @@ export async function rpc(
   }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
+    if(name.startsWith('trade_inspection_') && data?.code==='P0001' && ['Inspection proposal invalid','Inspection nonce already consumed','Inspection confirmation invalid or expired'].includes(data?.message))
+      throw new Error('Confirmação de inspeção inválida, reutilizada ou expirada. Gere uma nova proposta.');
     const code =
       data?.code === 'P0001' && data?.message === 'Another EA session owns the lease'
         ? 'BRIDGE_SESSION_LEASE_CONFLICT'

@@ -20,6 +20,7 @@ const strategyMetrics = require('../functions/api/trade/strategy-metrics.ts');
 const health = require('../functions/api/trade/health.ts');
 const executionStatus = require('../functions/api/trade/execution-status.ts');
 let operationReadFailures = 1;
+let simulateMissingBridge=false;
 (async () => {
   const db = new PGlite();
   await db.exec(
@@ -31,6 +32,8 @@ let operationReadFailures = 1;
     '20261003124510_multi_strategy_scanner.sql',
     '20261004210552_real_execution_safety.sql',
     '20261005000359_real_execution_fail_closed.sql',
+    '20261005091111_pre_real_homologation.sql',
+    '20261005092318_pre_real_account_mode.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   globalThis.fetch = async (url, init) => {
@@ -41,6 +44,7 @@ let operationReadFailures = 1;
         `select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) as result`,
         args,
       );
+      if(simulateMissingBridge&&name==='trade_bridge_read'&&!result.rows[0]?.result)return Response.json({code:'PGRST202'},{status:404});
       return Response.json(result.rows[0]?.result ?? null);
     } catch (e) {
       return Response.json({ error: e.message }, { status: 409 });
@@ -124,7 +128,7 @@ let operationReadFailures = 1;
                             : 'onRequestGet'
                         ]({ request, env })
                     : url.pathname.endsWith('evaluate')
-                      ? evaluate({ request })
+                      ? evaluate({ request,env })
                       : url.pathname.endsWith('professor')
                         ? professor({ request, env })
                         : url.pathname.endsWith('journal')
@@ -381,6 +385,7 @@ let operationReadFailures = 1;
       exact: true,
     })
     .waitFor();
+  simulateMissingBridge=true;
   await page
     .getByRole('combobox', { name: 'Fonte de mercado' })
     .selectOption('mt5');
@@ -399,19 +404,49 @@ let operationReadFailures = 1;
   await page
     .getByRole('combobox', { name: 'Fonte de mercado' })
     .selectOption('replay');
-  await page.getByText('DADOS SIMULADOS', { exact: true }).waitFor();
+  await page.getByText('REPLAY', { exact: true }).waitFor();
   await page.waitForFunction(
     () =>
       !document.body.textContent.includes(
         'Migration do módulo de operações ausente.',
       ),
   );
+  simulateMissingBridge=false;
   const diagnostic = await page.evaluate(async () =>
     (await fetch('/api/trade/health')).json(),
   );
   assert.equal(diagnostic.persistence, 'AVAILABLE');
   assert.equal(diagnostic.realExecutionEnabled, false);
   assert.equal(diagnostic.runtime.executionExplicitlyDisabled, true);
+  // Isolated real-feed fixture: never a broker request. REAL gates remain false.
+  const {generateMockCandles,snapshotOf}=require('../trade/core/providers.ts');
+  const {scanMarket}=require('../trade/scanner/engine.ts');
+  let liveFixture;const mockBars=generateMockCandles(),closed=Math.floor(Date.now()/60000)*60;
+  for(let cursor=120;cursor<=420;cursor++){
+    const delta=closed-(mockBars[cursor-1].timestamp+60);
+    const candles=mockBars.slice(0,cursor).map(c=>({...c,symbol:'WINV26',timestamp:c.timestamp+delta}));
+    const candidate=scanMarket(snapshotOf(candles,'live')).candidates.find(c=>c.analysis.status==='complete'&&!c.analysis.conflicts.length);
+    if(candidate){liveFixture={candles,candidate};break;}
+  }
+  assert.ok(liveFixture);const price=liveFixture.candidate.analysis.setup.entry;
+  await db.query('select trade_bridge_exchange_v2($1,false,1,$2,15000)',[{
+    bridgeId:'xp-mt5-primary',symbol:'WINV26',session:'ui-inspection',batch:0,accountHash:'a'.repeat(64),
+    ticks:[{symbol:'WINV26',timeMsc:Date.now(),bid:price-5,ask:price,last:price,volume:1,flags:0}],candles:liveFixture.candles,events:[],
+    state:{protocolVersion:2,connected:true,executionAllowed:false,tickSize:5,tickValue:1,currency:'BRL',positions:[],orders:[]}},'a'.repeat(64)]);
+  await page.setViewportSize({width:1440,height:1100});
+  await page.getByRole('combobox',{name:'Fonte de mercado'}).selectOption('mt5');
+  await page.getByRole('button',{name:'REAL BLOQUEADO',exact:true}).click();
+  const prepareButton=page.getByRole('button',{name:'Preparar proposta REAL',exact:true});
+  await prepareButton.waitFor();await page.waitForFunction(()=>{const b=[...document.querySelectorAll('button')].find(b=>b.textContent==='Preparar proposta REAL');return b&&!b.disabled;});
+  await prepareButton.click();await page.getByRole('button',{name:'REVISAR PROPOSTA REAL',exact:true}).click();
+  await page.getByRole('heading',{name:'Confirmar operação REAL?',exact:true}).waitFor();
+  await page.screenshot({path:'.trade-qa/inspection-desktop.png',fullPage:true});
+  await page.setViewportSize({width:390,height:844});await page.screenshot({path:'.trade-qa/inspection-mobile.png',fullPage:true});
+  await page.getByRole('button',{name:'CONFIRMAR ORDEM REAL',exact:true}).click();
+  await page.getByRole('status').filter({hasText:'EXECUÇÃO REAL BLOQUEADA'}).waitFor();
+  assert.equal((await db.query('select *from trade_bridge_commands')).rows.length,0);
+  assert.ok((await db.query('select used_at from trade_real_inspections')).rows[0].used_at);
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   assert.deepEqual(errors, []);
   console.log(
     JSON.stringify({
@@ -424,6 +459,7 @@ let operationReadFailures = 1;
         'proposal before formation; detailed method on demand',
         'PAPER operational; REAL selectable, checklist visible, order blocked',
         'human paper approval, next-candle fill, zero MT5 commands',
+        'REAL inspection: separate proposal, desktop/mobile final dialog, consumed nonce, explicit blocked response, zero commands',
         'step',
         'timeframe',
         'Professor ON: full reasoning drawer; OFF: compact operational view',

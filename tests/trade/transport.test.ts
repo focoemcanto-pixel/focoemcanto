@@ -243,6 +243,8 @@ test('v2 API/Postgres persists heartbeat and historical feed once across retry w
       '20261003124510_multi_strategy_scanner.sql',
       '20261004210552_real_execution_safety.sql',
       '20261005000359_real_execution_fail_closed.sql',
+    '20261005091111_pre_real_homologation.sql',
+    '20261005092318_pre_real_account_mode.sql',
     ])
       await db.exec(readFileSync('supabase/migrations/' + file, 'utf8'));
     await db.exec('set role service_role');

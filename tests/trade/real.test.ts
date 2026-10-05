@@ -57,6 +57,7 @@ function fixture() {
     protocolVersion: 2,
     magic: '706032601',
     currency: 'BRL',
+    marginMode:0,accountTradeMode:2,
     tickSize: 5,
     tickValue: 1,
     volumeMin: 1,
@@ -117,6 +118,7 @@ function fixture() {
       max_risk_brl: 200,
       max_daily_loss_brl: 600,
       max_slippage_points: 20,
+      account_trade_mode:2,max_position_contracts:2,max_orders_per_session:5,max_orders_per_day:10,max_notional_brl:1000000,
     },
     authorizations: [
       {
@@ -127,6 +129,7 @@ function fixture() {
       },
     ],
     unresolved: 0,
+    ordersDay:0,ordersSession:0,
   };
   return { now, p, env, ctx };
 }
@@ -304,6 +307,8 @@ async function database() {
     '20261003124510_multi_strategy_scanner.sql',
     '20261004210552_real_execution_safety.sql',
     '20261005000359_real_execution_fail_closed.sql',
+    '20261005091111_pre_real_homologation.sql',
+    '20261005092318_pre_real_account_mode.sql',
   ])
     await db.exec(readFileSync('supabase/migrations/' + name, 'utf8'));
   return db;
@@ -341,6 +346,7 @@ async function seed(
       f.ctx.policy.session_windows,
     ],
   );
+  await db.exec('update trade_execution_policy set account_trade_mode=2,max_position_contracts=2,max_orders_per_session=5,max_orders_per_day=10,max_notional_brl=1000000');
   await db.query(
     `insert into trade_live_authorizations(strategy_id,version,live_authorized,stage)values($1,$2,true,'live-monitoring')on conflict(strategy_id,version)do update set live_authorized=true,stage='live-monitoring'`,
     [f.p.setup.strategy, f.p.setup.version],
@@ -644,4 +650,53 @@ test('actual API shares scanner and requires both human steps before signed queu
     globalThis.fetch = original;
     await db.close();
   }
+});
+
+for(const [name,change]of Object.entries({
+ 'inspection only':(f:any):void=>{f.p.inspectionOnly=true;},
+ 'max position contracts':(f:any):void=>{f.ctx.policy.max_position_contracts=0;},
+ 'session order count':(f:any):void=>{f.ctx.ordersSession=f.ctx.policy.max_orders_per_session;},
+ 'daily order count':(f:any):void=>{f.ctx.ordersDay=f.ctx.policy.max_orders_per_day;},
+ 'max notional':(f:any):void=>{f.ctx.policy.max_notional_brl=1;},
+ 'replay real':(f:any):void=>{f.p.source='replay';},
+ 'missing SL':(f:any):void=>{f.p.sl=0;},
+ 'missing TP':(f:any):void=>{f.p.tp=0;},
+ 'wrong bridge':(f:any):void=>{f.ctx.bridge.bridgeId='other';},
+ 'demo account':(f:any):void=>{f.ctx.bridge.state.accountTradeMode=0;},
+ 'account policy mode':(f:any):void=>{f.ctx.policy.account_trade_mode=0;},
+ 'policy disabled':(f:any):void=>{f.ctx.policy.enabled=false;},
+}))test('pre-real gate: '+name,()=>{const f=fixture();change(f);assert.equal(realReadiness(f.ctx,f.env,f.p,f.now).canExecute,false);});
+
+test('non-executable REAL inspection has distinct identity, two steps, single-use expiry and zero commands',async()=>{
+ const db=await database(),f=fixture(),original=globalThis.fetch;
+ try{
+ await seed(db,f);f.p.inspectionOnly=true;
+ await db.query('select trade_propose($1,$2,$3)',['focoos-admin',bridge,f.p]);
+ globalThis.fetch=async(u,init)=>{
+ assert.equal(new URL(String(u)).hostname,'fixture.invalid');const name=String(u).split('/').pop()!;assert.match(name,/^trade_[a-z0-9_]+$/);
+ try{const args=Object.values(JSON.parse(String(init?.body)));const r=await db.query<any>(`select public.${name}(${args.map((_,i)=>'$'+(i+1)).join(',')}) result`,args);return Response.json(r.rows[0].result);}
+ catch(e:any){return Response.json({code:e.code},{status:400});}};
+ const {onRequestPost}=await import('../../functions/api/trade/operations');
+ const env={...f.env,TRADE_EXECUTION_ENABLED:'false',TRADE_SUPABASE_URL:'https://fixture.invalid',TRADE_SUPABASE_SERVICE_KEY:'fixture'};
+ const post=(body:any)=>onRequestPost({env,request:new Request('https://fixture.invalid/operations',{method:'POST',body:JSON.stringify({mode:'REAL',id:f.p.id,cursor:180,...body})})});
+ const prepared=await post({action:'prepare-real'});const d:any=await prepared.json();assert.equal(prepared.status,200,JSON.stringify(d));assert.equal(d.inspectionOnly,true);
+ assert.equal((await post({action:'confirm',nonce:d.nonce})).status,409);
+ assert.equal((await post({mode:'PAPER',action:'confirm',nonce:d.nonce,confirmation:'CONFIRMAR ORDEM REAL'})).status,409);
+ const final=await post({action:'confirm',nonce:d.nonce,confirmation:'CONFIRMAR ORDEM REAL'});const blocked:any=await final.json();assert.equal(final.status,409);assert.equal(blocked.blocked,true);assert.ok(blocked.gates.some((g:any)=>g.key==='backend'&&!g.ok));
+ assert.equal((await post({action:'confirm',nonce:d.nonce,confirmation:'CONFIRMAR ORDEM REAL'})).status,409);
+ assert.equal((await db.query('select *from trade_bridge_commands')).rows.length,0);
+ assert.ok((await db.query<any>('select used_at from trade_real_inspections')).rows[0].used_at);
+ assert.equal((await db.query<any>('select trade_real_valid($1,$2,2,$3,15000) ok',[bridge,f.p,account])).rows[0].ok,false);
+ await db.exec("update trade_real_inspections set used_at=null,expires_at=now()-interval '1 second'");
+ assert.equal((await post({action:'confirm',nonce:d.nonce,confirmation:'CONFIRMAR ORDEM REAL'})).status,409);
+ await db.exec('set role authenticated');await assert.rejects(db.exec('select *from trade_real_inspections'),/permission denied/);
+ }finally{globalThis.fetch=original;await db.close();}
+});
+
+test('Postgres rechecks additive financial limits even with every old gate authorized',async()=>{
+ const db=await database(),f=fixture();try{await seed(db,f);const valid=async()=>(await db.query<any>('select trade_real_valid($1,$2,2,$3,15000) ok',[bridge,f.p,account])).rows[0].ok;assert.equal(await valid(),true);
+ for(const [column,value]of [['max_position_contracts',0],['max_notional_brl',1],['max_orders_per_day',null],['max_orders_per_session',null]]as const){
+ if(value===0){f.p.quantity=3;assert.equal(await valid(),false);f.p.quantity=1;continue;}
+ await db.query(`update trade_execution_policy set ${column}=$1`,[value]);assert.equal(await valid(),false);await db.exec('update trade_execution_policy set account_trade_mode=2,max_position_contracts=2,max_orders_per_session=5,max_orders_per_day=10,max_notional_brl=1000000');}
+ }finally{await db.close();}
 });

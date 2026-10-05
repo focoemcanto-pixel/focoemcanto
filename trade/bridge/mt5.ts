@@ -8,6 +8,12 @@ import {
   type BrokerCommand,
   type BrokerExecutionProvider,
 } from './protocol';
+/** Gap detection reports missing M1 intervals; session breaks are not filled with invented candles. */
+export function candleQuality(candles:any[],symbol:string){
+ let duplicates=0,outOfOrder=0,gaps=0;const seen=new Set<number>();let previous:number|undefined;
+ for(const c of candles){if(c.symbol!==symbol)continue;if(seen.has(c.timestamp))duplicates++;seen.add(c.timestamp);if(previous!==undefined){if(c.timestamp<previous)outOfOrder++;else if(c.timestamp-previous>60)gaps++;}previous=c.timestamp;}
+ return {timezone:'UTC',displayTimezone:'America/Sao_Paulo',timeframe:'1m',candles:seen.size,duplicates,outOfOrder,gaps,gapsRequireSessionReview:true};
+}
 export function feedStatus(data: any, env: BridgeEnv, now = Date.now()) {
   const c = config(env),
     lastTick = data?.tick || null;
@@ -22,11 +28,14 @@ export function feedStatus(data: any, env: BridgeEnv, now = Date.now()) {
     ageMs >= -2000 &&
     ageMs <= c.maxAgeMs &&
     receivedAge !== null &&
+    Number.isFinite(receivedAge) &&
+    now - Date.parse(data.receivedAt) >= -2000 &&
     receivedAge <= c.maxAgeMs;
   return {
     source: 'XP / MetaTrader 5',
     symbol: c.symbol,
-    status: live ? 'LIVE' : 'OFFLINE',
+    status: live ? 'LIVE' : lastTick?.symbol === c.symbol && data?.state?.connected === true && receivedAge !== null && Number.isFinite(receivedAge) && receivedAge <= c.maxAgeMs ? 'STALE' : 'OFFLINE',
+    quality:candleQuality(data?.candles||[],c.symbol),
     maxAgeMs: c.maxAgeMs,
     ageMs,
     receivedAgeMs: receivedAge,

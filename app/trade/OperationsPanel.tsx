@@ -14,6 +14,8 @@ export default function OperationsPanel({
   setupId,
   paperComplete,
   paperSetupId,
+  realComplete,
+  realStrategy,
   strategyNames = {},
   executionMode = 'PAPER',
   onModeChange = () => {},
@@ -26,6 +28,8 @@ export default function OperationsPanel({
   setupId?: string;
   paperComplete?: boolean;
   paperSetupId?: string;
+  realComplete?: boolean;
+  realStrategy?: string;
   strategyNames?: Record<string, string>;
 }) {
   const mode = executionMode,
@@ -95,12 +99,12 @@ export default function OperationsPanel({
           cursor,
           mode,
           quantity,
-          strategy: p?.setup.strategy,
+          strategy: p?.setup.strategy || (mode==='REAL'?realStrategy:undefined),
           ...extra,
         }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
+      if (!r.ok) { if(d.gates)setReadiness((old:any)=>({...old,gates:d.gates,canExecute:false})); throw new Error(d.error); }
       if (action === 'prepare-real') setFinalConfirmation(d);
       if (action === 'confirm') setFinalConfirmation(null);
       await load();
@@ -108,14 +112,13 @@ export default function OperationsPanel({
       setError(e instanceof Error ? e.message : 'Falha na operação');
       if (mode === 'REAL') {
         setFinalConfirmation(null);
-        setReadiness(null);
       }
     } finally {
       setBusy(false);
     }
   }
   const activeComplete =
-    mode === 'PAPER' ? (paperComplete ?? complete) : complete;
+    mode === 'PAPER' ? (paperComplete ?? complete) : (realComplete ?? complete);
   const activeSetupId = mode === 'PAPER' ? (paperSetupId ?? setupId) : setupId;
   const matching = rows.filter(
     (r) => r.payload.source === source && r.payload.mode === mode,
@@ -130,16 +133,7 @@ export default function OperationsPanel({
       matching.find(
         (r) => r.state === 'CONFIRMADA' && !r.execution?.exitTime,
       ) ||
-      matching[0] ||
-      (mode === 'REAL'
-        ? rows.find(
-            (r) =>
-              r.payload.mode === 'PAPER' &&
-              r.payload.source === source &&
-              r.state === 'AGUARDANDO CONFIRMAÇÃO' &&
-              r.payload.expiresAt > Date.now(),
-          )
-        : undefined),
+      matching[0],
     p: Proposal | undefined = row?.payload,
     x = row?.execution;
   const ready = readiness?.canExecute === true && source === 'mt5',
@@ -199,6 +193,7 @@ export default function OperationsPanel({
           onClick={() => {
             setMode('REAL');
             setSelectedId('');
+            setFinalConfirmation(null);
           }}
         >
           REAL<small>{ready ? 'AGUARDA CONFIRMAÇÃO' : 'BLOQUEADO'}</small>
@@ -353,6 +348,7 @@ export default function OperationsPanel({
               </p>
             </details>
             <small className="trade-operation-footnote">
+              {p.inspectionOnly && 'INSPEÇÃO REAL BLOQUEADA · SEM ENVIO AO BROKER. '}
               {p.pointValueSource === 'win-specification-paper' &&
                 'PAPER: R$ 0,20 por ponto conforme especificação WIN. '}
               Preço de execução pode variar. Valores não incluem taxas nem
@@ -366,13 +362,13 @@ export default function OperationsPanel({
                   disabled={
                     busy ||
                     Date.now() > p.expiresAt ||
-                    (mode === 'REAL' && !ready)
+                    (mode === 'REAL' && !ready && !p.inspectionOnly)
                   }
                   onClick={() =>
                     action(mode === 'REAL' ? 'prepare-real' : 'confirm', p.id)
                   }
                 >
-                  {mode === 'PAPER' ? 'ENTRAR NO PAPER' : 'ENTRAR · ORDEM REAL'}
+                  {mode === 'PAPER' ? 'ENTRAR NO PAPER' : p.inspectionOnly ? 'REVISAR PROPOSTA REAL' : 'ENTRAR · ORDEM REAL'}
                 </button>
                 <button disabled={busy} onClick={() => action('discard', p.id)}>
                   NÃO ENTRAR
@@ -442,7 +438,7 @@ export default function OperationsPanel({
       {mode === 'REAL' && (!p || preview) && (
         <button
           className="trade-primary"
-          disabled={busy || !ready || !activeComplete}
+          disabled={busy || source !== 'mt5' || !activeComplete}
           onClick={() => action('propose')}
         >
           Preparar proposta REAL
@@ -459,8 +455,7 @@ export default function OperationsPanel({
             <span className="trade-eyebrow">ÚLTIMA CONFIRMAÇÃO HUMANA</span>
             <h2>Confirmar operação REAL?</h2>
             <p>
-              Esta confirmação pode enviar uma ordem com dinheiro real. Aceite
-              HTTP não confirma execução.
+              {finalConfirmation.inspectionOnly ? 'INSPEÇÃO REAL — esta tentativa será bloqueada. Nenhum comando será enviado à XP.' : 'Esta confirmação pode enviar uma ordem com dinheiro real. Aceite HTTP não confirma execução.'}
             </p>
             <strong>
               {finalConfirmation.proposal.direction} ·{' '}
@@ -476,6 +471,9 @@ export default function OperationsPanel({
               <dd>{num(finalConfirmation.proposal.tp)}</dd>
               <dt>Risco estimado</dt>
               <dd>{money(finalConfirmation.proposal.riskBRL)}</dd>
+              <dt>Conta</dt><dd>{finalConfirmation.readiness?.gates?.find((g:any)=>g.key==='account')?.ok ? 'XP · identidade autorizada' : 'XP · identidade ainda bloqueada'}</dd>
+              <dt>Potencial estimado</dt><dd>{money(finalConfirmation.proposal.potentialBRL)}</dd>
+              <dt>Risco/retorno</dt><dd>1 : {num(finalConfirmation.proposal.rr)}</dd>
               <dt>Validade da confirmação</dt>
               <dd>
                 {new Date(finalConfirmation.expiresAt).toLocaleTimeString(
@@ -487,7 +485,7 @@ export default function OperationsPanel({
               className="trade-primary"
               disabled={
                 busy ||
-                !ready ||
+                (!ready && !finalConfirmation.inspectionOnly) ||
                 Date.now() > Date.parse(finalConfirmation.expiresAt)
               }
               onClick={() =>

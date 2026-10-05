@@ -106,3 +106,5 @@ Fluxo obrigatório de operação, modos PAPER/REAL, persistência e migration: [
 Pipeline PAPER/REAL, confirmação final, gates, EA v2 e instalação no Mac: [real-execution.md](real-execution.md). REAL permanece desarmado.
 
 Diagnóstico HTTP 400, identidade do Worker, transporte v2.01 e pending legado: [transport-homologation.md](transport-homologation.md).
+
+Homologação pré-real e requisitos da primeira etapa financeira: [pre-real-homologation.md](./pre-real-homologation.md).
