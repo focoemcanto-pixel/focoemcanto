@@ -8,7 +8,9 @@ import {
   isExecutable,
   type Proposal,
 } from '../../trade/bridge/approval';
-import { paperRiskLimit, realRiskLimit } from '../../trade/bridge/config';
+import { realRiskLimit } from '../../trade/bridge/config';
+import { paperRiskPolicy, oneRBRL } from '../../trade/bridge/risk-settings';
+import { seedRisk } from './risk-fixture';
 import {
   PaperExecutionProvider,
   hypotheticalObservation,
@@ -178,18 +180,13 @@ test('missing or invalid limit fails closed: RISK_BLOCKED, never a silent defaul
   }
 });
 
-test('PAPER limit: explicit variable, shared fallback, labelled compatibility default, invalid fails closed', () => {
-  assert.deepEqual(paperRiskLimit({ TRADE_PAPER_MAX_RISK_BRL: '250', TRADE_MAX_RISK_BRL: '80' }), {
-    maxRiskBRL: 250,
-    source: 'TRADE_PAPER_MAX_RISK_BRL',
-  });
-  assert.deepEqual(paperRiskLimit({ TRADE_MAX_RISK_BRL: '80' }), {
-    maxRiskBRL: 80,
-    source: 'TRADE_MAX_RISK_BRL',
-  });
-  assert.deepEqual(paperRiskLimit({}), { maxRiskBRL: 100, source: 'compat-default' });
-  assert.equal(paperRiskLimit({ TRADE_PAPER_MAX_RISK_BRL: 'abc' }).maxRiskBRL, null);
-  assert.equal(paperRiskLimit({ TRADE_PAPER_MAX_RISK_BRL: '0' }).maxRiskBRL, null);
+test('PAPER limit comes only from persisted risk management; no hardcoded or environment fallback', () => {
+  assert.deepEqual(paperRiskPolicy({ settings: null, blocked: 'RISK_SETTINGS_MISSING' } as any), { maxRiskBRL: null, source: 'gestão de risco não configurada', maxContracts: 1 });
+  assert.equal(paperRiskPolicy({ settings: null, blocked: 'RISK_SETTINGS_UNAVAILABLE' } as any).maxRiskBRL, null);
+  const s: any = { version: 7, configHash: 'abcdef0123', oneRBRL: 50, maxContracts: 3 };
+  assert.deepEqual(paperRiskPolicy({ settings: s, blocked: null } as any), { maxRiskBRL: 50, source: 'gestão de risco v7 (abcdef01)', maxContracts: 3 });
+  assert.equal(oneRBRL(5000, 'PCT_CAPITAL', 1), 50);
+  assert.equal(oneRBRL(5000, 'FIXED_BRL', 80), 80);
 });
 
 test('G: REAL without policy max_risk_brl fails closed; never borrows a PAPER default', () => {
@@ -328,6 +325,7 @@ async function database() {
     '20261005092318_pre_real_account_mode.sql',
     '20261005122031_bridge_market_clock.sql',
     '20261005150000_risk_blocked_technical_proposal.sql',
+    '20261007100000_paper_risk_settings.sql',
   ])
     await db.exec(readFileSync('supabase/migrations/' + name, 'utf8'));
   return db;
@@ -360,8 +358,8 @@ test('D/F end-to-end PAPER: blocked proposal persisted, confirm refused before p
       TRADE_SUPABASE_URL: 'https://fixture.invalid',
       TRADE_SUPABASE_SERVICE_KEY: 'fixture',
       TRADE_EXECUTION_ENABLED: 'false',
-      TRADE_PAPER_MAX_RISK_BRL: '10',
     };
+    await seedRisk(db, { riskValue: 10 });
     const post = (body: any) =>
       onRequestPost({
         env,
@@ -408,9 +406,10 @@ test('D/F end-to-end PAPER: blocked proposal persisted, confirm refused before p
     );
     // With a sufficient explicit limit the same flow is READY and executable in PAPER.
     await db.exec('delete from trade_operation_journal; delete from trade_operation_proposals');
+    await seedRisk(db, { riskValue: 1000 });
     const ready: any = await (
       await onRequestPost({
-        env: { ...env, TRADE_PAPER_MAX_RISK_BRL: '1000' },
+        env,
         request: new Request('https://fixture.invalid/api/trade/operations', {
           method: 'POST',
           body: JSON.stringify({ action: 'propose', source: 'replay', cursor: 180, mode: 'PAPER', quantity: 1 }),
@@ -436,8 +435,8 @@ test('scanner: confirmed setup above the PAPER limit becomes a visible RISK_BLOC
       TRADE_SUPABASE_URL: 'https://fixture.invalid',
       TRADE_SUPABASE_SERVICE_KEY: 'fixture',
       TRADE_EXECUTION_ENABLED: 'false',
-      TRADE_PAPER_MAX_RISK_BRL: '10',
     };
+    await seedRisk(db, { riskValue: 10 });
     const result: any = await runScanner(env, 'replay', 30, 'risk-blocked');
     assert.ok(result.technicalProposals.length >= 1, JSON.stringify(result.proposalBlocks));
     for (const t of result.technicalProposals) {
@@ -448,7 +447,8 @@ test('scanner: confirmed setup above the PAPER limit becomes a visible RISK_BLOC
       assert.equal(t.proposal.sl, c.analysis.setup.stop);
       assert.equal(t.proposal.entry, c.analysis.setup.entry);
     }
-    assert.deepEqual(result.riskPolicy.paper, { maxRiskBRL: 10, source: 'TRADE_PAPER_MAX_RISK_BRL' });
+    assert.equal(result.riskPolicy.paper.maxRiskBRL, 10);
+    assert.match(result.riskPolicy.paper.source, /^gestão de risco v\d+ /);
     const rows = (await db.query<any>('select state from trade_operation_proposals')).rows;
     assert.ok(rows.length && rows.every((r) => r.state === 'BLOQUEADA POR RISCO'));
     const watches = (await db.query<any>("select state from trade_setup_watches where state='RISK_BLOCKED'")).rows;

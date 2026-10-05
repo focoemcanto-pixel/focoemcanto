@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { seedRisk } from './risk-fixture';
 import { PGlite } from '@electric-sql/pglite';
 import {
   rpc,
@@ -128,6 +129,10 @@ test('service-role RPC PAPER approval/journal works with execution false; schema
         'utf8',
       ),
     );
+    // PAPER risk management and a saved configuration: without it a
+    // PAPER proposal is RISK_BLOCKED (no hardcoded fallback).
+    await db.exec(readFileSync('supabase/migrations/20261007100000_paper_risk_settings.sql', 'utf8'));
+    await seedRisk(db);
     await db.exec('set role service_role');
     assert.equal((await operations({ request, env })).status, 200);
     const post = async (body: any) =>

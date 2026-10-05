@@ -40,6 +40,33 @@ Um setup pode existir sem proposta executável. Uma proposta pode ser bloqueada 
   - **Métricas registradas:** MFE/MAE em pontos e em R, tempo até alvo/stop, barras acompanhadas e resultado em R.
   - **Imutabilidade:** o desfecho final não muda mais.
 
+## Confluência e atribuição por estratégia
+
+Uma oportunidade de mercado gera **uma** observação, **um** desfecho, **uma** proposta e, no máximo, **uma** operação PAPER. Isso preserva a deduplicação do scanner.
+
+**Prova de participação.** Outra estratégia do mesmo grupo de deduplicação recebe crédito analítico só se tiver tudo isto:
+
+- estado CONFIRMED **no mesmo candle** da confirmação;
+- todas as condições dela própria atendidas;
+- a mesma direção.
+
+Essa prova vai para `snapshot.participantEvidence`, que é imutável e guarda estratégia, versão, `configHash`, `confirmedAt`, condições e níveis. Uma estratégia apenas em formação, ou que confirma depois, não recebe o resultado (não há look-ahead).
+
+**Na estatística:**
+
+- cada estratégia confirmada recebe o desfecho **hipotético** na própria estatística (papel PARTICIPANT, mostrado como "N como participante");
+- `opportunities` conta cada oportunidade uma vez (N global);
+- PAPER_FORWARD é creditado só à estratégia cujos níveis foram operados;
+- uma estratégia que também tem observação própria da mesma oportunidade conta uma vez só.
+
+## Entrada disponível ≠ hipótese válida
+
+AGUARDANDO GATILHO → SETUP CONFIRMADO → PROPOSTA READY → **ENTRADA DISPONÍVEL · Ns** → ENTRADA EXPIRADA.
+
+- O cronômetro usa o `expiresAt` do **backend**, ajustado pela diferença entre o relógio local e o do servidor (header `Date`).
+- Uma proposta expirada nunca exibe botão de entrada.
+- O backend também recusa: o SQL `trade_confirm` marca EXPIRADA, e no feed LIVE a actionability recusa MISSED, INVALIDATED e EXPIRED.
+
 ## Validade da proposta (`actionability-v1`)
 
 Medida contra a **cotação atual** (compra no ask, venda no bid):
@@ -120,6 +147,24 @@ Os agrupamentos são sempre estratégia × versão × dataset.
 
 Nenhuma leitura do LAB seleciona `account_hash`, token ou fingerprint. Nenhuma estatística altera gates: REAL continua bloqueado (`TRADE_EXECUTION_ENABLED=false`, kill switch ativo, policy desabilitada).
 
+## Retenção de ticks (`20261007090000_tick_retention.sql`) — fase de AUDITORIA
+
+**Regra planejada:**
+
+- manter os **5 pregões mais recentes presentes na base**, não 5 dias corridos;
+- um pregão é uma data BRT, no relógio de mercado normalizado, com pelo menos 1.000 ticks;
+- fins de semana, feriados e ticks de teste não reduzem a janela;
+- o cutoff é 00:00 BRT do pregão preservado mais antigo.
+
+**Nesta fase nada é apagado: não existe função de exclusão.**
+
+- `trade_tick_retention_plan` é a prévia somente leitura.
+- `trade_tick_retention_run` só registra o que **seria** removido, diariamente às 19:45 BRT via pg_cron, em `trade_tick_retention_runs`.
+- Uma chamada sem dry-run é recusada com `TICK_DELETION_DISABLED`.
+- Ativar a exclusão será uma migration futura e explícita.
+
+**Dependências auditadas:** a ingestão lê só o último tick; o LAB lê uma janela de ≤120 s dentro do horizonte de 240 min. Scanner, replay, PAPER, REAL e auditorias usam candles, estado e comandos.
+
 ## Retenção
 
 - Observações: uma por setup confirmado (dezenas por dia).
@@ -127,3 +172,75 @@ Nenhuma leitura do LAB seleciona `account_hash`, token ou fingerprint. Nenhuma e
 - Ticks não são copiados.
 - `trade_strategy_evaluations` grava uma linha por estratégia por candle (~8,5 mil/dia).
 - `trade_bridge_ticks` já passa de 790 MB e não tem retenção. Recomenda-se uma política de arquivamento (fora do escopo desta fase).
+
+## Gestão de risco PAPER (`20261007100000_paper_risk_settings.sql`)
+
+**Origem.** Substitui o limite fixo de compatibilidade de R$100 (`paperCompatMaxRiskBRL`, origem `compat-default`). Não há mais fallback por código nem por variável de ambiente: sem configuração salva, a proposta PAPER fica RISK_BLOCKED.
+
+**Persistência.** A configuração fica em `trade_risk_settings_versions`, uma tabela só de inserções (append-only): cada gravação é uma versão nova, com `config_hash`. O banco valida tudo e calcula o 1R:
+
+- `FIXED_BRL`: 1R = valor fixo em R$;
+- `PCT_CAPITAL`: 1R = capital × % / 100, com no máximo 10% e 1R ≤ capital.
+
+O capital operacional é um número de planejamento; não é o saldo da corretora.
+
+**Quantidade.** O Risk Engine usa o 1R persistido como orçamento de risco por operação:
+
+- quantidade = min(⌊1R / risco por contrato⌋, máximo de contratos);
+- se 0, a proposta é RISK_BLOCKED;
+- o stop técnico nunca muda.
+
+**Limites diários (dia em BRT, política `GROSS_LOSSES_PLUS_OPEN_RISK_V1`).** Só operações PAPER aceitas no mercado LIVE (fonte `mt5`) consomem os limites. Replay é treino; LIVE_DETECTED e desfechos hipotéticos nunca consomem.
+
+- Orçamento consumido = soma das **perdas** realizadas do dia, em valor absoluto. Um ganho posterior **não** devolve o orçamento; o P&L líquido é mostrado à parte.
+- Risco aberto = risco inicial integral de cada posição PAPER aberta. O PAPER não move stop nem faz parcial, então nada reduz esse risco.
+- Uma entrada é recusada quando: perdas do dia ≥ limite; operações do dia ≥ máximo; ou perdas + risco aberto + risco da nova entrada > limite.
+- Scanner, hipóteses e LAB continuam funcionando.
+
+**Quantidade.**
+
+- **Sugerida** = mín(⌊1R / risco por contrato⌋, máximo de contratos).
+- **Redução:** o usuário pode diminuí-la na confirmação (`trade_paper_quantity` guarda a sugerida e a escolhida), nunca aumentá-la. Ao tentar, a recusa explica: "3 contratos arriscariam R$ 114,00, acima do seu limite de R$ 100,00."
+
+**Mudança de configuração.**
+
+- A proposta pendente ou bloqueada criada com uma versão anterior é substituída automaticamente por uma nova, já redimensionada, enquanto o setup continua válido.
+- A pendente é expirada. A bloqueada é terminal por desenho e permanece como registro de estudo.
+- No diário fica `SUBSTITUIDA_GESTAO_RISCO`.
+
+**Autoridade.** No aceite PAPER, `trade_paper_entry_check` exige:
+
+- a mesma versão da configuração usada para dimensionar a proposta;
+- risco ≤ 1R;
+- limites diários disponíveis.
+
+**Histórico.** Cada proposta guarda `payload.riskSettings` (versão, hash, capital, 1R e limites). Mudanças futuras nunca reescrevem esse registro.
+
+## Readiness (fonte única)
+
+`trade/bridge/readiness.ts` separa as dimensões:
+
+| Dimensão | Valores |
+|---|---|
+| Dados de mercado | LIVE / STALE / OFFLINE |
+| Bridge | conectado / desconectado |
+| EA | conectado / desconectado |
+| Execução no EA | habilitada / desabilitada |
+| Execução no backend | habilitada / desabilitada |
+| Sessão REAL | armada / não armada |
+| Policy | válida / inválida / ausente |
+| Kill switch | ativo / liberado |
+| Estratégia | autorizada / não autorizada |
+| Conta | verificada / não verificada |
+
+- O dado de mercado usa o mesmo `feedStatus` do header.
+- Um EA conectado com EnableExecution=false aparece como **CONECTADO + EXECUÇÃO DESABILITADA**.
+- Contexto indisponível aparece como **DESCONHECIDO**, nunca como OFFLINE.
+
+**Causa do erro "Não foi possível acessar a persistência Trade".** `trade_bridge_read` (e `trade_real_context`, que o usava) devolvia cerca de 344 KB por chamada, com 2.000 candles. Isso dava média de 443 ms e picos de 7 s na borda. Somado a uma janela de deploy antes da migration (404 de `trade_real_session_check`), fazia o painel REAL cair em "Feed OFFLINE / desconectado".
+
+**Correção.**
+
+- `trade_bridge_status` (estado + tick, sem candles) passa a ser usado pelo contexto REAL, pelo health, pela checagem de preço do PAPER e pelo diagnóstico.
+- O `execution-status` sempre devolve as dimensões, e o erro aparece com código, operação e HTTP.
+

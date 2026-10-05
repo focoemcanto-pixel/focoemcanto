@@ -201,8 +201,41 @@ export default function LabPanel() {
           {t.outcomes.ambiguous} ambíguo · {t.outcomes.expired} sem desfecho · {t.outcomes.open} em acompanhamento.
         </p>
       </section>
+      {data.risk && (
+        <section aria-label="Risco" className="trade-lab-funnel" data-section="risk">
+          <span className="trade-eyebrow">RISCO · EVIDÊNCIA (LIVE, NÃO ALTERA O RISCO)</span>
+          <dl>
+            <dt>Bloqueados por risco</dt>
+            <dd>{data.risk.blockedByRisk}</dd>
+            <dt>…teriam atingido alvo / stop</dt>
+            <dd>
+              {data.risk.blockedOutcomes.targetFirst} / {data.risk.blockedOutcomes.stopFirst}
+            </dd>
+            <dt>Uso médio do 1R</dt>
+            <dd>{data.risk.avgOneRUsage == null ? '—' : `${Math.round(data.risk.avgOneRUsage * 100)}%`}</dd>
+            <dt>Risco médio · quantidade média</dt>
+            <dd>
+              {data.risk.avgRiskBRL == null ? '—' : data.risk.avgRiskBRL.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} ·{' '}
+              {data.risk.avgQuantity == null ? '—' : data.risk.avgQuantity.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}
+            </dd>
+            <dt>Recusadas por limite diário / máx. operações</dt>
+            <dd>
+              {data.risk.refusedDailyLoss} / {data.risk.refusedMaxTrades}
+            </dd>
+          </dl>
+          <p>Resultados de setups bloqueados são HIPOTÉTICOS: servem de evidência, nunca para aumentar o risco automaticamente.</p>
+        </section>
+      )}
       <section aria-label="Estratégias" className="trade-lab-strategies">
         <span className="trade-eyebrow">ESTRATÉGIAS · POR VERSÃO E ORIGEM</span>
+        {(data.analytics.opportunities || [])
+          .filter((x: any) => dataset === 'ALL' || x.dataset === dataset)
+          .map((x: any) => (
+            <p key={x.dataset} className="trade-lab-reason">
+              {datasetLabel[x.dataset] || x.dataset}: {x.opportunities} oportunidade(s) de mercado únicas, N={x.metrics.n} resolvidas. Uma
+              oportunidade confirmada por várias estratégias conta uma vez aqui; cada estratégia confirmada recebe o desfecho na própria estatística.
+            </p>
+          ))}
         {!groups.length && <p>Nenhum setup confirmado na janela{dataset === 'ALL' ? '' : ' para esta origem'}. A base começa a crescer com o feed LIVE.</p>}
         {groups.map((g: any) => {
           const m = g.metrics,
@@ -216,7 +249,7 @@ export default function LabPanel() {
                 <span>{datasetLabel[g.dataset] || g.dataset}</span>
                 <em>{g.status}</em>
                 <small>
-                  {g.observations} setups · N={m.n} resolvidos{g.statuses.AMBIGUOUS ? ` · ${g.statuses.AMBIGUOUS} ambíguos` : ''}
+                  {g.observations} setups{g.asParticipant ? ` (${g.asParticipant} como participante)` : ''} · N={m.n} resolvidos{g.statuses.AMBIGUOUS ? ` · ${g.statuses.AMBIGUOUS} ambíguos` : ''}
                   {g.statuses.OPEN ? ` · ${g.statuses.OPEN} abertos` : ''}
                 </small>
               </summary>

@@ -4,7 +4,7 @@ import {
   PersistenceError,
   type BridgeEnv,
 } from '../../../trade/bridge/config';
-import { labAnalytics, funnel, labParameters, type LabObservation } from '../../../trade/lab/analytics';
+import { labAnalytics, funnel, labParameters, riskSummary, type LabObservation } from '../../../trade/lab/analytics';
 import { actionabilityParameters } from '../../../trade/lab/actionability';
 import { outcomeParameters } from '../../../trade/lab/outcome';
 const owner = 'focoos-admin'; // Existing admin-session middleware, never client supplied.
@@ -21,6 +21,25 @@ export function toLabObservation(o: any): LabObservation {
     lifecycle: o.lifecycle,
     outcome: o.outcome || null,
     paper: o.paper || null,
+    scope: o.scope,
+    risk: o.risk
+      ? {
+          oneRBRL: o.risk.oneRBRL == null ? null : Number(o.risk.oneRBRL),
+          riskBRL: o.risk.riskBRL == null ? null : Number(o.risk.riskBRL),
+          riskPerContractBRL: o.risk.riskPerContractBRL == null ? null : Number(o.risk.riskPerContractBRL),
+          suggestedQuantity: o.risk.suggestedQuantity == null ? null : Number(o.risk.suggestedQuantity),
+          chosenQuantity: o.risk.chosenQuantity == null ? null : Number(o.risk.chosenQuantity),
+          blockCode: o.risk.blockCode ?? null,
+          riskSettingsVersion: o.risk.riskSettingsVersion == null ? null : Number(o.risk.riskSettingsVersion),
+        }
+      : null,
+    refusals: Array.isArray(o.refusals) ? o.refusals : [],
+    marketAsOf: typeof s.marketAsOf === 'number' ? s.marketAsOf : undefined,
+    participants: Array.isArray(s.participantEvidence)
+      ? s.participantEvidence
+          .filter((x: any) => x?.state === 'CONFIRMED' && x.strategyId && x.version)
+          .map((x: any) => ({ strategyId: x.strategyId, version: x.version, configHash: x.configHash }))
+      : [],
     features: {
       hourBRT: s.session?.hourBRT ?? null,
       weekday: s.session?.weekday ?? null,
@@ -53,6 +72,7 @@ export async function onRequestGet({ request, env }: { request: Request; env: Br
         models: { lab: labParameters, actionability: actionabilityParameters, outcome: outcomeParameters },
         today: funnel(todayRows, todayDetected),
         analytics: labAnalytics(observations),
+        risk: riskSummary(observations),
         registry: data?.registry || [],
         periods: data?.periods || [],
         recent: rows.slice(0, 60),

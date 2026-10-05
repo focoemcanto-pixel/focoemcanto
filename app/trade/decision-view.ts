@@ -74,3 +74,19 @@ export function marketReading(scan?: ScannerResult) {
       ).length || 0,
   };
 }
+/**
+ * Entry window of a READY proposal, from the BACKEND expiresAt (ms). A valid hypothesis is not an
+ * entry: only a READY proposal inside its validity is "ENTRADA DISPONÍVEL"; afterwards it is expired
+ * and never looks operable. `skewMs` aligns the local clock with the server's (Date header).
+ */
+export function entryWindow(expiresAtMs: number | undefined, nowMs: number, skewMs = 0) {
+  const ms = typeof expiresAtMs === 'number' ? expiresAtMs - (nowMs + skewMs) : -1;
+  return ms > 0
+    ? { available: true as const, seconds: Math.ceil(ms / 1000), label: `ENTRADA DISPONÍVEL · ${Math.ceil(ms / 1000)}s` }
+    : { available: false as const, seconds: 0, label: 'ENTRADA EXPIRADA · não perseguir preço' };
+}
+/** Server − local clock difference from an HTTP Date header (second precision); 0 when unknown. */
+export function serverSkew(dateHeader: string | null, localNowMs: number) {
+  const t = dateHeader ? Date.parse(dateHeader) : NaN;
+  return Number.isFinite(t) && Math.abs(t - localNowMs) < 6 * 3600 * 1000 ? t - localNowMs : 0;
+}

@@ -80,6 +80,17 @@ export class MT5MarketDataProvider implements MarketDataProvider {
       p_bridge: config(this.env).bridgeId,
     });
   }
+  /**
+   * State + latest tick only (no candle history, ~1 KB instead of ~344 KB). Same normalized clock as
+   * read(). Falls back to read() while the light RPC is not deployed.
+   */
+  async status() {
+    try {
+      return await rpc(this.env, 'trade_bridge_status', { p_bridge: config(this.env).bridgeId });
+    } catch {
+      return this.read();
+    }
+  }
   async history(
     symbol: string,
     timeframe: Timeframe,

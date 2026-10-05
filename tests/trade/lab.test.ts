@@ -7,14 +7,16 @@ import { assessActionability } from '../../trade/lab/actionability';
 import { trackOutcome, resolveWithTicks } from '../../trade/lab/outcome';
 import { labAnalytics, metrics, strategyStatus, type LabObservation } from '../../trade/lab/analytics';
 import { realReadiness } from '../../trade/bridge/real';
+import { seedRisk } from './risk-fixture';
 
 const migrations = readdirSync('supabase/migrations').filter((f) => f >= '20261003035402' && f.endsWith('.sql')).sort();
-async function world(extraEnv: Record<string, string> = {}) {
+async function world(extraEnv: Record<string, string> = {}, risk: Parameters<typeof seedRisk>[1] = {}) {
   const db = new PGlite(),
     original = globalThis.fetch,
     called: string[] = [];
   await db.exec('create role anon;create role authenticated;create role service_role bypassrls;');
   for (const m of migrations) await db.exec(readFileSync('supabase/migrations/' + m, 'utf8'));
+  await seedRisk(db, risk);
   globalThis.fetch = (async (u: any, init: any) => {
     const url = new URL(String(u));
     assert.equal(url.hostname, 'fixture.invalid', 'no network beyond the local fixture');
@@ -92,7 +94,7 @@ test('4/23: snapshot and final outcome are immutable; history survives a new str
 });
 
 test('6: a setup blocked by risk is still recorded and followed to its outcome', async () => {
-  const w = await world({ TRADE_PAPER_MAX_RISK_BRL: '10' });
+  const w = await world({}, { riskValue: 10 });
   try {
     await runScanner(w.env as any, 'replay', 30, 'risk');
     const blocked = (await w.obs()).filter((o: any) => o.lifecycle === 'BLOCKED_RISK');

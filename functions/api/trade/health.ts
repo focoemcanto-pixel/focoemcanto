@@ -5,14 +5,12 @@ import {
   persistenceFailure,
   type BridgeEnv,
 } from '../../../trade/bridge/config';
-import { feedStatus } from '../../../trade/bridge/mt5';
+import { feedStatus, MT5MarketDataProvider } from '../../../trade/bridge/mt5';
 /** Admin-session middleware protects this endpoint. No token, account or key output. */
 export async function onRequestGet({ env }: { env: BridgeEnv }) {
   const runtime = runtimeConfiguration(env);
   try {
-    const bridge = await rpc(env, 'trade_bridge_read', {
-      p_bridge: config(env).bridgeId,
-    });
+    const bridge = await new MT5MarketDataProvider(env).status();
     const rows = await rpc(env, 'trade_operations_read', {
       p_owner: 'focoos-admin',
     });

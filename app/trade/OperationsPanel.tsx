@@ -3,6 +3,8 @@ import { useEffect, useState, useRef } from 'react';
 import type { Proposal } from '../../trade/bridge/approval';
 import { remainingPositionRiskBRL } from '../../trade/core/risk-engine';
 import RealSessionPanel from './RealSessionPanel';
+import RiskSettingsPanel from './RiskSettingsPanel';
+import { entryWindow, serverSkew } from './decision-view';
 const num = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const money = (v: number | null | undefined) =>
@@ -49,7 +51,16 @@ export default function OperationsPanel({
     [error, setError] = useState(''),
     [loadError, setLoadError] = useState(''),
     [busy, setBusy] = useState(false),
-    [selectedId, setSelectedId] = useState('');
+    [selectedId, setSelectedId] = useState(''),
+    [now, setNow] = useState(() => Date.now()),
+    [confirmPaper, setConfirmPaper] = useState(false),
+    [chosenQty, setChosenQty] = useState(1),
+    [skew, setSkew] = useState(0);
+  // One-second clock for the entry countdown; validity itself always comes from the backend expiresAt.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
   async function load() {
     const r = await fetch(
       `/api/trade/operations?source=${source}&cursor=${cursor}`,
@@ -57,12 +68,14 @@ export default function OperationsPanel({
     );
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
+    setSkew(serverSkew(r.headers.get('Date'), Date.now()));
     setRows(d);
     const status = await fetch('/api/trade/execution-status', {
       cache: 'no-store',
     });
     const statusData = await status.json();
-    setReadiness(status.ok ? statusData.real : null);
+    // Always keep the readiness dimensions; on a failing REAL context show its real cause, never defaults.
+    setReadiness(statusData?.real ? { ...statusData.real, dimensions: statusData.readiness ?? null } : null);
     setLoadError('');
   }
   useEffect(() => {
@@ -100,7 +113,8 @@ export default function OperationsPanel({
           source,
           cursor,
           mode,
-          quantity,
+          // Only a new proposal takes the free quantity; a PAPER entry sends the chosen quantity explicitly.
+          ...(action === 'propose' ? { quantity } : {}),
           strategy: p?.setup.strategy || (mode==='REAL'?realStrategy:undefined),
           ...extra,
         }),
@@ -122,15 +136,24 @@ export default function OperationsPanel({
   const activeComplete =
     mode === 'PAPER' ? (paperComplete ?? complete) : (realComplete ?? complete);
   const activeSetupId = mode === 'PAPER' ? (paperSetupId ?? setupId) : setupId;
-  const matching = rows.filter(
-    (r) => r.payload.source === source && r.payload.mode === mode,
-  );
+  const own = rows.filter(
+      (r) => r.payload.source === source && r.payload.mode === mode,
+    ),
+    ownActive = own.some(
+      (r) => (r.state === 'AGUARDANDO CONFIRMAÇÃO' && entryWindow(r.payload.expiresAt, now, skew).available) || (r.state === 'CONFIRMADA' && !r.execution?.exitTime),
+    ),
+    // ONE proposal, two destinations: in REAL mode the Copilot's proposal is shown with the REAL
+    // destination (blocked until every REAL gate passes) instead of requiring a separate proposal.
+    matching =
+      mode === 'REAL' && !ownActive
+        ? rows.filter((r) => r.payload.source === source && r.payload.mode === 'PAPER').concat(own)
+        : own;
   const row =
       matching.find((r) => r.id === selectedId) ||
       matching.find(
         (r) =>
           r.state === 'AGUARDANDO CONFIRMAÇÃO' &&
-          r.payload.expiresAt > Date.now(),
+          entryWindow(r.payload.expiresAt, now, skew).available,
       ) ||
       matching.find(
         (r) => r.state === 'CONFIRMADA' && !r.execution?.exitTime,
@@ -142,12 +165,19 @@ export default function OperationsPanel({
     row?.state === 'BLOQUEADA POR RISCO' || p?.proposalState === 'RISK_BLOCKED';
   const ready = readiness?.canExecute === true && source === 'mt5',
     preview = !!p && p.mode !== mode;
+  const entry = entryWindow(p?.expiresAt, now, skew),
+    dailyBlocked = mode === 'PAPER' ? p?.riskSettings?.dailyBlocked ?? null : null,
+    awaiting = row?.state === 'AGUARDANDO CONFIRMAÇÃO' && !riskBlocked,
+    act = row?.actionability as { status: string; reasons: string[]; marketPrice: number | null } | undefined,
+    priceOk = p?.source !== 'mt5' || act?.status === 'ACTIONABLE',
+    notConfigured = p?.riskBlock?.code === 'RISK_LIMIT_NOT_CONFIGURED';
   const priority =
-    row?.state === 'AGUARDANDO CONFIRMAÇÃO' && p && p.expiresAt > Date.now()
+    awaiting && entry.available
       ? 'proposal'
       : row?.state === 'CONFIRMADA' && !x?.exitTime
         ? 'paper'
         : 'history';
+  useEffect(() => setConfirmPaper(false), [row?.id, mode]);
   return (
     <section
       className="trade-operation"
@@ -158,9 +188,11 @@ export default function OperationsPanel({
         <div>
           <span className="trade-eyebrow">
             {preview
-              ? 'HIPÓTESE PAPER · PRÉVIA PARA REAL'
+              ? `PROPOSTA DO COPILOTO · DESTINO REAL${awaiting ? ` · ${entry.label}` : ''}`
               : priority === 'proposal'
-                ? 'SETUP CONFIRMADO · PROPOSTA PRONTA'
+                ? `SETUP CONFIRMADO · ${entry.label}`
+                : awaiting
+                  ? `SETUP CONFIRMADO · ${entry.label}`
                 : priority === 'paper'
                   ? `ACOMPANHAMENTO ${mode}`
                   : 'MESA DE OPERAÇÕES'}
@@ -215,6 +247,7 @@ export default function OperationsPanel({
           ? 'SIMULAÇÃO — SEM DINHEIRO REAL'
           : 'CONTA REAL — ORDENS PODEM ENVOLVER DINHEIRO REAL'}
       </p>
+      {mode === 'PAPER' && <RiskSettingsPanel onChanged={() => load().catch(() => {})} />}
       {mode === 'REAL' && (
         <RealSessionPanel
           real={readiness}
@@ -351,29 +384,38 @@ export default function OperationsPanel({
                 {num(p.potentialPoints)} pts
                 {!riskBlocked && ` · ${money(p.potentialBRL)}`}
               </dd>
-              {riskBlocked && (
-                <>
-                  <dt>Risco mínimo · 1 contrato</dt>
-                  <dd>{money(p.riskPerContractBRL)}</dd>
-                  <dt>Limite configurado</dt>
-                  <dd>
-                    {p.sizing?.maxRiskBRL != null
-                      ? money(p.sizing.maxRiskBRL)
-                      : 'ausente'}
-                  </dd>
-                </>
-              )}
               <dt>Risco/retorno</dt>
               <dd>1 : {num(p.rr)}</dd>
-              {p.sizing && !riskBlocked && (
-                <>
-                  <dt>Tamanho pelo risco</dt>
-                  <dd>
-                    {p.quantity} contrato(s) · {money(p.sizing.riskPerContractBRL)}{' '}
-                    por contrato · limite {money(p.sizing.maxRiskBRL)}
-                  </dd>
-                </>
-              )}
+              {(() => {
+                // Sizing as recorded in THIS proposal (immutable): later 1R changes never rewrite it.
+                const oneR = p.riskSettings?.oneRBRL ?? p.sizing?.maxRiskBRL ?? null;
+                return (
+                  <>
+                    <dt>1R configurado</dt>
+                    <dd data-risk="one-r">
+                      {oneR != null ? money(oneR) : 'não configurado'}
+                      {p.riskSettings ? ` · gestão v${p.riskSettings.version}` : ''}
+                    </dd>
+                    <dt>Risco por contrato</dt>
+                    <dd data-risk="per-contract">{money(p.riskPerContractBRL)}</dd>
+                    <dt>Quantidade</dt>
+                    <dd data-risk="quantity">{p.quantity} contrato(s)</dd>
+                    <dt>Risco total</dt>
+                    <dd data-risk="total">{money(p.riskBRL)}</dd>
+                    <dt>Sobra do 1R</dt>
+                    <dd data-risk="left">{oneR != null ? money(Math.max(0, oneR - p.riskBRL)) : '—'}</dd>
+                    <dt>Potencial</dt>
+                    <dd data-risk="potential">{money(p.potentialBRL)}</dd>
+                    <dt>% do 1R utilizado</dt>
+                    <dd data-risk="usage">
+                      {oneR ? `${num((p.riskBRL / oneR) * 100)}%` : '—'}
+                      {riskBlocked && p.riskPerContractBRL != null && oneR
+                        ? ` · 1 contrato exigiria ${num((p.riskPerContractBRL / oneR) * 100)}% do 1R`
+                        : ''}
+                    </dd>
+                  </>
+                );
+              })()}
               <dt>Snapshot · validade</dt>
               <dd>
                 {new Date(p.asOf * 1000).toLocaleTimeString('pt-BR')} · até{' '}
@@ -407,14 +449,17 @@ export default function OperationsPanel({
             </small>
             {riskBlocked && (
               <>
-                <p className="trade-operation-error" role="status">
-                  RISCO ACIMA DO LIMITE ·{' '}
-                  {p.riskBlock?.message ||
-                    'Proposta técnica não executável com o limite atual.'}
-                </p>
+                {!notConfigured && (
+                  <p className="trade-operation-error" role="status" data-entry="risk-blocked">
+                    BLOQUEADA POR RISCO ·{' '}
+                    {p.riskBlock?.code === 'RISK_LIMIT_EXCEEDED'
+                      ? `1 contrato arriscaria ${money(p.riskBlock.minimumRiskBRL)}. Seu limite por operação é ${money(p.riskBlock.maxRiskBRL)}. O stop técnico não é aproximado para caber.`
+                      : p.riskBlock?.message || 'Proposta técnica não executável com o limite atual.'}
+                  </p>
+                )}
                 <div className="trade-operation-actions">
                   <button className="trade-primary" disabled>
-                    {mode === 'PAPER' ? 'ENTRAR NO PAPER' : 'ENTRAR · ORDEM REAL'}
+                    {mode === 'PAPER' ? 'ENTRAR EM PAPER' : 'ENTRAR REAL'}
                   </button>
                 </div>
                 <p className="trade-operation-caption">
@@ -424,25 +469,135 @@ export default function OperationsPanel({
                 </p>
               </>
             )}
-            {!preview && !riskBlocked && row.state === 'AGUARDANDO CONFIRMAÇÃO' && (
+            {!preview && awaiting && !entry.available && (
+              <p className="trade-operation-error" role="status" data-entry="expired">
+                ENTRADA EXPIRADA · não perseguir preço. O setup segue acompanhado no LAB como resultado HIPOTÉTICO.
+              </p>
+            )}
+            {!preview && awaiting && entry.available && dailyBlocked && (
+              <p className="trade-operation-error" role="status" data-entry="daily-blocked">
+                {dailyBlocked === 'DAILY_LOSS_LIMIT_REACHED' ? 'PERDA MÁXIMA DIÁRIA ATINGIDA' : dailyBlocked === 'DAILY_TRADE_LIMIT_REACHED' ? 'MÁXIMO DE OPERAÇÕES DO DIA ATINGIDO' : 'GESTÃO DE RISCO BLOQUEIA ENTRADAS'} · nova entrada PAPER bloqueada. O setup segue no LAB como resultado HIPOTÉTICO.
+              </p>
+            )}
+            {awaiting && entry.available && !priceOk && (
+              <p className="trade-operation-error" role="status" data-entry={act?.status?.toLowerCase() || 'no_quote'}>
+                {act?.status === 'MISSED'
+                  ? 'ENTRADA PERDIDA · o preço se afastou da referência — não perseguir.'
+                  : act?.status === 'INVALIDATED'
+                    ? 'SETUP INVALIDADO · o preço passou do stop técnico.'
+                    : act?.status === 'EXPIRED'
+                      ? 'ENTRADA EXPIRADA · não perseguir preço.'
+                      : 'SEM COTAÇÃO LIVE · o feed não está LIVE; nenhuma entrada é oferecida.'}{' '}
+                {act?.reasons?.join(' ')} O setup segue acompanhado no LAB como resultado HIPOTÉTICO.
+              </p>
+            )}
+            {!preview && awaiting && entry.available && priceOk && !dailyBlocked && mode === 'PAPER' && !confirmPaper && (
               <div className="trade-operation-actions">
+                <span className="trade-operation-countdown" role="timer" aria-live="off" data-entry="available">
+                  {entry.label}
+                </span>
                 <button
                   className="trade-primary"
-                  disabled={
-                    busy ||
-                    Date.now() > p.expiresAt ||
-                    (mode === 'REAL' && !ready && !p.inspectionOnly)
-                  }
-                  onClick={() =>
-                    action(mode === 'REAL' ? 'prepare-real' : 'confirm', p.id)
-                  }
+                  disabled={busy || !entry.available}
+                  onClick={() => {
+                    setChosenQty(p.quantity);
+                    setConfirmPaper(true);
+                  }}
                 >
-                  {mode === 'PAPER' ? 'ENTRAR NO PAPER' : p.inspectionOnly ? 'REVISAR PROPOSTA REAL' : 'ENTRAR · ORDEM REAL'}
+                  ENTRAR EM PAPER
                 </button>
                 <button disabled={busy} onClick={() => action('discard', p.id)}>
                   NÃO ENTRAR
                 </button>
               </div>
+            )}
+            {!preview && awaiting && entry.available && priceOk && !dailyBlocked && mode === 'PAPER' && confirmPaper && (
+              <div className="trade-paper-confirm" role="group" aria-label="Confirmar entrada PAPER">
+                <strong>
+                  CONFIRMAR ENTRADA PAPER · {p.direction === 'BUY' ? 'COMPRA' : 'VENDA'} {p.symbol}
+                </strong>
+                <label>
+                  Quantidade (máximo pelo risco: {p.quantity})
+                  <input
+                    aria-label="Quantidade da entrada PAPER"
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={chosenQty}
+                    onChange={(e) => setChosenQty(Math.trunc(Number(e.target.value)))}
+                  />
+                </label>
+                {chosenQty > p.quantity && (
+                  <p className="trade-operation-error" role="alert">
+                    {chosenQty} contratos arriscariam {money(chosenQty * (p.riskPerContractBRL ?? 0))}, acima do seu limite de{' '}
+                    {money(p.riskSettings?.oneRBRL ?? p.sizing?.maxRiskBRL ?? null)}.
+                  </p>
+                )}
+                <p>
+                  Risco {money(Math.max(0, Math.min(chosenQty, p.quantity)) * (p.riskPerContractBRL ?? 0))} · stop {num(p.sl)} · alvo {num(p.tp)} ·{' '}
+                  {entry.label}. Simulação: nenhuma ordem é enviada à XP.
+                </p>
+                <div className="trade-operation-actions">
+                  <button onClick={() => setConfirmPaper(false)} disabled={busy}>
+                    CANCELAR
+                  </button>
+                  <button
+                    className="trade-primary"
+                    disabled={busy || !entry.available || chosenQty < 1 || chosenQty > p.quantity}
+                    onClick={async () => {
+                      await action('confirm', p.id, { quantity: chosenQty });
+                      setConfirmPaper(false);
+                    }}
+                  >
+                    CONFIRMAR ENTRADA PAPER
+                  </button>
+                </div>
+              </div>
+            )}
+            {!preview && awaiting && entry.available && priceOk && !dailyBlocked && mode === 'REAL' && (
+              <div className="trade-operation-actions">
+                <span className="trade-operation-countdown" role="timer" aria-live="off" data-entry="available">
+                  {entry.label}
+                </span>
+                <button
+                  className="trade-primary"
+                  disabled={busy || !entry.available || (!ready && !p.inspectionOnly)}
+                  onClick={() => action('prepare-real', p.id)}
+                >
+                  {p.inspectionOnly ? 'REVISAR PROPOSTA REAL' : 'ENTRAR · ORDEM REAL'}
+                </button>
+                <button disabled={busy} onClick={() => action('discard', p.id)}>
+                  NÃO ENTRAR
+                </button>
+              </div>
+            )}
+            {preview && mode === 'REAL' && awaiting && (
+              <div className="trade-operation-actions" data-destination="real">
+                <button className="trade-primary" disabled>
+                  ENTRAR REAL
+                </button>
+                <small>
+                  REAL INDISPONÍVEL ·{' '}
+                  {readiness?.gates?.filter((g: any) => !g.ok).length ?? '—'} verificação(ões) bloqueada(s). A mesma
+                  proposta continua disponível em PAPER.
+                </small>
+              </div>
+            )}
+            {notConfigured && mode === 'PAPER' && (
+              <p className="trade-operation-error" role="status" data-entry="risk-missing">
+                GESTÃO DE RISCO NÃO CONFIGURADA · sem 1R a proposta não é dimensionada.{' '}
+                <button
+                  onClick={() => {
+                    const el = document.querySelector('.trade-risk') as HTMLDetailsElement | null;
+                    if (el) {
+                      el.open = true;
+                      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  }}
+                >
+                  CONFIGURAR AGORA
+                </button>
+              </p>
             )}
             {!preview && row.state === 'CONFIRMADA' && (
               <>
@@ -509,13 +664,22 @@ export default function OperationsPanel({
         )}
       </details>
       {mode === 'REAL' && (!p || preview || riskBlocked) && (
-        <button
-          className="trade-primary"
-          disabled={busy || source !== 'mt5' || !activeComplete}
-          onClick={() => action('propose')}
-        >
-          Preparar proposta REAL
-        </button>
+        // Not the operating path: the Copilot's proposal is the decision point. This is a REAL
+        // inspection/audit tool (never sends while REAL is blocked).
+        <details className="trade-real-inspection">
+          <summary>Inspeção REAL · auditoria (sem envio)</summary>
+          <p>
+            Gera uma proposta REAL separada só para revisar gates, política e confirmação final. Com REAL bloqueado nenhuma ordem é
+            enviada.
+          </p>
+          <button
+            className="trade-primary"
+            disabled={busy || source !== 'mt5' || !activeComplete}
+            onClick={() => action('propose')}
+          >
+            Preparar proposta REAL
+          </button>
+        </details>
       )}
       <dialog
         className="trade-real-dialog"

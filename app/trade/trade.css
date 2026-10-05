@@ -2587,3 +2587,196 @@
 .trade-lab-card > summary em { margin-left: auto; }
 .trade-lab-head select { background: #0f1a22; color: #dfe6ec; border: 1px solid #2b3945; border-radius: 6px; padding: 4px 8px; font-size: 12px; }
 .trade-lab-head label { font-size: 12px; color: #90a0ae; }
+.trade-operation-countdown {
+  align-self: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+}
+.trade-risk {
+  margin: 14px 0;
+  border: 1px solid #35352f;
+  border-radius: 8px;
+  padding: 12px;
+}
+.trade-risk[data-blocked] {
+  border-color: #8a5a3c;
+}
+.trade-risk summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: baseline;
+  cursor: pointer;
+}
+.trade-risk summary strong {
+  color: #f1e6d2;
+  font-variant-numeric: tabular-nums;
+}
+.trade-risk summary em {
+  flex-basis: 100%;
+  font-style: normal;
+  font-size: 12px;
+  color: #e9b48a;
+}
+.trade-risk-current {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: 6px 12px;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.trade-risk-current dt {
+  color: #a9a291;
+}
+.trade-risk-current dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.trade-risk-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: 10px 14px;
+  margin-top: 10px;
+}
+.trade-risk-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #a9a291;
+}
+.trade-risk-form input,
+.trade-risk-form select {
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #45453d;
+  border-radius: 6px;
+  background: #15150f;
+  color: #f1e6d2;
+  font: inherit;
+  font-size: 14px;
+}
+.trade-risk-form .trade-risk-preview,
+.trade-risk-form button,
+.trade-risk-form small,
+.trade-risk-form p {
+  grid-column: 1 / -1;
+}
+.trade-risk-form small {
+  color: #a9a291;
+}
+@media (max-width: 520px) {
+  .trade-risk-current {
+    grid-template-columns: 1fr;
+  }
+}
+.trade-paper-confirm {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid #6f5d3e;
+  border-radius: 8px;
+}
+.trade-paper-confirm label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+  color: #a9a291;
+}
+.trade-paper-confirm input {
+  max-width: 8rem;
+  padding: 8px;
+  border: 1px solid #45453d;
+  border-radius: 6px;
+  background: #15150f;
+  color: #f1e6d2;
+  font: inherit;
+}
+.trade-risk-model {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #35352f;
+  border-radius: 6px;
+  min-width: 0;
+}
+.trade-risk-model legend {
+  padding: 0 4px;
+  font-size: 12px;
+  color: #a9a291;
+}
+.trade-risk-model label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #f1e6d2;
+  font-size: 13px;
+}
+.trade-risk-model input {
+  accent-color: #d5b57a;
+}
+.trade-risk-summary {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border: 1px solid #45453d;
+  border-radius: 6px;
+}
+.trade-risk-summary dl {
+  display: grid;
+  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
+  gap: 4px 12px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.trade-risk-summary dt {
+  color: #a9a291;
+}
+.trade-risk-summary dd {
+  margin: 0;
+  color: #f1e6d2;
+  font-variant-numeric: tabular-nums;
+}
+.trade-risk-form input::placeholder {
+  color: #77705f;
+}
+@media (max-width: 520px) {
+  .trade-risk-summary dl {
+    grid-template-columns: 1fr;
+  }
+}
+.trade-real-inspection {
+  margin: 12px 0;
+  padding: 10px 12px;
+  border: 1px dashed #45453d;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.trade-real-inspection summary {
+  cursor: pointer;
+  color: #d6c3a1;
+}
+/* Risk form: full-width text inputs, native-size radios (overrides the generic operation input style). */
+.trade-operation .trade-risk-form input:not([type='radio']) {
+  width: 100%;
+  max-width: 100%;
+  min-height: 40px;
+  box-sizing: border-box;
+  text-align: left;
+}
+.trade-operation .trade-risk-model input[type='radio'] {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex: 0 0 auto;
+}
+.trade-operation .trade-paper-confirm input {
+  width: 8rem;
+  box-sizing: border-box;
+}
