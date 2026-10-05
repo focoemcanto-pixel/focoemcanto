@@ -1,3 +1,4 @@
+import type { ExecutionApprovalProvider } from './approval';
 import type { Candle } from '../core/types';
 import type { Proposal } from './approval';
 /** Causal execution model: market at next finalized bar open, adverse barrier wins. */
@@ -88,8 +89,24 @@ export function paperExecution(p: Proposal, candles: Candle[], previous?: any) {
 }
 
 /** PAPER approval never depends on live activation gates. */
-export class PaperExecutionProvider {
- constructor(private env:import('./config').BridgeEnv){}
- async approve(p:Proposal){if(p.mode!=='PAPER')throw new Error('Provider PAPER não executa REAL');const {config,rpc}=await import('./config'),c=config(this.env);return rpc(this.env,'trade_confirm',{p_owner:'focoos-admin',p_id:p.id,p_action:'confirm',p_command:null,p_max:c.maxContracts,p_account:c.accountHash,p_max_age:c.maxAgeMs});}
- observe(p:Proposal,candles:Candle[],previous?:any){if(p.mode!=='PAPER')throw new Error('Provider PAPER não executa REAL');return paperExecution(p,candles,previous);}
+export class PaperExecutionProvider implements ExecutionApprovalProvider {
+  constructor(private env: import('./config').BridgeEnv) {}
+  async approve(p: Proposal) {
+    if (p.mode !== 'PAPER') throw new Error('Provider PAPER não executa REAL');
+    const { config, rpc } = await import('./config'),
+      c = config(this.env);
+    return rpc(this.env, 'trade_confirm', {
+      p_owner: 'focoos-admin',
+      p_id: p.id,
+      p_action: 'confirm',
+      p_command: null,
+      p_max: c.maxContracts,
+      p_account: c.accountHash,
+      p_max_age: c.maxAgeMs,
+    });
+  }
+  observe(p: Proposal, candles: Candle[], previous?: any) {
+    if (p.mode !== 'PAPER') throw new Error('Provider PAPER não executa REAL');
+    return paperExecution(p, candles, previous);
+  }
 }

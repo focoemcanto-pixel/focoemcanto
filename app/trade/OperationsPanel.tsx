@@ -15,11 +15,11 @@ export default function OperationsPanel({
   paperComplete,
   paperSetupId,
   strategyNames = {},
-  executionMode = "PAPER",
+  executionMode = 'PAPER',
   onModeChange = () => {},
 }: {
-  executionMode?: "PAPER" | "REAL";
-  onModeChange?: (mode: "PAPER" | "REAL") => void;
+  executionMode?: 'PAPER' | 'REAL';
+  onModeChange?: (mode: 'PAPER' | 'REAL') => void;
   source: 'replay' | 'mt5';
   cursor: number;
   complete: boolean;
@@ -28,10 +28,16 @@ export default function OperationsPanel({
   paperSetupId?: string;
   strategyNames?: Record<string, string>;
 }) {
-  const mode = executionMode, setMode = onModeChange;
+  const mode = executionMode,
+    setMode = onModeChange;
   const dialog = useRef<HTMLDialogElement>(null);
-  const [readiness, setReadiness] = useState<any>(null), [finalConfirmation,setFinalConfirmation] = useState<any>(null);
-  useEffect(()=>{if(finalConfirmation && dialog.current && !dialog.current.open)dialog.current.showModal();else if(!finalConfirmation)dialog.current?.close();},[finalConfirmation]);
+  const [readiness, setReadiness] = useState<any>(null),
+    [finalConfirmation, setFinalConfirmation] = useState<any>(null);
+  useEffect(() => {
+    if (finalConfirmation && dialog.current && !dialog.current.open)
+      dialog.current.showModal();
+    else if (!finalConfirmation) dialog.current?.close();
+  }, [finalConfirmation]);
   const [quantity, setQuantity] = useState(1),
     [rows, setRows] = useState<any[]>([]),
     [error, setError] = useState(''),
@@ -46,8 +52,11 @@ export default function OperationsPanel({
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
     setRows(d);
-    const status = await fetch('/api/trade/execution-status',{cache:'no-store'});
-    const statusData = await status.json();setReadiness(status.ok ? statusData.real : null);
+    const status = await fetch('/api/trade/execution-status', {
+      cache: 'no-store',
+    });
+    const statusData = await status.json();
+    setReadiness(status.ok ? statusData.real : null);
     setLoadError('');
   }
   useEffect(() => {
@@ -55,7 +64,10 @@ export default function OperationsPanel({
     const refresh = () => {
       if (active)
         load().catch((e) => {
-          if (active) {setLoadError(e.message);setReadiness(null);}
+          if (active) {
+            setLoadError(e.message);
+            setReadiness(null);
+          }
         });
     };
     refresh();
@@ -65,23 +77,39 @@ export default function OperationsPanel({
       clearInterval(t);
     };
   }, [source, cursor]);
-  async function action(action: string, id?: string, extra: Record<string,unknown> = {}) {
+  async function action(
+    action: string,
+    id?: string,
+    extra: Record<string, unknown> = {},
+  ) {
     setBusy(true);
     setError('');
     try {
       const r = await fetch('/api/trade/operations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, id, source, cursor, mode, quantity, strategy:p?.setup.strategy, ...extra }),
+        body: JSON.stringify({
+          action,
+          id,
+          source,
+          cursor,
+          mode,
+          quantity,
+          strategy: p?.setup.strategy,
+          ...extra,
+        }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      if(action==='prepare-real')setFinalConfirmation(d);
-      if(action==='confirm')setFinalConfirmation(null);
+      if (action === 'prepare-real') setFinalConfirmation(d);
+      if (action === 'confirm') setFinalConfirmation(null);
       await load();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Falha na operação');
-      if(mode==='REAL'){setFinalConfirmation(null);setReadiness(null);}
+      if (mode === 'REAL') {
+        setFinalConfirmation(null);
+        setReadiness(null);
+      }
     } finally {
       setBusy(false);
     }
@@ -102,10 +130,20 @@ export default function OperationsPanel({
       matching.find(
         (r) => r.state === 'CONFIRMADA' && !r.execution?.exitTime,
       ) ||
-      matching[0] || (mode==='REAL' ? rows.find(r=>r.payload.mode==='PAPER' && r.payload.source===source && r.state==='AGUARDANDO CONFIRMAÇÃO' && r.payload.expiresAt>Date.now()) : undefined),
+      matching[0] ||
+      (mode === 'REAL'
+        ? rows.find(
+            (r) =>
+              r.payload.mode === 'PAPER' &&
+              r.payload.source === source &&
+              r.state === 'AGUARDANDO CONFIRMAÇÃO' &&
+              r.payload.expiresAt > Date.now(),
+          )
+        : undefined),
     p: Proposal | undefined = row?.payload,
     x = row?.execution;
-  const ready = readiness?.canExecute===true && source==='mt5', preview = !!p && p.mode!==mode;
+  const ready = readiness?.canExecute === true && source === 'mt5',
+    preview = !!p && p.mode !== mode;
   const priority =
     row?.state === 'AGUARDANDO CONFIRMAÇÃO' && p && p.expiresAt > Date.now()
       ? 'proposal'
@@ -121,11 +159,13 @@ export default function OperationsPanel({
       <header className="trade-operation-header">
         <div>
           <span className="trade-eyebrow">
-            {priority === 'proposal'
-              ? 'SETUP CONFIRMADO · PROPOSTA PRONTA'
-              : priority === 'paper'
-                ? `ACOMPANHAMENTO ${mode}`
-                : 'MESA DE OPERAÇÕES'}
+            {preview
+              ? 'HIPÓTESE PAPER · PRÉVIA PARA REAL'
+              : priority === 'proposal'
+                ? 'SETUP CONFIRMADO · PROPOSTA PRONTA'
+                : priority === 'paper'
+                  ? `ACOMPANHAMENTO ${mode}`
+                  : 'MESA DE OPERAÇÕES'}
           </span>
           <h2>
             {mode === 'PAPER'
@@ -139,19 +179,70 @@ export default function OperationsPanel({
         </div>
         <span className="trade-operation-mode">{mode}</span>
       </header>
-      <div className="trade-execution-selector" role="group" aria-label="Modo de execução">
-        <button aria-pressed={mode==='PAPER'} onClick={()=>{setMode('PAPER');setSelectedId('');setFinalConfirmation(null);}}>PAPER<small>OPERACIONAL</small></button>
-        <button aria-pressed={mode==='REAL'} onClick={()=>{setMode('REAL');setSelectedId('');}}>REAL<small>{ready?'AGUARDA CONFIRMAÇÃO':'BLOQUEADO'}</small></button>
+      <div
+        className="trade-execution-selector"
+        role="group"
+        aria-label="Modo de execução"
+      >
+        <button
+          aria-pressed={mode === 'PAPER'}
+          onClick={() => {
+            setMode('PAPER');
+            setSelectedId('');
+            setFinalConfirmation(null);
+          }}
+        >
+          PAPER<small>OPERACIONAL</small>
+        </button>
+        <button
+          aria-pressed={mode === 'REAL'}
+          onClick={() => {
+            setMode('REAL');
+            setSelectedId('');
+          }}
+        >
+          REAL<small>{ready ? 'AGUARDA CONFIRMAÇÃO' : 'BLOQUEADO'}</small>
+        </button>
       </div>
-      <p className="trade-mode-banner" data-mode={mode}>{mode==='PAPER'?'SIMULAÇÃO — SEM DINHEIRO REAL':'CONTA REAL — ORDENS PODEM ENVOLVER DINHEIRO REAL'}</p>
-      {mode==='REAL' && <details className="trade-real-checklist" open>
-        <summary>{readiness?.status || 'REAL DESARMADO'} · pipeline implementado</summary>
-        {source!=='mt5' && <p>Selecione XP / MetaTrader 5 para utilizar dados reais.</p>}
-        {(readiness?.gates || [{key:'loading',label:'Verificação server-side',ok:false,reason:'Aguardando validação da persistência e dos gates.'}]).map((g:any)=><div key={g.key} data-ok={g.ok}><strong>{g.ok?'✓':'○'} {g.label}</strong>{!g.ok && <small>{g.reason}</small>}</div>)}
-      </details>}
+      <p className="trade-mode-banner" data-mode={mode}>
+        {mode === 'PAPER'
+          ? 'SIMULAÇÃO — SEM DINHEIRO REAL'
+          : 'CONTA REAL — ORDENS PODEM ENVOLVER DINHEIRO REAL'}
+      </p>
+      {mode === 'REAL' && (
+        <details className="trade-real-checklist">
+          <summary>
+            {readiness?.status || 'REAL DESARMADO'} · pipeline implementado
+            <span className="trade-real-gate-count">
+              {readiness?.gates?.filter((g: any) => !g.ok).length ?? '—'}{' '}
+              verificações bloqueadas · ver checklist
+            </span>
+          </summary>
+          {source !== 'mt5' && (
+            <p>Selecione XP / MetaTrader 5 para utilizar dados reais.</p>
+          )}
+          {(
+            readiness?.gates || [
+              {
+                key: 'loading',
+                label: 'Verificação server-side',
+                ok: false,
+                reason: 'Aguardando validação da persistência e dos gates.',
+              },
+            ]
+          ).map((g: any) => (
+            <div key={g.key} data-ok={g.ok}>
+              <strong>
+                {g.ok ? '✓' : '○'} {g.label}
+              </strong>
+              {!g.ok && <small>{g.reason}</small>}
+            </div>
+          ))}
+        </details>
+      )}
       <details
         className="trade-operation-ticket"
-        open={mode==='REAL' || priority !== 'history' || undefined}
+        open={mode === 'REAL' || priority !== 'history' || undefined}
       >
         <summary className="trade-history-ticket-label">
           {p ? 'Último ciclo · ver detalhes' : 'Configuração e histórico'}
@@ -166,9 +257,13 @@ export default function OperationsPanel({
                 type="number"
                 min="1"
                 step="1"
-                disabled={!!p && p.mode===mode && row.state==='AGUARDANDO CONFIRMAÇÃO'}
+                disabled={
+                  !!p &&
+                  p.mode === mode &&
+                  row.state === 'AGUARDANDO CONFIRMAÇÃO'
+                }
                 max={readiness?.limits?.maxContracts || 1}
-                value={p && p.mode===mode ? p.quantity : quantity}
+                value={p && p.mode === mode ? p.quantity : quantity}
                 onChange={(e) => setQuantity(Number(e.target.value))}
               />
             </label>
@@ -191,8 +286,7 @@ export default function OperationsPanel({
             >
               {rows
                 .filter(
-                  (r) =>
-                    r.payload.source === source && r.payload.mode === mode,
+                  (r) => r.payload.source === source && r.payload.mode === mode,
                 )
                 .map((r) => (
                   <option key={r.id} value={r.id}>
@@ -209,9 +303,11 @@ export default function OperationsPanel({
             <div className="trade-operation-status">
               <span className="trade-operation-dot" />
               <h3>
-                {preview ? 'PRÉVIA DA MESMA HIPÓTESE PAPER' : row.state === 'CONFIRMADA'
-                  ? x?.status || 'ENVIANDO'
-                  : row.state}
+                {preview
+                  ? 'PRÉVIA DA MESMA HIPÓTESE PAPER'
+                  : row.state === 'CONFIRMADA'
+                    ? x?.status || 'ENVIANDO'
+                    : row.state}
               </h3>
             </div>
             <strong className="trade-operation-instrument">
@@ -267,10 +363,16 @@ export default function OperationsPanel({
               <div className="trade-operation-actions">
                 <button
                   className="trade-primary"
-                  disabled={busy || Date.now() > p.expiresAt || (mode==='REAL' && !ready)}
-                  onClick={() => action(mode==='REAL'?'prepare-real':'confirm', p.id)}
+                  disabled={
+                    busy ||
+                    Date.now() > p.expiresAt ||
+                    (mode === 'REAL' && !ready)
+                  }
+                  onClick={() =>
+                    action(mode === 'REAL' ? 'prepare-real' : 'confirm', p.id)
+                  }
                 >
-                  {mode==='PAPER'?'ENTRAR NO PAPER':'ENTRAR · ORDEM REAL'}
+                  {mode === 'PAPER' ? 'ENTRAR NO PAPER' : 'ENTRAR · ORDEM REAL'}
                 </button>
                 <button disabled={busy} onClick={() => action('discard', p.id)}>
                   NÃO ENTRAR
@@ -286,8 +388,19 @@ export default function OperationsPanel({
                       ? 'Aguardando retorno efetivo do provedor.'
                       : ''}
                 </p>
-                {mode==='REAL' && x?.protection && <p className={x.protectionFault?'trade-operation-error':''}>Proteção SL/TP: {x.protection}</p>}
-                {mode==='REAL' && x?.retcodes?.length>0 && <details><summary>Retorno efetivo do MT5</summary><p>{JSON.stringify(x.retcodes)}</p></details>}
+                {mode === 'REAL' && x?.protection && (
+                  <p
+                    className={x.protectionFault ? 'trade-operation-error' : ''}
+                  >
+                    Proteção SL/TP: {x.protection}
+                  </p>
+                )}
+                {mode === 'REAL' && x?.retcodes?.length > 0 && (
+                  <details>
+                    <summary>Retorno efetivo do MT5</summary>
+                    <p>{JSON.stringify(x.retcodes)}</p>
+                  </details>
+                )}
                 <dl>
                   <dt>Quantidade executada</dt>
                   <dd>{num(x?.filled)}</dd>
@@ -326,17 +439,71 @@ export default function OperationsPanel({
           </>
         )}
       </details>
-      {mode==='REAL' && (!p || preview) && <button className="trade-primary" disabled={busy || !ready || !activeComplete} onClick={()=>action('propose')}>Preparar proposta REAL</button>}
-      <dialog className="trade-real-dialog" ref={dialog} onCancel={()=>setFinalConfirmation(null)} onClose={()=>setFinalConfirmation(null)}>
-        {finalConfirmation && <>
-          <span className="trade-eyebrow">ÚLTIMA CONFIRMAÇÃO HUMANA</span>
-          <h2>Confirmar operação REAL?</h2>
-          <p>Esta confirmação pode enviar uma ordem com dinheiro real. Aceite HTTP não confirma execução.</p>
-          <strong>{finalConfirmation.proposal.direction} · {finalConfirmation.proposal.symbol} · {finalConfirmation.proposal.quantity} contrato(s)</strong>
-          <dl><dt>Entrada a mercado · referência</dt><dd>{num(finalConfirmation.proposal.entry)}</dd><dt>Stop loss</dt><dd>{num(finalConfirmation.proposal.sl)}</dd><dt>Take profit</dt><dd>{num(finalConfirmation.proposal.tp)}</dd><dt>Risco estimado</dt><dd>{money(finalConfirmation.proposal.riskBRL)}</dd><dt>Validade da confirmação</dt><dd>{new Date(finalConfirmation.expiresAt).toLocaleTimeString('pt-BR')}</dd></dl>
-          <button className="trade-primary" disabled={busy || !ready || Date.now()>Date.parse(finalConfirmation.expiresAt)} onClick={()=>action('confirm',finalConfirmation.proposal.id,{nonce:finalConfirmation.nonce,confirmation:'CONFIRMAR ORDEM REAL'})}>CONFIRMAR ORDEM REAL</button>
-          <button onClick={()=>setFinalConfirmation(null)}>VOLTAR · NÃO ENVIAR</button>
-        </>}
+      {mode === 'REAL' && (!p || preview) && (
+        <button
+          className="trade-primary"
+          disabled={busy || !ready || !activeComplete}
+          onClick={() => action('propose')}
+        >
+          Preparar proposta REAL
+        </button>
+      )}
+      <dialog
+        className="trade-real-dialog"
+        ref={dialog}
+        onCancel={() => setFinalConfirmation(null)}
+        onClose={() => setFinalConfirmation(null)}
+      >
+        {finalConfirmation && (
+          <>
+            <span className="trade-eyebrow">ÚLTIMA CONFIRMAÇÃO HUMANA</span>
+            <h2>Confirmar operação REAL?</h2>
+            <p>
+              Esta confirmação pode enviar uma ordem com dinheiro real. Aceite
+              HTTP não confirma execução.
+            </p>
+            <strong>
+              {finalConfirmation.proposal.direction} ·{' '}
+              {finalConfirmation.proposal.symbol} ·{' '}
+              {finalConfirmation.proposal.quantity} contrato(s)
+            </strong>
+            <dl>
+              <dt>Entrada a mercado · referência</dt>
+              <dd>{num(finalConfirmation.proposal.entry)}</dd>
+              <dt>Stop loss</dt>
+              <dd>{num(finalConfirmation.proposal.sl)}</dd>
+              <dt>Take profit</dt>
+              <dd>{num(finalConfirmation.proposal.tp)}</dd>
+              <dt>Risco estimado</dt>
+              <dd>{money(finalConfirmation.proposal.riskBRL)}</dd>
+              <dt>Validade da confirmação</dt>
+              <dd>
+                {new Date(finalConfirmation.expiresAt).toLocaleTimeString(
+                  'pt-BR',
+                )}
+              </dd>
+            </dl>
+            <button
+              className="trade-primary"
+              disabled={
+                busy ||
+                !ready ||
+                Date.now() > Date.parse(finalConfirmation.expiresAt)
+              }
+              onClick={() =>
+                action('confirm', finalConfirmation.proposal.id, {
+                  nonce: finalConfirmation.nonce,
+                  confirmation: 'CONFIRMAR ORDEM REAL',
+                })
+              }
+            >
+              CONFIRMAR ORDEM REAL
+            </button>
+            <button onClick={() => setFinalConfirmation(null)}>
+              VOLTAR · NÃO ENVIAR
+            </button>
+          </>
+        )}
       </dialog>
       {(error || loadError) && (
         <p className="trade-operation-error" role="status">

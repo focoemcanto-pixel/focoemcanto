@@ -18,7 +18,7 @@ const operations = require('../functions/api/trade/operations.ts');
 const scanner = require('../functions/api/trade/scanner.ts');
 const strategyMetrics = require('../functions/api/trade/strategy-metrics.ts');
 const health = require('../functions/api/trade/health.ts');
-const executionStatus=require('../functions/api/trade/execution-status.ts');
+const executionStatus = require('../functions/api/trade/execution-status.ts');
 let operationReadFailures = 1;
 (async () => {
   const db = new PGlite();
@@ -30,6 +30,7 @@ let operationReadFailures = 1;
     '20261003042050_human_approval.sql',
     '20261003124510_multi_strategy_scanner.sql',
     '20261004210552_real_execution_safety.sql',
+    '20261005000359_real_execution_fail_closed.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   globalThis.fetch = async (url, init) => {
@@ -98,33 +99,37 @@ let operationReadFailures = 1;
         request,
         env,
         next: async () =>
-          url.pathname.endsWith('execution-status') ? executionStatus.onRequestGet({env}) : url.pathname.endsWith('health')
-            ? health.onRequestGet({ env })
-            : url.pathname.endsWith('scanner')
-              ? scanner[
-                  request.method === 'POST' ? 'onRequestPost' : 'onRequestGet'
-                ]({ request, env })
-              : url.pathname.endsWith('strategy-metrics')
-                ? strategyMetrics.onRequestGet({ env })
-                : url.pathname.endsWith('operations')
-                  ? r.method() === 'GET' && operationReadFailures-- > 0
-                    ? Response.json(
-                        {
-                          error: 'Migration do módulo de operações ausente.',
-                          code: 'SCHEMA_MISSING',
-                        },
-                        { status: 503 },
-                      )
-                    : operations[
-                        r.method() === 'POST' ? 'onRequestPost' : 'onRequestGet'
-                      ]({ request, env })
-                  : url.pathname.endsWith('evaluate')
-                    ? evaluate({ request })
-                    : url.pathname.endsWith('professor')
-                      ? professor({ request, env })
-                      : url.pathname.endsWith('journal')
-                        ? journal({ request, env })
-                        : runs({ request, env }),
+          url.pathname.endsWith('execution-status')
+            ? executionStatus.onRequestGet({ env })
+            : url.pathname.endsWith('health')
+              ? health.onRequestGet({ env })
+              : url.pathname.endsWith('scanner')
+                ? scanner[
+                    request.method === 'POST' ? 'onRequestPost' : 'onRequestGet'
+                  ]({ request, env })
+                : url.pathname.endsWith('strategy-metrics')
+                  ? strategyMetrics.onRequestGet({ env })
+                  : url.pathname.endsWith('operations')
+                    ? r.method() === 'GET' && operationReadFailures-- > 0
+                      ? Response.json(
+                          {
+                            error: 'Migration do módulo de operações ausente.',
+                            code: 'SCHEMA_MISSING',
+                          },
+                          { status: 503 },
+                        )
+                      : operations[
+                          r.method() === 'POST'
+                            ? 'onRequestPost'
+                            : 'onRequestGet'
+                        ]({ request, env })
+                    : url.pathname.endsWith('evaluate')
+                      ? evaluate({ request })
+                      : url.pathname.endsWith('professor')
+                        ? professor({ request, env })
+                        : url.pathname.endsWith('journal')
+                          ? journal({ request, env })
+                          : runs({ request, env }),
       });
     if (response) {
       await route.fulfill({
@@ -226,11 +231,23 @@ let operationReadFailures = 1;
   await page
     .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
     .waitFor();
-  await page.getByRole('button',{name:'REAL BLOQUEADO',exact:true}).click();
-  await page.getByText('REAL DESARMADO · pipeline implementado').waitFor();
-  assert.equal(await page.getByRole('button',{name:'Preparar proposta REAL',exact:true}).isDisabled(),true);
-  await page.screenshot({path:'/tmp/trade-real-disarmed-desktop.png',fullPage:true});
-  await page.getByRole('button',{name:'PAPER OPERACIONAL',exact:true}).click();
+  await page
+    .getByRole('button', { name: 'REAL BLOQUEADO', exact: true })
+    .click();
+  await page.locator('.trade-real-checklist summary').waitFor();
+  assert.equal(
+    await page
+      .getByRole('button', { name: 'Preparar proposta REAL', exact: true })
+      .isDisabled(),
+    true,
+  );
+  await page.screenshot({
+    path: '/tmp/trade-real-disarmed-desktop.png',
+    fullPage: true,
+  });
+  await page
+    .getByRole('button', { name: 'PAPER OPERACIONAL', exact: true })
+    .click();
   await page
     .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
     .waitFor();
@@ -328,6 +345,28 @@ let operationReadFailures = 1;
     .getByRole('button', { name: 'Fechar detalhes do motor', exact: true })
     .click();
   await page.screenshot({ path: '.trade-qa/mobile.png', fullPage: true });
+  await page
+    .getByRole('button', { name: 'REAL BLOQUEADO', exact: true })
+    .click();
+  await page.screenshot({ path: '.trade-qa/mobile-real.png', fullPage: true });
+  assert.ok(
+    await page.evaluate(() => {
+      const parent = document
+        .querySelector('.trade-execution-selector')
+        .getBoundingClientRect();
+      return (
+        [
+          ...document.querySelectorAll('.trade-execution-selector button'),
+        ].every((el) => {
+          const r = el.getBoundingClientRect();
+          return r.left >= parent.left && r.right <= parent.right + 1;
+        }) && document.documentElement.scrollWidth <= innerWidth
+      );
+    }),
+  );
+  await page
+    .getByRole('button', { name: 'PAPER OPERACIONAL', exact: true })
+    .click();
   assert.ok(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= window.innerWidth,
@@ -383,7 +422,7 @@ let operationReadFailures = 1;
         'setup',
         'compact motor; full 17-entry library only in accessible drawer, search, Escape and focus recovery',
         'proposal before formation; detailed method on demand',
-        'paper-only action and REAL option disabled',
+        'PAPER operational; REAL selectable, checklist visible, order blocked',
         'human paper approval, next-candle fill, zero MT5 commands',
         'step',
         'timeframe',

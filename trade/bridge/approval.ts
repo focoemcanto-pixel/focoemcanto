@@ -30,7 +30,12 @@ export type Proposal = {
   scope?: string;
   setupWatchId?: string;
 };
-export interface ExecutionApprovalProvider {approve(p:Proposal,intent?:{command:import('./protocol').BrokerCommand;nonce:string}):Promise<unknown>;}
+export interface ExecutionApprovalProvider {
+  approve(
+    p: Proposal,
+    intent?: { command: import('./protocol').BrokerCommand; nonce: string },
+  ): Promise<unknown>;
+}
 export function makeProposal(
   a: Analysis,
   options: {
@@ -114,7 +119,7 @@ export function executionView(
   events: any[],
   positions: any[],
   live: boolean,
-  orders:any[] = [],
+  orders: any[] = [],
 ) {
   const deals = events.filter(
     (e) =>
@@ -136,7 +141,12 @@ export function executionView(
       p.magic === approvalPolicy.magic &&
       p.symbol === proposal.symbol,
   );
-  let status = command?.state==='queued'?'ENFILEIRADA':command?.state==='dispatch_unknown'?'RESULTADO INDETERMINADO':'ENVIANDO';
+  let status =
+    command?.state === 'queued'
+      ? 'ENFILEIRADA'
+      : command?.state === 'dispatch_unknown'
+        ? 'RESULTADO INDETERMINADO'
+        : 'ENVIANDO';
   if (filled > 0)
     status = filled + 1e-8 < proposal.quantity ? 'PARCIAL' : 'EXECUTADA';
   else if (
@@ -163,28 +173,80 @@ export function executionView(
   const closedVolume = exitDeals.reduce((n, e) => n + Number(e.volume), 0);
   const resultBRL = closedVolume
     ? exitDeals.reduce(
-        (n, e) => n + Number(e.profit || 0) + Number(e.commission || 0) + Number(e.swap || 0) + Number(e.fee || 0),
+        (n, e) =>
+          n +
+          Number(e.profit || 0) +
+          Number(e.commission || 0) +
+          Number(e.swap || 0) +
+          Number(e.fee || 0),
         0,
-      ) + unique.reduce((n, e) => n + Number(e.commission || 0) + Number(e.swap || 0) + Number(e.fee || 0), 0)
+      ) +
+      unique.reduce(
+        (n, e) =>
+          n +
+          Number(e.commission || 0) +
+          Number(e.swap || 0) +
+          Number(e.fee || 0),
+        0,
+      )
     : null;
-  const tag='FT'+proposal.id.replaceAll('-','').slice(0,24),orderIds=new Set(events.filter(e=>e.commandId===proposal.id&&e.order).map(e=>e.order));
- const pendingOrders=orders.filter(o=>o.symbol===proposal.symbol&&o.magic===approvalPolicy.magic&&(orderIds.has(o.ticket)||o.comment===tag));
- const terminalOrder=events.some(e=>e.commandId===proposal.id&&e.kind==='order-state'&&[2,4,6].includes(e.orderState));
- const closed=filled>0&&closedVolume>=filled&&!position&&pendingOrders.length===0&&(filled+1e-8>=proposal.quantity||terminalOrder);
- const actualRiskBRL=entry!==null?Math.abs(entry-proposal.sl)*proposal.pointValue*filled:null;
- const protection=position?(!position.sl||!position.tp?'FALHA: POSIÇÃO SEM SL/TP':Math.abs(position.sl-proposal.sl)>1e-6||Math.abs(position.tp-proposal.tp)>1e-6?'PROTEÇÃO DIVERGENTE DA PROPOSTA':'SL/TP CONFIRMADOS NO MT5'):null;
+  const tag = 'FT' + proposal.id.replaceAll('-', '').slice(0, 24),
+    orderIds = new Set(
+      events
+        .filter((e) => e.commandId === proposal.id && e.order)
+        .map((e) => e.order),
+    );
+  const pendingOrders = orders.filter(
+    (o) =>
+      o.symbol === proposal.symbol &&
+      o.magic === approvalPolicy.magic &&
+      (orderIds.has(o.ticket) || o.comment === tag),
+  );
+  const terminalOrder = events.some(
+    (e) =>
+      e.commandId === proposal.id &&
+      e.kind === 'order-state' &&
+      [2, 4, 6].includes(e.orderState),
+  );
+  const closed =
+    filled > 0 &&
+    closedVolume >= filled &&
+    !position &&
+    pendingOrders.length === 0 &&
+    (filled + 1e-8 >= proposal.quantity || terminalOrder);
+  const actualRiskBRL =
+    entry !== null
+      ? Math.abs(entry - proposal.sl) * proposal.pointValue * filled
+      : null;
+  const protection = position
+    ? !position.sl || !position.tp
+      ? 'FALHA: POSIÇÃO SEM SL/TP'
+      : Math.abs(position.sl - proposal.sl) > 1e-6 ||
+          Math.abs(position.tp - proposal.tp) > 1e-6
+        ? 'PROTEÇÃO DIVERGENTE DA PROPOSTA'
+        : 'SL/TP CONFIRMADOS NO MT5'
+    : null;
   return {
-    status:closed?'ENCERRADA':status,
+    status: closed ? 'ENCERRADA' : status,
     protection,
-    protectionFault:!!position && protection!=='SL/TP CONFIRMADOS NO MT5',
-    retcodes:events.filter(e=>e.commandId===proposal.id&&Number.isFinite(e.retcode)).map(e=>({kind:e.kind,retcode:e.retcode,retcodeExternal:e.retcodeExternal??null})),
+    protectionFault: !!position && protection !== 'SL/TP CONFIRMADOS NO MT5',
+    retcodes: events
+      .filter((e) => e.commandId === proposal.id && Number.isFinite(e.retcode))
+      .map((e) => ({
+        kind: e.kind,
+        retcode: e.retcode,
+        retcodeExternal: e.retcodeExternal ?? null,
+      })),
     actualRiskBRL,
     pendingOrders,
     filled,
     entry,
     closed,
     resultBRL,
-    resultR: closed && resultBRL !== null ? resultBRL / (actualRiskBRL || proposal.riskBRL) : null,
+    resultR:
+      closed && resultBRL !== null
+        ? resultBRL / (actualRiskBRL || proposal.riskBRL)
+        : null,
     exitTime: closed
       ? Math.max(...exitDeals.map((e) => e.timeMsc)) / 1000
       : null,

@@ -1,3 +1,4 @@
+import type { ExecutionApprovalProvider } from './approval';
 import type { MarketDataProvider } from '../core/providers';
 import { aggregateCandles } from '../core/providers';
 import type { Candle, Timeframe } from '../core/types';
@@ -57,7 +58,7 @@ export class MT5MarketDataProvider implements MarketDataProvider {
     return aggregateCandles(data.candles || [], timeframe, asOf);
   }
 }
-export class MT5BrokerExecutionProvider implements BrokerExecutionProvider {
+export class MT5BrokerExecutionProvider implements BrokerExecutionProvider, ExecutionApprovalProvider {
   constructor(private env: BridgeEnv) {}
   async state() {
     const data = await new MT5MarketDataProvider(this.env).read();
@@ -81,9 +82,28 @@ export class MT5BrokerExecutionProvider implements BrokerExecutionProvider {
       p_max_age: c.maxAgeMs,
     });
   }
-  async approve(p:import('./approval').Proposal,intent?:{command:BrokerCommand;nonce:string}) {
-    const c=config(this.env);if(p.mode!=='REAL'||!intent||intent.command.id!==p.id||!c.execution)throw new Error('Execução real bloqueada');
-    return rpc(this.env,'trade_real_confirm',{p_owner:'focoos-admin',p_id:p.id,p_nonce:intent.nonce,p_command:intent.command,p_max:c.maxContracts,p_account:c.accountHash,p_age:c.maxAgeMs,p_backend:c.execution});
+  async approve(
+    p: import('./approval').Proposal,
+    intent?: { command: BrokerCommand; nonce: string },
+  ) {
+    const c = config(this.env);
+    if (
+      p.mode !== 'REAL' ||
+      !intent ||
+      intent.command.id !== p.id ||
+      !c.execution
+    )
+      throw new Error('Execução real bloqueada');
+    return rpc(this.env, 'trade_real_confirm', {
+      p_owner: 'focoos-admin',
+      p_id: p.id,
+      p_nonce: intent.nonce,
+      p_command: intent.command,
+      p_max: c.maxContracts,
+      p_account: c.accountHash,
+      p_age: c.maxAgeMs,
+      p_backend: c.execution,
+    });
   }
   async submit(value: BrokerCommand) {
     const command = validateCommand(value, this.env),

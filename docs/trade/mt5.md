@@ -45,7 +45,7 @@ Marque token e chave Supabase como **secrets**. Nenhuma variável `NEXT_PUBLIC_*
    - `ApiOrigin`: `https://focoemcanto.com` (sem barra final).
    - `BridgeId`: o mesmo backend; demais limites podem manter defaults documentados.
 9. Confirme **OK**. Para o teste de dados, não habilite negociação automática: timer e WebRequest são independentes de permissão de ordens. Mesmo se o terminal estiver autorizado para outras operações, `EnableExecution=false` bloqueia este EA.
-10. Abra **Toolbox/Caixa de Ferramentas → Experts**. Procure o fingerprint e **HTTP 200** no gráfico. HTTP -1/erro 4014/4060: confira URL autorizada e rede. HTTP 401: tokens não coincidem. HTTP 400: veja configuração do backend/persistência/símbolo/conta. Segredos nunca aparecem no log.
+10. Abra **Toolbox/Caixa de Ferramentas → Experts**. Procure **HTTP 200** (EA v2 não registra fingerprint privado) no gráfico. HTTP -1/erro 4014/4060: confira URL autorizada e rede. HTTP 401: tokens não coincidem. HTTP 400: veja configuração do backend/persistência/símbolo/conta. Segredos nunca aparecem no log.
 11. Abra `focoemcanto.com/trade`, faça login FocoOS e selecione **XP / MetaTrader 5** em **Fonte de mercado**. O gráfico deve mostrar histórico e o painel mostrar último tick, idade, Bid/Ask/Last. **LIVE** exige tick recente e heartbeat conectado; fora do pregão pode estar corretamente OFFLINE mesmo com HTTP 200.
 12. Deixe terminal e Mac ligados, conectados e sem repouso. Fechar o MT5, suspender o Mac ou perder rede para o feed. Ao reabrir o MT5, confirme que o gráfico manteve o EA e observe a reconexão.
 
@@ -76,3 +76,5 @@ Marque token e chave Supabase como **secrets**. Nenhuma variável `NEXT_PUBLIC_*
 ## Validação
 
 Testes TS/API + Postgres/PGlite validam autenticador, payload, idempotência, claim, lost response, sessão concorrente, RLS, gates e freshness. QA headless preserva replay/professor/diário; compile Functions + Next export. **Não substituem compilar MQL5 no MetaEditor, validar Wine/WebRequest nem homologar execução XP**. Checklist de conexão e ticks reais acima é o próximo gate, antes de qualquer ordem.
+
+Para EA v2 e pipeline REAL desarmado, siga [real-execution.md](real-execution.md).

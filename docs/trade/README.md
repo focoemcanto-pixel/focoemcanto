@@ -102,3 +102,5 @@ Todas as tabelas têm RLS. Catálogo é somente leitura para usuários autentica
 Veja [parâmetros](./parameters.md), [conectar WIN/B3](./live-b3.md) e [validação](./validation.md).
 
 Fluxo obrigatório de operação, modos PAPER/REAL, persistência e migration: [human-approval.md](human-approval.md). Nenhuma entrada pode seguir pelo endpoint de comandos diretos; somente proposta confirmada.
+
+Pipeline PAPER/REAL, confirmação final, gates, EA v2 e instalação no Mac: [real-execution.md](real-execution.md). REAL permanece desarmado.

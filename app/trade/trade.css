@@ -2132,24 +2132,137 @@
   }
 }
 /* Explicit execution mode and second human confirmation. */
-.trade-execution-selector {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin:14px 0 10px}
-.trade-app .trade-execution-selector button {display:block;min-width:0;padding:12px 8px;font-size:13px;letter-spacing:.08em;text-align:center;border:1px solid #34352f;background:#161914;border-radius:8px}
-.trade-execution-selector button small {display:block;margin-top:5px;font-size:9px;letter-spacing:.07em;color:#8d9389}
-.trade-execution-selector button[aria-pressed=true] {border-color:#baa273;background:#28261e;color:#e9d6ad}
-.trade-execution-selector button:last-child[aria-pressed=true] {border-color:#a77864;background:#2b211e;color:#edc1ac}
-.trade-mode-banner {padding:10px 12px;font-size:10px;letter-spacing:.06em;line-height:1.5;background:#22241e;color:#c0c2ad;border-radius:6px}
-.trade-mode-banner[data-mode=REAL] {background:#2b211e;color:#dfb39d}
-.trade-real-checklist {margin:14px 0;border:1px solid #35352f;border-radius:8px;padding:12px}
-.trade-real-checklist summary {font-size:12px;color:#d6c3a1;cursor:pointer;line-height:1.6}
-.trade-real-checklist>div {padding:8px 0;border-bottom:1px solid #2b2e27;font-size:11px}
-.trade-real-checklist strong {font-weight:500;color:#c0c4b8}
-.trade-real-checklist small {display:block;padding-left:15px;margin-top:4px;color:#898f82;line-height:1.5}
-.trade-real-checklist [data-ok=true] strong {color:#a9be91}
-.trade-real-dialog {position:fixed;width:480px;max-width:calc(100% - 28px);max-height:90dvh;overflow:auto;margin:auto;padding:28px;background:#191d17;color:#d8decd;border:1px solid #706148;border-radius:14px;box-shadow:0 24px 100px #0009}
-.trade-real-dialog::backdrop {background:#060905cc;backdrop-filter:blur(5px)}
-.trade-real-dialog h2 {font-size:25px;margin:12px 0}
-.trade-real-dialog p {font-size:13px;color:#aeb5a5;line-height:1.7}
-.trade-real-dialog dl {display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:24px 0;font-size:12px}
-.trade-real-dialog dd {text-align:right}
-.trade-app .trade-real-dialog button {width:100%;justify-content:center;margin-top:9px;padding:14px;font-size:11px}
-.trade-badge[data-execution-mode=REAL] {color:#d7ac96;border-color:#7e5342;background:#2b211e}
+.trade-execution-selector {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin: 14px 0 10px;
+}
+.trade-app .trade-execution-selector button {
+  display: block;
+  min-width: 0;
+  padding: 12px 8px;
+  font-size: 13px;
+  letter-spacing: 0.08em;
+  text-align: center;
+  border: 1px solid #34352f;
+  background: #161914;
+  border-radius: 8px;
+}
+.trade-execution-selector button small {
+  display: block;
+  margin-top: 5px;
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  color: #8d9389;
+}
+.trade-execution-selector button[aria-pressed='true'] {
+  border-color: #baa273;
+  background: #28261e;
+  color: #e9d6ad;
+}
+.trade-execution-selector button:last-child[aria-pressed='true'] {
+  border-color: #a77864;
+  background: #2b211e;
+  color: #edc1ac;
+}
+.trade-mode-banner {
+  padding: 10px 12px;
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  background: #22241e;
+  color: #c0c2ad;
+  border-radius: 6px;
+}
+.trade-mode-banner[data-mode='REAL'] {
+  background: #2b211e;
+  color: #dfb39d;
+}
+.trade-real-checklist {
+  margin: 14px 0;
+  border: 1px solid #35352f;
+  border-radius: 8px;
+  padding: 12px;
+}
+.trade-real-checklist summary {
+  font-size: 12px;
+  color: #d6c3a1;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.trade-real-checklist > div {
+  padding: 8px 0;
+  border-bottom: 1px solid #2b2e27;
+  font-size: 11px;
+}
+.trade-real-checklist strong {
+  font-weight: 500;
+  color: #c0c4b8;
+}
+.trade-real-checklist small {
+  display: block;
+  padding-left: 15px;
+  margin-top: 4px;
+  color: #898f82;
+  line-height: 1.5;
+}
+.trade-real-checklist [data-ok='true'] strong {
+  color: #a9be91;
+}
+.trade-real-dialog {
+  position: fixed;
+  width: 480px;
+  max-width: calc(100% - 28px);
+  max-height: 90dvh;
+  overflow: auto;
+  margin: auto;
+  padding: 28px;
+  background: #191d17;
+  color: #d8decd;
+  border: 1px solid #706148;
+  border-radius: 14px;
+  box-shadow: 0 24px 100px #0009;
+}
+.trade-real-dialog::backdrop {
+  background: #060905cc;
+  backdrop-filter: blur(5px);
+}
+.trade-real-dialog h2 {
+  font-size: 25px;
+  margin: 12px 0;
+}
+.trade-real-dialog p {
+  font-size: 13px;
+  color: #aeb5a5;
+  line-height: 1.7;
+}
+.trade-real-dialog dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 24px 0;
+  font-size: 12px;
+}
+.trade-real-dialog dd {
+  text-align: right;
+}
+.trade-app .trade-real-dialog button {
+  width: 100%;
+  justify-content: center;
+  margin-top: 9px;
+  padding: 14px;
+  font-size: 11px;
+}
+.trade-badge[data-execution-mode='REAL'] {
+  color: #d7ac96;
+  border-color: #7e5342;
+  background: #2b211e;
+}
+
+.trade-real-gate-count {
+  display: block;
+  color: #999d8d;
+  font-size: 10px;
+  margin-top: 5px;
+}

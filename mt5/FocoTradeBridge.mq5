@@ -176,9 +176,10 @@ void Execute(string line){
  req.order=ticket;req.price=price;req.type_time=(ENUM_ORDER_TYPE_TIME)OrderGetInteger(ORDER_TYPE_TIME);req.expiration=(datetime)OrderGetInteger(ORDER_TIME_EXPIRATION);
  req.action=action=="CANCEL"?TRADE_ACTION_REMOVE:TRADE_ACTION_MODIFY;
  }else{ResultEvent(id,"rejected",0,0,0);return;}
+ // OrderCheck success can return 0 (official MQL5 reference), unlike OrderSend.
  bool checked=OrderCheck(req,check);
  if(!QueueEvent("check_"+id,"order-check",id,",\"retcode\":"+(string)check.retcode+",\"ok\":"+B(checked)+",\"margin\":"+N(check.margin)))return;
- if(!checked || check.retcode!=TRADE_RETCODE_DONE){ResultEvent(id,"rejected",check.retcode,0,0);return;}
+ if(!checked || (check.retcode!=0 && check.retcode!=TRADE_RETCODE_DONE)){ResultEvent(id,"rejected",check.retcode,0,0);return;}
  if(!QueueEvent("sending_"+id,"sending",id))return;
  bool accepted=OrderSend(req,res);
  QueueEvent("send_"+id,"order-send",id,",\"retcode\":"+(string)res.retcode+",\"retcodeExternal\":"+(string)res.retcode_external+",\"accepted\":"+B(accepted)+",\"order\":"+Q((string)res.order)+",\"deal\":"+Q((string)res.deal));

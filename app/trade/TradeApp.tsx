@@ -172,7 +172,7 @@ export default function TradeApp() {
     [savedRuns, setSavedRuns] = useState<any[]>([]);
   const [source, setSource] = useState<'replay' | 'mt5'>('replay');
   const [pulse, setPulse] = useState(0);
-  const [executionMode,setExecutionMode] = useState<'PAPER'|'REAL'>('PAPER');
+  const [executionMode, setExecutionMode] = useState<'PAPER' | 'REAL'>('PAPER');
   useEffect(() => {
     if (source !== 'mt5') return;
     const timer = setInterval(() => setPulse((p) => p + 1), 2000);
@@ -394,7 +394,9 @@ export default function TradeApp() {
           ))}
         </nav>
         <div className="trade-account">
-          <span className="trade-badge" data-execution-mode={executionMode}>{executionMode==='PAPER'?'PAPER LAB':'EXECUÇÃO REAL'}</span>
+          <span className="trade-badge" data-execution-mode={executionMode}>
+            {executionMode === 'PAPER' ? 'PAPER LAB' : 'EXECUÇÃO REAL'}
+          </span>
           <button
             title="Sair da sessão FocoOS"
             onClick={async () => {
@@ -799,7 +801,9 @@ export default function TradeApp() {
                 <span className="trade-live-dot" />
               </div>
               <div className="trade-decision-desk">
-                <OperationsPanel executionMode={executionMode} onModeChange={setExecutionMode}
+                <OperationsPanel
+                  executionMode={executionMode}
+                  onModeChange={setExecutionMode}
                   strategyNames={Object.fromEntries(
                     state?.scanner?.candidates.map((c) => [
                       c.definition.id,
