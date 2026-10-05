@@ -25,6 +25,10 @@ export type Setup = {
   entry: number;
   stop: number;
   targets: number[];
+  symbol?: string;
+  tickSize?: number;
+  riskRules?: import('./invariants').RiskRules;
+  session?: string;
   riskPoints: number;
   potentialPoints: number;
   rr: number;
@@ -41,6 +45,7 @@ export type Analysis = {
   conditions: Condition[];
   missing: string[];
   conflicts: string[];
+  rejectionReasons?: string[];
   support?: number;
   resistance?: number;
   region?: [number, number];

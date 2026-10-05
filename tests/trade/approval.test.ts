@@ -15,7 +15,7 @@ const options = {
   pointValue: 0.2,
   currency: 'BRL',
   cursor: 180,
-  asOf: 1,
+  asOf: analysis.setup!.timestamp,
   liveAuthorized: false,
 };
 test('proposal quantifies configured monetary risk and rejects incomplete, conflicting and unauthorized real setups', () => {

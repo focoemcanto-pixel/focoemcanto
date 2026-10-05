@@ -1,3 +1,5 @@
+import { validateSetup } from '../core/invariants';
+import { pullbackParameters } from '../core/strategy';
 import type { Analysis } from '../core/types';
 export const approvalPolicy = {
   proposalLifetimeMs: 30000,
@@ -82,6 +84,12 @@ export function makeProposal(
     options.pointValue <= 0
   )
     throw new Error('Valor monetário do contrato indisponível');
+  const rules=s.riskRules || (s.strategy==='trend_pullback_confirmation_v1' ? pullbackParameters : {minStopPoints:s.tickSize || 5,maxStopPoints:Number.MAX_VALUE});
+  const invalid=validateSetup(s,s.tickSize || 5,rules);
+  if(s.symbol && s.symbol!==options.symbol)invalid.push('WRONG_SYMBOL: símbolo/contrato divergente.');
+  if(s.timestamp!==options.asOf)invalid.push('STALE_SETUP: timestamp da hipótese divergente.');
+  if(options.source==='mt5' && (now-options.asOf*1000>120000 || options.asOf*1000>now+2000))invalid.push('STALE_SETUP: estrutura antiga ou futura.');
+  if(invalid.length)throw new Error('SETUP_REJECTED: '+invalid.join(' '));
   const sign = s.direction === 'long' ? 1 : -1,
     risk = (s.entry - s.stop) * sign,
     potential = (s.targets[0] - s.entry) * sign;

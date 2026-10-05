@@ -15,6 +15,7 @@ const bridge = 'xp-mt5-primary',
 function fixture() {
   const now = Date.now(),
     analysis = runReplay(generateMockCandles(), 180).analyses[0];
+  analysis.setup!.timestamp=now/1000-5;
   const base = makeProposal(
     analysis,
     {
@@ -156,7 +157,7 @@ test('REAL is ready only with every explicit gate; disarmed backend never disabl
       pointValue: 0.2,
       currency: 'BRL',
       cursor: 180,
-      asOf: 1,
+      asOf: runReplay(generateMockCandles(),180).analyses[0].setup!.timestamp,
       liveAuthorized: false,
     }),
   );

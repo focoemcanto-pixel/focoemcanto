@@ -1,3 +1,4 @@
+import { validateLevels } from '../core/invariants';
 import type { Analysis, MarketSnapshot, Condition } from '../core/types';
 import {
   TrendPullbackConfirmation,
@@ -71,7 +72,7 @@ function definition(id: string, name: string): StrategyDefinition {
   return {
     id,
     name,
-    version: '1.0.0',
+    version: '1.1.0',
     stage: 'paper',
     liveAuthorized: false,
     timeframes: ['5m', '1m'],
@@ -349,8 +350,8 @@ export class RuleStrategy implements StrategyEvaluator {
           : Math.max(hi, last?.high || hi) + p.stopBufferTicks * s.tickSize,
       risk = direction * (entry - stop),
       target = entry + direction * risk * p.targetR;
-    const riskValid =
-      !!a && risk >= p.minStopTicks * s.tickSize && risk <= a * p.maxStopAtr;
+    const errors = a ? validateLevels({direction:direction===1?'BUY':'SELL',entry,stop,target,rr:p.targetR},s.tickSize,{minStopPoints:p.minStopTicks*s.tickSize,maxStopPoints:a*p.maxStopAtr,targetR:p.targetR}) : ['Dados insuficientes para risco'];
+    const riskValid = !!a && errors.length===0;
     const conditions = [
       condition(
         'data',
@@ -405,6 +406,7 @@ export class RuleStrategy implements StrategyEvaluator {
       support: enough ? lo : undefined,
       resistance: enough ? hi : undefined,
       region: enough ? region : undefined,
+      rejectionReasons: enough && !riskValid ? errors : undefined,
       explanation: complete
         ? 'Regras candidatas satisfeitas. Hipótese PAPER sem vantagem comprovada.'
         : `Aguardar: ${conditions.find((c) => !c.met)?.detail}. Não entrar ainda.`,
@@ -412,6 +414,9 @@ export class RuleStrategy implements StrategyEvaluator {
     if (complete)
       analysis.setup = {
         id: `${d.id}:${d.version}:${s.symbol}:${s.asOf}`,
+        symbol:s.symbol,
+        tickSize:s.tickSize,
+        riskRules:{minStopPoints:p.minStopTicks*s.tickSize,maxStopPoints:(a || 0)*p.maxStopAtr,targetR:p.targetR},
         strategy: d.id,
         version: d.version,
         timestamp: s.asOf,
@@ -434,7 +439,7 @@ export class RuleStrategy implements StrategyEvaluator {
       analysis,
       reasons: conditions.filter((c) => !c.met).map((c) => c.detail),
       projected:
-        enough && risk > 0
+        enough && riskValid && pattern
           ? { entry, stop, target, rr: p.targetR, region }
           : undefined,
       trigger: reason || 'Aguardar dados',
@@ -454,11 +459,12 @@ const pullback: StrategyEvaluator = {
   evaluate(s, f) {
     const analysis = original.evaluate(s),
       p = analysis.setup;
-    const enough = s.candles['15m'].length >= 10;
+    const enough = analysis.conditions[0].detail.indexOf('Aguardar')<0 && s.candles['5m'].length>=pullbackParameters.structureLookbackBars;
     return {
       definition: this.definition,
       state: !enough
         ? 'INSUFFICIENT_DATA'
+        : analysis.rejectionReasons?.length ? 'REJECTED'
         : p
           ? 'CONFIRMED'
           : analysis.conditions.filter((c) => c.met).length >= 5
@@ -467,7 +473,7 @@ const pullback: StrategyEvaluator = {
               ? 'REJECTED'
               : 'FORMING',
       analysis,
-      reasons: analysis.missing,
+      reasons: analysis.rejectionReasons?.length ? analysis.rejectionReasons : analysis.missing,
       trigger: analysis.conditions.find((c) => c.key === 'trigger')!.detail,
       detectedAt: s.asOf,
       validUntil: s.asOf + 600,
@@ -506,7 +512,7 @@ function unavailable(
         state: 'UNAVAILABLE_DATA',
         analysis: {
           strategy: id,
-          version: '1.0.0',
+          version: '1.1.0',
           stage: 'research',
           status: 'blocked',
           trend: 'neutral',

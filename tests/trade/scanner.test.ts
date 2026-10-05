@@ -98,6 +98,7 @@ test('pattern fixtures: breakout, rejection support/resistance and false break a
   const s = structuredClone(snapshot),
     f = calculateFeatures(s),
     base = f.frames['1m'];
+  s.tickSize=1;
   f.frames['5m'].emaFast = 110;
   f.frames['5m'].emaSlow = 100;
   Object.assign(base, {
@@ -373,7 +374,9 @@ test('sliding window preserves PAPER entry, gap-before-fill cancels and oppositi
     evaluate(s: any, f: any) {
       const c = base.evaluate(s, f);
       c.definition = this.definition;
-      c.analysis.setup!.direction = 'short';
+      const setup=c.analysis.setup!;
+      setup.direction='short';setup.stop=setup.entry+setup.riskPoints;setup.targets=[setup.entry-setup.potentialPoints];
+      c.analysis.trend='down';c.projected={entry:setup.entry,stop:setup.stop,target:setup.targets[0],rr:setup.rr,region:[setup.stop,setup.stop]};
       return c;
     },
   };

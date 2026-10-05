@@ -1,3 +1,5 @@
+import { decisionSnapshot } from '../core/market-context';
+import { validateLevels, validateSetup } from '../core/invariants';
 import { timeframeSeconds } from '../core/providers';
 import type { Timeframe } from '../core/types';
 import type { MarketSnapshot } from '../core/types';
@@ -27,10 +29,17 @@ export function scanMarket(
       ]),
     ) as MarketSnapshot['candles'],
   };
+  snapshot = decisionSnapshot(snapshot);
   const features = calculateFeatures(snapshot),
     candidates = registry.map((r) => r.evaluate(snapshot, features));
   if (snapshot.source === 'live' && !feedLive)
     candidates.forEach((c) => {
+    const p=c.definition.parameters;
+    const rules={minStopPoints:p.minStopPoints ?? p.minStopTicks*snapshot.tickSize, maxStopPoints:p.maxStopPoints ?? (features.frames['1m'].atr || 0)*p.maxStopAtr,targetR:p.targetR};
+    const errors=c.analysis.setup ? validateSetup(c.analysis.setup,snapshot.tickSize,rules) : c.projected ? validateLevels({direction:c.analysis.trend==='down'?'SELL':'BUY',...c.projected},snapshot.tickSize,rules) : c.analysis.rejectionReasons || [];
+    if(errors.length && c.state!=='INSUFFICIENT_DATA' && c.state!=='UNAVAILABLE_DATA') {
+      c.state='REJECTED'; c.analysis.status='blocked'; c.analysis.setup=undefined;c.projected=undefined;c.analysis.projected=undefined; c.reasons=errors;c.analysis.rejectionReasons=errors;c.analysis.explanation='SETUP DESCARTADO: '+errors.join(' ');
+    }
       c.state = 'UNAVAILABLE_DATA';
       c.analysis.setup = undefined;
       c.analysis.status = 'blocked';
@@ -51,6 +60,12 @@ export function scanMarket(
     ].map((k) => [k, 0]),
   ) as ScannerResult['summary'];
   candidates.forEach((c) => {
+    const p=c.definition.parameters;
+    const rules={minStopPoints:p.minStopPoints ?? p.minStopTicks*snapshot.tickSize, maxStopPoints:p.maxStopPoints ?? (features.frames['1m'].atr || 0)*p.maxStopAtr,targetR:p.targetR};
+    const errors=c.analysis.setup ? validateSetup(c.analysis.setup,snapshot.tickSize,rules) : c.projected ? validateLevels({direction:c.analysis.trend==='down'?'SELL':'BUY',...c.projected},snapshot.tickSize,rules) : c.analysis.rejectionReasons || [];
+    if(errors.length && c.state!=='INSUFFICIENT_DATA' && c.state!=='UNAVAILABLE_DATA') {
+      c.state='REJECTED'; c.analysis.status='blocked'; c.analysis.setup=undefined;c.projected=undefined;c.analysis.projected=undefined; c.reasons=errors;c.analysis.rejectionReasons=errors;c.analysis.explanation='SETUP DESCARTADO: '+errors.join(' ');
+    }
     if (
       c.state !== 'UNAVAILABLE_DATA' &&
       c.state !== 'INSUFFICIENT_DATA' &&
@@ -193,7 +208,10 @@ export function advanceWatches(
       );
       continue;
     }
-    if (!c || c.state === 'UNAVAILABLE_DATA') continue;
+    if (!c || c.state === 'INSUFFICIENT_DATA' || c.state === 'UNAVAILABLE_DATA') {
+      Object.assign(w,transitionWatch(w,'INVALIDATED',scan.asOf,'Estrutura atual insuficiente ou versão da estratégia alterada; hipótese antiga não reutilizada'));
+      continue;
+    }
     if (
       (w.state === 'CONFIRMED' && c.state !== 'CONFIRMED') ||
       c.analysis.trend !== w.candidate.analysis.trend

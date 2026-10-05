@@ -1,3 +1,5 @@
+import { decisionSnapshot, sessionKey } from './market-context';
+import { validateLevels } from './invariants';
 import type { Analysis, Candle, MarketSnapshot, Strategy } from './types';
 export const pullbackParameters = Object.freeze({
   contextFastPeriod: 4,
@@ -30,7 +32,7 @@ export function ema(values: number[], period: number) {
 }
 export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
   readonly id = 'trend_pullback_confirmation_v1';
-  readonly version = '1.0.0';
+  readonly version = '1.1.0';
   readonly stage = 'paper' as const;
   readonly liveAuthorized = false;
   constructor(readonly parameters: PullbackParameters = pullbackParameters) {
@@ -56,6 +58,7 @@ export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
       throw new Error('Parâmetros inválidos.');
   }
   evaluate(s: MarketSnapshot): Analysis {
+    s = decisionSnapshot(s);
     const p = this.parameters,
       context = s.candles['15m'],
       structure = s.candles['5m'].slice(-p.structureLookbackBars),
@@ -230,7 +233,13 @@ export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
         sign * regionProjected + p.supportTolerancePoints,
       ];
     }
-    if (enough && risk > 0 && result.region)
+    const invalid = validateLevels({direction:sign===1?'BUY':'SELL',entry,stop,target:entry+sign*risk*p.targetR,rr:p.targetR},s.tickSize,p);
+    if (enough && invalid.length) {
+      result.rejectionReasons = invalid;
+      result.explanation = `SETUP DESCARTADO: ${invalid.join(' ')}`;
+    }
+    if (!enough) result.explanation = `Aguardando estrutura atual e contínua: M15 ${context.length}/${p.contextSlowPeriod+p.contextSlopeBars}, M5 ${structure.length}/${p.structureLookbackBars}. Sessões anteriores e lacunas não são usadas como stop.`;
+    if (enough && region && invalid.length === 0 && result.region)
       result.projected = {
         entry,
         stop,
@@ -240,7 +249,11 @@ export class TrendPullbackConfirmation implements Strategy<PullbackParameters> {
       };
     if (complete && last)
       result.setup = {
-        id: `${this.id}:${last.timestamp}`,
+        id: `${this.id}:${this.version}:${s.symbol}:${last.timestamp}`,
+        symbol:s.symbol,
+        tickSize:s.tickSize,
+        riskRules:{minStopPoints:p.minStopPoints,maxStopPoints:p.maxStopPoints,targetR:p.targetR},
+        session:sessionKey(s.asOf-1),
         strategy: this.id,
         version: this.version,
         timestamp: s.asOf,

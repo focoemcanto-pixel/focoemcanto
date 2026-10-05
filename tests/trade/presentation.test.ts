@@ -25,7 +25,7 @@ test('presentation groups convergent rules without changing scanner evaluations 
     id: 'opposite',
     candidate: {
       ...structuredClone(w.candidate),
-      analysis: { ...w.candidate.analysis, trend: 'down' as const },
+      analysis: { ...w.candidate.analysis, trend: (w.candidate.analysis.trend==='down'?'up':'down') as 'up'|'down' },
     },
   };
   const grouped = observationGroups([w, twin, opposite], {

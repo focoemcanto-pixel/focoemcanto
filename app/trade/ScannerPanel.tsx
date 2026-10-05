@@ -318,10 +318,11 @@ export default function ScannerPanel({
           {missing?.label || 'Aguardar a proposta'}
           <small>{c.trigger}</small>
         </p>
+        {!p && <p className="trade-observation-next">Aguardando estrutura válida para calcular entrada, stop e alvo.</p>}
         {p && (
           <div className="trade-projected-levels">
             <div>
-              <small>ENTRADA PROJETADA</small>
+              <small>PROJEÇÃO PRELIMINAR</small>
               <strong>{num(p.entry)}</strong>
             </div>
             <div>
@@ -371,7 +372,8 @@ export default function ScannerPanel({
             </p>
           ))}
           <p>Gatilho: {c.trigger}</p>
-          {p && (
+          {!p && <p className="trade-observation-next">Aguardando estrutura válida para calcular entrada, stop e alvo.</p>}
+        {p && (
             <p>
               Região {num(p.region[0])}–{num(p.region[1])}. Stop técnico{' '}
               {num(p.stop)}; alvo de referência {num(p.target)}. Os níveis
