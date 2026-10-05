@@ -1,0 +1,11 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {sizePosition,WIN_SPEC,remainingPositionRiskBRL} from '../../trade/core/risk-engine';
+import {createManagedPosition,moveStop,partialExit,openRiskBRL} from '../../trade/core/position-management';
+import {analyzeTrades} from '../../trade/core/analytics';
+const policy={capitalBase:20000,riskPerTradePercent:.5,dailyLossLimitPercent:1.5,maxOpenRiskBRL:200,maxContracts:10};
+test('sizes WIN from technical stop and rounds down',()=>{const r=sizePosition({entry:208000,stop:207800,instrument:WIN_SPEC,policy});assert.equal(r.allowed,true);assert.equal(r.riskBudgetBRL,100);assert.equal(r.riskPerContractBRL,40);assert.equal(r.contracts,2);assert.equal(r.actualRiskBRL,80);});
+test('rejects when one contract exceeds risk budget',()=>{const r=sizePosition({entry:208000,stop:207300,instrument:WIN_SPEC,policy});assert.equal(r.allowed,false);assert.equal(r.reason,'NO_TRADE_RISK_LIMIT');});
+test('daily loss and simultaneous open risk fail closed',()=>{assert.equal(sizePosition({entry:208000,stop:207800,instrument:WIN_SPEC,policy,state:{realizedPnLToday:-300,openRiskBRL:0}}).reason,'DAILY_LOSS_LIMIT');assert.equal(sizePosition({entry:208000,stop:207800,instrument:WIN_SPEC,policy,state:{realizedPnLToday:0,openRiskBRL:200}}).reason,'OPEN_RISK_LIMIT');});
+test('breakeven reduces directional open risk to zero',()=>assert.equal(remainingPositionRiskBRL('long',208000,208000,2,.2),0));
+test('trailing cannot loosen and partial exit realizes R',()=>{const p=createManagedPosition({id:'x',direction:'long',entry:208000,initialStop:207800,stop:207800,target:208400,initialQuantity:2,openQuantity:2,pointValue:.2,initialRiskBRL:80,trailingMode:'STRUCTURE'},1);moveStop(p,208000,2);assert.equal(openRiskBRL(p),0);assert.throws(()=>moveStop(p,207900,3),/STOP_CANNOT_LOOSEN/);partialExit(p,1,208200,4);assert.equal(p.realizedPnLBRL,40);assert.equal(p.realizedR,.5);assert.equal(p.openQuantity,1);});
+test('analytics exposes expectancy, drawdown and loss streak without hiding sample size',()=>{const a=analyzeTrades([{resultR:2},{resultR:-1},{resultR:-1},{resultR:2},{resultR:-1}]);assert.equal(a.sampleSize,5);assert.equal(a.expectancyR,.2);assert.equal(a.maxLossStreak,2);assert.equal(a.maxDrawdownR,2);assert.equal(a.confidence,'INSUFFICIENT_DATA');});
