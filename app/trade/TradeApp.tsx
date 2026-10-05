@@ -37,6 +37,7 @@ type State = Omit<ReturnType<typeof runReplay>, 'source'> & {
     } | null;
     executionEnabled: boolean;
     killSwitch: boolean;
+    staleReason?: string | null;
     positionsCount: number;
     ordersCount: number;
   };
@@ -430,7 +431,7 @@ export default function TradeApp() {
         </span>
         <p>
           {source === 'mt5'
-            ? `${feed?.symbol || 'MT5'} · último dado ${feed?.lastTick ? new Date(feed.lastTick.timeMsc).toLocaleTimeString('pt-BR') : 'aguardando'} · idade ${feedAge === null ? '—' : Math.max(0, Math.round(feedAge / 1000)) + 's'} · Bid ${format(feed?.lastTick?.bid)} / Ask ${format(feed?.lastTick?.ask)} / Last ${format(feed?.lastTick?.last)} · posições ${feed?.positionsCount || 0} / ordens ${feed?.ordersCount || 0} · REAL ${feed?.killSwitch === false ? 'ARMADO' : 'BLOQUEADO'}`
+            ? `${feed?.symbol || 'MT5'} · último dado ${feed?.lastTick ? new Date(feed.lastTick.timeMsc).toLocaleTimeString('pt-BR') : 'aguardando'} · idade ${feedAge === null ? '—' : Math.max(0, Math.round(feedAge / 1000)) + 's'} · Bid ${format(feed?.lastTick?.bid)} / Ask ${format(feed?.lastTick?.ask)} / Last ${format(feed?.lastTick?.last)} · posições ${feed?.positionsCount || 0} / ordens ${feed?.ordersCount || 0} · REAL ${feed?.killSwitch === false ? 'ARMADO' : 'BLOQUEADO'}${feed?.staleReason === 'TICK_BACKLOG' ? ' · EA reenviando ticks antigos (backlog); candles M1 atuais. Atualize o EA para v2.06.' : feed?.staleReason === 'TICK_IN_FUTURE' ? ' · tick com horário futuro: relógio a verificar' : feed?.staleReason === 'CLOCK_MISMATCH' ? ' · relógio do EA diverge da configuração' : ''}`
             : 'Laboratório de estratégias · dados simulados'}
         </p>
         {/* Only an armed session can be blocked; a blocked session never shows this button. */}

@@ -82,3 +82,5 @@ Marque token e chave Supabase como **secrets**. Nenhuma variável `NEXT_PUBLIC_*
 Testes TS/API + Postgres/PGlite validam autenticador, payload, idempotência, claim, lost response, sessão concorrente, RLS, gates e freshness. QA headless preserva replay/professor/diário; compile Functions + Next export. **Não substituem compilar MQL5 no MetaEditor, validar Wine/WebRequest nem homologar execução XP**. Checklist de conexão e ticks reais acima é o próximo gate, antes de qualquer ordem.
 
 Para EA v2 e pipeline REAL desarmado, siga [real-execution.md](real-execution.md).
+
+> Feed STALE com heartbeat e candles atuais após reabrir o MT5: ver [feed-backlog-2026-10-05.md](feed-backlog-2026-10-05.md) (EA v2.06).
