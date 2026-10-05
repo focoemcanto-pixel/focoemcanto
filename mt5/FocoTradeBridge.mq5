@@ -1,5 +1,5 @@
 #property strict
-#property version "2.04"
+#property version "2.06"
 #property description "Foco Trade XP/MT5 bridge. Execution disabled by default."
 input string ApiOrigin="https://focoemcanto.com";
 input string BridgeToken="";
