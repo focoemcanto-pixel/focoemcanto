@@ -18,6 +18,7 @@ const operations = require('../functions/api/trade/operations.ts');
 const scanner = require('../functions/api/trade/scanner.ts');
 const strategyMetrics = require('../functions/api/trade/strategy-metrics.ts');
 const health = require('../functions/api/trade/health.ts');
+const executionStatus=require('../functions/api/trade/execution-status.ts');
 let operationReadFailures = 1;
 (async () => {
   const db = new PGlite();
@@ -28,6 +29,7 @@ let operationReadFailures = 1;
     '20261003035402_mt5_bridge.sql',
     '20261003042050_human_approval.sql',
     '20261003124510_multi_strategy_scanner.sql',
+    '20261004210552_real_execution_safety.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   globalThis.fetch = async (url, init) => {
@@ -96,7 +98,7 @@ let operationReadFailures = 1;
         request,
         env,
         next: async () =>
-          url.pathname.endsWith('health')
+          url.pathname.endsWith('execution-status') ? executionStatus.onRequestGet({env}) : url.pathname.endsWith('health')
             ? health.onRequestGet({ env })
             : url.pathname.endsWith('scanner')
               ? scanner[
@@ -224,13 +226,11 @@ let operationReadFailures = 1;
   await page
     .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
     .waitFor();
-  assert.equal(
-    await page
-      .locator('select[aria-label="Modo de execução"] option')
-      .nth(1)
-      .isDisabled(),
-    true,
-  );
+  await page.getByRole('button',{name:'REAL BLOQUEADO',exact:true}).click();
+  await page.getByText('REAL DESARMADO · pipeline implementado').waitFor();
+  assert.equal(await page.getByRole('button',{name:'Preparar proposta REAL',exact:true}).isDisabled(),true);
+  await page.screenshot({path:'/tmp/trade-real-disarmed-desktop.png',fullPage:true});
+  await page.getByRole('button',{name:'PAPER OPERACIONAL',exact:true}).click();
   await page
     .getByRole('heading', { name: 'AGUARDANDO CONFIRMAÇÃO', exact: true })
     .waitFor();
@@ -395,7 +395,7 @@ let operationReadFailures = 1;
         'reset',
         'MT5 offline never fabricates live price',
         'source switch preserves replay',
-        'persistence recovery and authenticated runtime health with REAL disabled',
+        'persistence recovery and authenticated runtime health with REAL selectable but blocked',
       ],
       screenshots: ['.trade-qa/desktop.png', '.trade-qa/mobile.png'],
     }),

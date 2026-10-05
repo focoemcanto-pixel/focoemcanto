@@ -73,9 +73,9 @@ export async function onRequestPost({
         verifiedAt: new Date().toISOString(),
       },
     };
-    const result = await rpc(env, 'trade_bridge_exchange', {
+    const result = await rpc(env, batch.state.protocolVersion===2?'trade_bridge_exchange_v2':'trade_bridge_exchange', {
       p_batch: batch,
-      p_execution: c.execution && !!c.accountHash,
+      p_execution: batch.state.protocolVersion===2 && c.execution && !!c.accountHash,
       p_max: c.maxContracts,
       p_account: c.accountHash,
       p_max_age: c.maxAgeMs,
