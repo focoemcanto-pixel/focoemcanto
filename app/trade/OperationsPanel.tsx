@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from 'react';
 import type { Proposal } from '../../trade/bridge/approval';
 import { remainingPositionRiskBRL } from '../../trade/core/risk-engine';
 import RealSessionPanel from './RealSessionPanel';
+import { entryWindow, serverSkew } from './decision-view';
 const num = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const money = (v: number | null | undefined) =>
@@ -49,7 +50,14 @@ export default function OperationsPanel({
     [error, setError] = useState(''),
     [loadError, setLoadError] = useState(''),
     [busy, setBusy] = useState(false),
-    [selectedId, setSelectedId] = useState('');
+    [selectedId, setSelectedId] = useState(''),
+    [now, setNow] = useState(() => Date.now()),
+    [skew, setSkew] = useState(0);
+  // One-second clock for the entry countdown; validity itself always comes from the backend expiresAt.
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
   async function load() {
     const r = await fetch(
       `/api/trade/operations?source=${source}&cursor=${cursor}`,
@@ -57,6 +65,7 @@ export default function OperationsPanel({
     );
     const d = await r.json();
     if (!r.ok) throw new Error(d.error);
+    setSkew(serverSkew(r.headers.get('Date'), Date.now()));
     setRows(d);
     const status = await fetch('/api/trade/execution-status', {
       cache: 'no-store',
@@ -130,7 +139,7 @@ export default function OperationsPanel({
       matching.find(
         (r) =>
           r.state === 'AGUARDANDO CONFIRMAÇÃO' &&
-          r.payload.expiresAt > Date.now(),
+          entryWindow(r.payload.expiresAt, now, skew).available,
       ) ||
       matching.find(
         (r) => r.state === 'CONFIRMADA' && !r.execution?.exitTime,
@@ -142,8 +151,10 @@ export default function OperationsPanel({
     row?.state === 'BLOQUEADA POR RISCO' || p?.proposalState === 'RISK_BLOCKED';
   const ready = readiness?.canExecute === true && source === 'mt5',
     preview = !!p && p.mode !== mode;
+  const entry = entryWindow(p?.expiresAt, now, skew),
+    awaiting = row?.state === 'AGUARDANDO CONFIRMAÇÃO' && !riskBlocked;
   const priority =
-    row?.state === 'AGUARDANDO CONFIRMAÇÃO' && p && p.expiresAt > Date.now()
+    awaiting && entry.available
       ? 'proposal'
       : row?.state === 'CONFIRMADA' && !x?.exitTime
         ? 'paper'
@@ -160,7 +171,9 @@ export default function OperationsPanel({
             {preview
               ? 'HIPÓTESE PAPER · PRÉVIA PARA REAL'
               : priority === 'proposal'
-                ? 'SETUP CONFIRMADO · PROPOSTA PRONTA'
+                ? `SETUP CONFIRMADO · ${entry.label}`
+                : awaiting
+                  ? `SETUP CONFIRMADO · ${entry.label}`
                 : priority === 'paper'
                   ? `ACOMPANHAMENTO ${mode}`
                   : 'MESA DE OPERAÇÕES'}
@@ -424,13 +437,21 @@ export default function OperationsPanel({
                 </p>
               </>
             )}
-            {!preview && !riskBlocked && row.state === 'AGUARDANDO CONFIRMAÇÃO' && (
+            {!preview && awaiting && !entry.available && (
+              <p className="trade-operation-error" role="status" data-entry="expired">
+                ENTRADA EXPIRADA · não perseguir preço. O setup segue acompanhado no LAB como resultado HIPOTÉTICO.
+              </p>
+            )}
+            {!preview && awaiting && entry.available && (
               <div className="trade-operation-actions">
+                <span className="trade-operation-countdown" role="timer" aria-live="off" data-entry="available">
+                  {entry.label}
+                </span>
                 <button
                   className="trade-primary"
                   disabled={
                     busy ||
-                    Date.now() > p.expiresAt ||
+                    !entry.available ||
                     (mode === 'REAL' && !ready && !p.inspectionOnly)
                   }
                   onClick={() =>

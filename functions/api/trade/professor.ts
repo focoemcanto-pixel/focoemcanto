@@ -7,7 +7,7 @@ import { rpc, type BridgeEnv } from '../../../trade/bridge/config';
 import { labAnalytics, labParameters } from '../../../trade/lab/analytics';
 import { toLabObservation } from './lab';
 /** Performance questions are answered only from LAB statistics, never from the AI. */
-export const performanceQuestion = /desempenh|performan|funcion|lucr|ganh|acert|win ?rate|expectativ|resultad|confi[aá]v|vale a pena|é boa|e boa|melhor estrat/;
+export const performanceQuestion = /desempenh|performan|funcion|lucr|ganh|dinheiro|acert|win ?rate|expectativ|resultad|confi[aá]v|vale a pena|é boa|e boa|melhor|pior|vencedor/;
 export function performanceAnswer(groups: ReturnType<typeof labAnalytics>['groups'], strategy: string | undefined) {
   const mine = groups.filter((g) => !strategy || g.strategyId === strategy);
   if (!mine.length)
@@ -19,7 +19,8 @@ export function performanceAnswer(groups: ReturnType<typeof labAnalytics>['group
       const facts = m.n >= labParameters.minSample
         ? ` Expectativa ${m.expectancyR?.toFixed(2)}R, profit factor ${m.profitFactor === null ? '—' : m.profitFactor.toFixed(2)}, drawdown máximo ${m.maxDrawdownR.toFixed(1)}R.`
         : '';
-      return `• ${g.strategyId} v${g.version} · ${g.dataset}: ${g.observations} observações, N=${m.n} resolvidas. ${g.status}: ${g.reason}${facts}`;
+      const label = g.dataset === 'LIVE_DETECTED' ? 'LIVE_DETECTED (resultado HIPOTÉTICO dos setups, operados ou não)' : g.dataset === 'PAPER_FORWARD' ? 'PAPER_FORWARD (operações PAPER aprovadas por você)' : g.dataset;
+      return `• ${g.strategyId} v${g.version} · ${label}: ${g.observations} observações, N=${m.n} resolvidas. ${g.status}: ${g.reason}${facts}`;
     }),
     `Critério: N < ${labParameters.minSample} não permite conclusão; PROMISSORA exige N ≥ ${labParameters.promisingSample}, expectativa ≥ ${labParameters.promisingExpectancyR}R e profit factor ≥ ${labParameters.promisingProfitFactor}. Resultado passado não garante resultado futuro.`,
   ].join('\n');
@@ -79,7 +80,8 @@ export async function onRequestPost({
     try {
       const data = await rpc(env as unknown as BridgeEnv, 'trade_lab_read', { p_owner: 'focoos-admin', p_since: Math.floor(Date.now() / 1000) - 365 * 86400 });
       const groups = labAnalytics(((data?.observations || []) as any[]).map(toLabObservation)).groups;
-      return Response.json({ answer: performanceAnswer(groups, body.strategy || candidate?.definition.id), provider: 'lab-statistics', asOf: state.snapshot.asOf });
+      const comparative = /melhor|pior|vencedor|qual estrat|qual setup/.test(q);
+      return Response.json({ answer: performanceAnswer(groups, comparative ? undefined : body.strategy || candidate?.definition.id), provider: 'lab-statistics', asOf: state.snapshot.asOf });
     } catch {
       return Response.json({ answer: 'O LAB está indisponível agora; sem os números dele o Professor não comenta desempenho.', provider: 'lab-statistics', asOf: state.snapshot.asOf });
     }

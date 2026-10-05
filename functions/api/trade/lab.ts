@@ -21,6 +21,13 @@ export function toLabObservation(o: any): LabObservation {
     lifecycle: o.lifecycle,
     outcome: o.outcome || null,
     paper: o.paper || null,
+    scope: o.scope,
+    marketAsOf: typeof s.marketAsOf === 'number' ? s.marketAsOf : undefined,
+    participants: Array.isArray(s.participantEvidence)
+      ? s.participantEvidence
+          .filter((x: any) => x?.state === 'CONFIRMED' && x.strategyId && x.version)
+          .map((x: any) => ({ strategyId: x.strategyId, version: x.version, configHash: x.configHash }))
+      : [],
     features: {
       hourBRT: s.session?.hourBRT ?? null,
       weekday: s.session?.weekday ?? null,

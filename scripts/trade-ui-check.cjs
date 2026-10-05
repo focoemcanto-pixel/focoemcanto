@@ -40,6 +40,8 @@ let simulateMissingBridge=false;
     '20261006090000_real_session_arming.sql',
     '20261006120000_setup_observation_lab.sql',
     '20261006130000_lab_notes_index.sql',
+    '20261007090000_tick_retention.sql',
+    '20261007091000_lab_participant_attribution.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   // Fixture ticks are stamped in real UTC; the production broker-wall clock is covered in real-session.test.ts.
@@ -269,6 +271,10 @@ let simulateMissingBridge=false;
     (await db.query('select * from trade_bridge_commands')).rows.length,
     0,
   );
+  // A READY proposal shows a live countdown from the backend expiresAt before the entry button.
+  const countdown = page.locator('[data-entry="available"]');
+  await countdown.waitFor();
+  assert.match(await countdown.textContent(), /^ENTRADA DISPONÍVEL · \d+s$/);
   await page
     .getByRole('button', { name: 'ENTRAR NO PAPER', exact: true })
     .click();

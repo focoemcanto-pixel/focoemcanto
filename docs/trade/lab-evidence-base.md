@@ -40,6 +40,33 @@ Um setup pode existir sem proposta executável. Uma proposta pode ser bloqueada 
   - **Métricas registradas:** MFE/MAE em pontos e em R, tempo até alvo/stop, barras acompanhadas e resultado em R.
   - **Imutabilidade:** o desfecho final não muda mais.
 
+## Confluência e atribuição por estratégia
+
+Uma oportunidade de mercado gera **uma** observação, **um** desfecho, **uma** proposta e, no máximo, **uma** operação PAPER. Isso preserva a deduplicação do scanner.
+
+**Prova de participação.** Outra estratégia do mesmo grupo de deduplicação recebe crédito analítico só se tiver tudo isto:
+
+- estado CONFIRMED **no mesmo candle** da confirmação;
+- todas as condições dela própria atendidas;
+- a mesma direção.
+
+Essa prova vai para `snapshot.participantEvidence`, que é imutável e guarda estratégia, versão, `configHash`, `confirmedAt`, condições e níveis. Uma estratégia apenas em formação, ou que confirma depois, não recebe o resultado (não há look-ahead).
+
+**Na estatística:**
+
+- cada estratégia confirmada recebe o desfecho **hipotético** na própria estatística (papel PARTICIPANT, mostrado como "N como participante");
+- `opportunities` conta cada oportunidade uma vez (N global);
+- PAPER_FORWARD é creditado só à estratégia cujos níveis foram operados;
+- uma estratégia que também tem observação própria da mesma oportunidade conta uma vez só.
+
+## Entrada disponível ≠ hipótese válida
+
+AGUARDANDO GATILHO → SETUP CONFIRMADO → PROPOSTA READY → **ENTRADA DISPONÍVEL · Ns** → ENTRADA EXPIRADA.
+
+- O cronômetro usa o `expiresAt` do **backend**, ajustado pela diferença entre o relógio local e o do servidor (header `Date`).
+- Uma proposta expirada nunca exibe botão de entrada.
+- O backend também recusa: o SQL `trade_confirm` marca EXPIRADA, e no feed LIVE a actionability recusa MISSED, INVALIDATED e EXPIRED.
+
 ## Validade da proposta (`actionability-v1`)
 
 Medida contra a **cotação atual** (compra no ask, venda no bid):
@@ -119,6 +146,31 @@ Os agrupamentos são sempre estratégia × versão × dataset.
 ## Segurança
 
 Nenhuma leitura do LAB seleciona `account_hash`, token ou fingerprint. Nenhuma estatística altera gates: REAL continua bloqueado (`TRADE_EXECUTION_ENABLED=false`, kill switch ativo, policy desabilitada).
+
+## Retenção de ticks (`20261007090000_tick_retention.sql`)
+
+**Regra:**
+
+- mantém os **5 pregões mais recentes presentes na base**, não 5 dias corridos;
+- um pregão é uma data BRT, no relógio de mercado normalizado, com pelo menos 1.000 ticks;
+- fins de semana, feriados e ticks de teste não reduzem a janela;
+- o cutoff é 00:00 BRT do pregão preservado mais antigo, e só os ticks anteriores a ele são removidos.
+
+**Execução:**
+
+- `trade_tick_retention_plan` é a prévia somente leitura;
+- `trade_tick_retention_run` processa no máximo 10 lotes de 20 mil linhas por chamada, em transação curta;
+- não roda entre 08:30 e 18:45 BRT em dia útil;
+- o pg_cron chama a função a cada 10 min, das 19:00 às 23:50 BRT.
+
+**Auditoria:** cada execução fica em `trade_tick_retention_runs`, com cutoff, sessões preservadas, quantidade a remover e removida, linhas preservadas e tamanho antes/depois.
+
+**Segurança:**
+
+- com menos de 5 pregões, nada é apagado;
+- somente `trade_bridge_ticks` é tocada.
+
+**Dependências auditadas:** a ingestão lê só o último tick; o LAB lê uma janela de ≤120 s dentro do horizonte de 240 min. Scanner, replay, PAPER, REAL e auditorias usam candles, estado e comandos.
 
 ## Retenção
 

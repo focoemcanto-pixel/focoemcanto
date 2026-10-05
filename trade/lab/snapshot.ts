@@ -23,6 +23,39 @@ const brt = (epochSeconds: number) => {
   );
   return { hour: Number(parts.hour), minute: Number(parts.minute), weekday: parts.weekday as string };
 };
+/**
+ * Analytic participation, proven at the confirmation candle only (no look-ahead): another strategy
+ * of the same dedup group (same rule that merges opportunities: same state, direction and levels
+ * within tolerance) that is itself CONFIRMED on this very candle with all of its own conditions met.
+ * A strategy that was merely forming, or confirms later, never receives this outcome. The definition
+ * travels only so the database can hash it; it is stripped before storage.
+ */
+export function participantEvidence(watch: SetupWatch, scan: ScannerResult) {
+  const primary = watch.candidate,
+    s = primary.analysis.setup!,
+    group = scan.groups.find((g) => g.participants.includes(primary.definition.id));
+  return (group?.participants || [])
+    .filter((id) => id !== primary.definition.id)
+    .flatMap((id) => {
+      const c = scan.candidates.find((x) => x.definition.id === id),
+        ps = c?.analysis.setup;
+      if (!c || !ps || c.state !== 'CONFIRMED' || ps.direction !== s.direction || !ps.conditions.every((x) => x.met)) return [];
+      return [
+        {
+          strategyId: c.definition.id,
+          version: c.definition.version,
+          state: c.state,
+          confirmedAt: scan.asOf,
+          conditions: ps.conditions.map((x) => ({ key: x.key, met: x.met })),
+          entry: ps.entry,
+          stop: ps.stop,
+          target: ps.targets[0],
+          rr: ps.rr,
+          definition: c.definition,
+        },
+      ];
+    });
+}
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 /**
  * Immutable snapshot of what the system knew at confirmation. Only features the scanner really
@@ -82,6 +115,7 @@ export function buildSetupSnapshot(
     rewardBRLPerContract: pointValue ? s.potentialPoints * pointValue : null,
     conditions: s.conditions.map((x) => ({ key: x.key, label: x.label, met: x.met, detail: x.detail })),
     participants: watch.participants,
+    participantEvidence: participantEvidence(watch, scan),
     regimes: scan.regimes,
     context: ctx ?? null,
     derived: {

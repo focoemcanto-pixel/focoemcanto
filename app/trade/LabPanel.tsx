@@ -203,6 +203,14 @@ export default function LabPanel() {
       </section>
       <section aria-label="Estratégias" className="trade-lab-strategies">
         <span className="trade-eyebrow">ESTRATÉGIAS · POR VERSÃO E ORIGEM</span>
+        {(data.analytics.opportunities || [])
+          .filter((x: any) => dataset === 'ALL' || x.dataset === dataset)
+          .map((x: any) => (
+            <p key={x.dataset} className="trade-lab-reason">
+              {datasetLabel[x.dataset] || x.dataset}: {x.opportunities} oportunidade(s) de mercado únicas, N={x.metrics.n} resolvidas. Uma
+              oportunidade confirmada por várias estratégias conta uma vez aqui; cada estratégia confirmada recebe o desfecho na própria estatística.
+            </p>
+          ))}
         {!groups.length && <p>Nenhum setup confirmado na janela{dataset === 'ALL' ? '' : ' para esta origem'}. A base começa a crescer com o feed LIVE.</p>}
         {groups.map((g: any) => {
           const m = g.metrics,
@@ -216,7 +224,7 @@ export default function LabPanel() {
                 <span>{datasetLabel[g.dataset] || g.dataset}</span>
                 <em>{g.status}</em>
                 <small>
-                  {g.observations} setups · N={m.n} resolvidos{g.statuses.AMBIGUOUS ? ` · ${g.statuses.AMBIGUOUS} ambíguos` : ''}
+                  {g.observations} setups{g.asParticipant ? ` (${g.asParticipant} como participante)` : ''} · N={m.n} resolvidos{g.statuses.AMBIGUOUS ? ` · ${g.statuses.AMBIGUOUS} ambíguos` : ''}
                   {g.statuses.OPEN ? ` · ${g.statuses.OPEN} abertos` : ''}
                 </small>
               </summary>

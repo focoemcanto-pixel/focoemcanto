@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, useId } from 'react';
-import { observationGroups, marketReading } from './decision-view';
+import { observationGroups, marketReading, entryWindow, serverSkew } from './decision-view';
 import type { Proposal } from '../../trade/bridge/approval';
 import type {
   Hypothesis,
@@ -110,7 +110,13 @@ export default function ScannerPanel({
     [error, setError] = useState(''),
     [stats, setStats] = useState<any[]>([]),
     [drawerOpen, setDrawerOpen] = useState(false),
-    [search, setSearch] = useState('');
+    [search, setSearch] = useState(''),
+    [now, setNow] = useState(() => Date.now()),
+    [skew, setSkew] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
   const dialogId = useId(),
     openButton = useRef<HTMLButtonElement>(null),
     dialogRef = useRef<HTMLDivElement>(null);
@@ -142,6 +148,7 @@ export default function ScannerPanel({
           d = await r.json();
         if (!r.ok) throw new Error(d.error);
         if (active) {
+          setSkew(serverSkew(r.headers.get('Date'), Date.now()));
           setData(d);
           setError('');
         }
@@ -641,6 +648,7 @@ export default function ScannerPanel({
             ),
             tp = tpEntry?.proposal,
             act = tpEntry?.actionability,
+            entry = entryWindow(tp?.expiresAt, now, skew),
             blocked = tp?.proposalState === 'RISK_BLOCKED',
             perContract =
               tp?.riskPerContractBRL ??
@@ -701,13 +709,13 @@ export default function ScannerPanel({
                       ? tp.riskBlock?.code === 'RISK_LIMIT_NOT_CONFIGURED'
                         ? 'NÃO EXECUTÁVEL · LIMITE DE RISCO NÃO CONFIGURADO'
                         : 'NÃO EXECUTÁVEL COM O LIMITE ATUAL'
-                      : act?.status === 'EXPIRED'
-                        ? 'PROPOSTA EXPIRADA · setup segue acompanhado no LAB'
+                      : act?.status === 'EXPIRED' || (act?.status === 'ACTIONABLE' && !entry.available)
+                        ? 'ENTRADA EXPIRADA · não perseguir preço · setup segue acompanhado no LAB'
                         : act?.status === 'MISSED'
                           ? 'PERDIDA · preço se afastou da referência (não perseguir)'
                           : act?.status === 'INVALIDATED'
                             ? 'INVALIDADA · preço além do stop técnico'
-                            : `EXECUTÁVEL EM PAPER · ${tp.quantity} contrato(s)`}
+                            : `${entry.label} · PAPER · ${tp.quantity} contrato(s)`}
                   </strong>
                   <small>
                     Risco mínimo · 1 contrato ={' '}

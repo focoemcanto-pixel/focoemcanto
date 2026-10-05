@@ -28,6 +28,11 @@ export type LabObservation = {
   outcome: { status: string; resultR: number | null; mfeR: number; maeR: number; minutesToTarget: number | null; minutesToStop: number | null; barsTracked: number } | null;
   paper: { resultR: number | null; mfeR?: number | null; maeR?: number | null; durationMinutes?: number | null; exitTime?: number | null } | null;
   features: { hourBRT: number | null; weekday: string | null; regimes: string[]; rr: number | null; trend5m: string | null };
+  /** Opportunity identity (scope + confirmation candle). */
+  scope?: string;
+  marketAsOf?: number;
+  /** Other strategies proven CONFIRMED on the same candle in the same dedup group (analytic credit only). */
+  participants?: { strategyId: string; version: string; configHash?: string }[];
 };
 type Sample = { at: number; r: number; mfeR: number | null; maeR: number | null; minutes: number | null; f: LabObservation['features']; direction: string };
 const mean = (a: number[]) => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : null);
@@ -144,25 +149,61 @@ export function segments(rows: Sample[], p = labParameters) {
     }),
   );
 }
-/** Per strategy × version × dataset. Versions and datasets are never merged. */
+/** Same market opportunity: same scope, confirmation candle, direction and set of confirmed strategies. */
+export function opportunityKey(o: LabObservation) {
+  // Without a recorded scope and confirmation candle (legacy rows) an observation is its own opportunity.
+  if (!o.scope || typeof o.marketAsOf !== 'number') return `id:${o.id}`;
+  const members = [`${o.strategyId}@${o.version}`, ...(o.participants || []).map((p) => `${p.strategyId}@${p.version}`)].sort();
+  return `${o.scope}|${o.marketAsOf}|${o.direction}|${members.join(',')}`;
+}
+/**
+ * Per strategy × version × dataset. Versions and datasets are never merged. A proven participant
+ * receives the opportunity's outcome in ITS OWN statistics (role PARTICIPANT) — once, even if it also
+ * has its own observation of the same opportunity. PAPER_FORWARD is credited only to the strategy whose
+ * levels were traded. `opportunities` counts each market opportunity once (global N).
+ */
 export function labAnalytics(observations: LabObservation[], p = labParameters) {
-  const groups = new Map<string, { strategyId: string; version: string; dataset: Dataset; resolved: Sample[]; statuses: Record<string, number> }>();
+  const groups = new Map<string, { strategyId: string; version: string; dataset: Dataset; resolved: Sample[]; statuses: Record<string, number>; asParticipant: number }>();
+  const credited = new Set<string>();
+  const add = (strategyId: string, version: string, s: ReturnType<typeof samples>[number], participant: boolean, opp: string) => {
+    // A strategy's own observation always counts; participant credit is skipped when that strategy
+    // already has this opportunity (own record or an earlier participant credit).
+    const once = `${strategyId}|${version}|${s.dataset}|${opp}`;
+    if (participant && credited.has(once)) return;
+    credited.add(once);
+    const key = `${strategyId}|${version}|${s.dataset}`;
+    const g = groups.get(key) || { strategyId, version, dataset: s.dataset, resolved: [], statuses: {}, asParticipant: 0 };
+    g.statuses[s.status] = (g.statuses[s.status] || 0) + 1;
+    if (participant) g.asParticipant++;
+    if (s.resolved) g.resolved.push(s.resolved);
+    groups.set(key, g);
+  };
+  // Own observations first, so a strategy's own record wins over participant credit for the same opportunity.
+  for (const o of observations) for (const s of samples(o)) add(o.strategyId, o.version, s, false, opportunityKey(o));
+  for (const o of observations)
+    for (const s of samples(o).filter((x) => x.dataset !== 'PAPER_FORWARD'))
+      for (const part of o.participants || []) add(part.strategyId, part.version, s, true, opportunityKey(o));
+  // Global: one row per opportunity per dataset, whatever the number of participating strategies.
+  const global = new Map<Dataset, { seen: Set<string>; resolved: Sample[]; n: number }>();
   for (const o of observations)
     for (const s of samples(o)) {
-      const key = `${o.strategyId}|${o.version}|${s.dataset}`;
-      const g = groups.get(key) || { strategyId: o.strategyId, version: o.version, dataset: s.dataset, resolved: [], statuses: {} };
-      g.statuses[s.status] = (g.statuses[s.status] || 0) + 1;
+      const g = global.get(s.dataset) || { seen: new Set<string>(), resolved: [], n: 0 };
+      const k = opportunityKey(o);
+      if (g.seen.has(k)) continue;
+      g.seen.add(k);
+      g.n++;
       if (s.resolved) g.resolved.push(s.resolved);
-      groups.set(key, g);
+      global.set(s.dataset, g);
     }
   return {
     parameters: p,
     groups: [...groups.values()]
       .map((g) => {
         const m = metrics(g.resolved, p);
-        return { strategyId: g.strategyId, version: g.version, dataset: g.dataset, observations: Object.values(g.statuses).reduce((a: number, b: number) => a + b, 0), statuses: g.statuses, metrics: m, ...strategyStatus(m, p), segments: segments(g.resolved, p) };
+        return { strategyId: g.strategyId, version: g.version, dataset: g.dataset, observations: Object.values(g.statuses).reduce((a: number, b: number) => a + b, 0), asParticipant: g.asParticipant, statuses: g.statuses, metrics: m, ...strategyStatus(m, p), segments: segments(g.resolved, p) };
       })
       .sort((a, b) => b.observations - a.observations),
+    opportunities: [...global].map(([dataset, g]) => ({ dataset, opportunities: g.n, metrics: metrics(g.resolved, p) })),
   };
 }
 /** Today's funnel: what the scanner found and what happened to it, traded or not. */
