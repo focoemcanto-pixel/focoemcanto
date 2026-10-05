@@ -5,10 +5,13 @@ import {
   pullbackParameters,
 } from '../core/strategy';
 import type { MarketFeatures } from './features';
+import { timeframeSeconds } from '../core/providers';
 import type {
+  DataRequirement,
   StrategyDefinition,
   StrategyEvaluator,
   StrategyCandidate,
+  Warmup,
 } from './types';
 /** Research thresholds, not optimized or evidence of an edge. Version changes required for rule changes. */
 export const scannerParameters = Object.freeze({
@@ -33,7 +36,7 @@ export const scannerParameters = Object.freeze({
   dedupEntryTicks: 6,
   dedupStopTicks: 10,
 });
-type Kind =
+export type Kind =
   | 'breakout'
   | 'retest'
   | 'support'
@@ -68,6 +71,63 @@ const definitions: [Kind, string, string][] = [
     'Estrutura + tendência + atividade',
   ],
 ];
+/** RuleStrategy rule-set version. 1.2.0: data requirements per rule instead of a global M5 warm-up. */
+export const ruleStrategyVersion = '1.2.0';
+/** Rules whose context, direction or regime depends on the M5 frame. The others are M1-only. */
+const usesM5Context: Kind[] = [
+  'reversal',
+  'ema-continuation',
+  'ema-cross',
+  'macd',
+  'confluence',
+  'range',
+];
+export function ruleDataRequirements(kind: Kind): DataRequirement[] {
+  const m1 =
+    kind === 'macd'
+      ? {
+          timeframe: '1m' as const,
+          bars: 35,
+          reason: 'MACD12/26/9 M1 + estrutura de 20 barras',
+        }
+      : {
+          timeframe: '1m' as const,
+          bars: scannerParameters.structureBars + 2,
+          reason: 'Estrutura de 20 barras M1 + barra anterior + barra atual',
+        };
+  return usesM5Context.includes(kind)
+    ? [
+        m1,
+        {
+          timeframe: '5m',
+          bars: scannerParameters.emaSlow + 1,
+          reason:
+            kind === 'range'
+              ? 'Regime RANGE medido no M5'
+              : 'Contexto EMA9/21 M5',
+        },
+      ]
+    : [m1];
+}
+/** Current-session bars available per required frame and the earliest time all requirements close. */
+export function warmupStatus(
+  requirements: DataRequirement[],
+  counts: Partial<Record<string, number>>,
+  asOf: number,
+): Warmup {
+  const frames = requirements.map((r) => ({
+    timeframe: r.timeframe,
+    have: counts[r.timeframe] || 0,
+    need: r.bars,
+  }));
+  const wait = Math.max(
+    0,
+    ...frames.map(
+      (f) => Math.max(0, f.need - f.have) * timeframeSeconds[f.timeframe],
+    ),
+  );
+  return { frames, readyAt: wait > 0 ? asOf + wait : null };
+}
 function definition(id: string, name: string): StrategyDefinition {
   return {
     id,
@@ -106,6 +166,13 @@ export class RuleStrategy implements StrategyEvaluator {
     name: string,
   ) {
     this.definition = definition(id, name);
+    this.definition.version = ruleStrategyVersion;
+    this.definition.dataRequirements = ruleDataRequirements(kind);
+    this.definition.requiredData = [
+      usesM5Context.includes(kind) ? 'Candles fechados M1/M5' : 'Candles fechados M1',
+      'OHLC',
+      'tick size',
+    ];
     if (kind === 'momentum' || kind === 'confluence')
       this.definition.requiredData.push(
         'Volume de ticks relativo — proxy de atividade',
@@ -130,14 +197,22 @@ export class RuleStrategy implements StrategyEvaluator {
       last = x.last,
       prev = x.previous,
       a = x.atr;
+    const requirements = d.dataRequirements || ruleDataRequirements(this.kind),
+      warmup = warmupStatus(
+        requirements,
+        { '1m': x.count, '5m': ctx.count },
+        s.asOf,
+      ),
+      needsM5 = requirements.some((r) => r.timeframe === '5m');
+    // Each rule waits only for the frames it reads; M1-only rules never wait for M5.
     const enough =
+      warmup.frames.every((f) => f.have >= f.need) &&
       !!last &&
       !!prev &&
       !!a &&
       x.support !== null &&
       x.resistance !== null &&
-      ctx.emaFast !== null &&
-      ctx.emaSlow !== null;
+      (!needsM5 || (ctx.emaFast !== null && ctx.emaSlow !== null));
     let direction =
       ctx.emaFast !== null && ctx.emaSlow !== null && ctx.emaFast < ctx.emaSlow
         ? -1
@@ -150,7 +225,10 @@ export class RuleStrategy implements StrategyEvaluator {
       pattern = false,
       trigger = false,
       region: [number, number] = [lo, hi],
-      reason = '';
+      reason = '',
+      level: number | null = null,
+      levelLabel = '',
+      touch = false;
     if (enough && last && prev && a) {
       const up = ctx.emaFast! > ctx.emaSlow!,
         body = Math.abs(last.close - last.open),
@@ -342,6 +420,43 @@ export class RuleStrategy implements StrategyEvaluator {
             'EMA M5 + rompimento de estrutura M1 + atividade relativa ≥ 1,2';
           break;
       }
+      switch (this.kind) {
+        case 'breakout':
+        case 'reversal':
+        case 'expansion':
+        case 'confluence':
+          level = direction === 1 ? hi + buffer : lo - buffer;
+          levelLabel = 'fechamento além da estrutura';
+          break;
+        case 'false-breakout':
+          level = direction === 1 ? lo - buffer : hi + buffer;
+          levelLabel = 'extremo além da estrutura';
+          break;
+        case 'retest':
+          level = (region[0] + region[1]) / 2;
+          levelLabel = 'nível rompido';
+          touch = true;
+          break;
+        case 'support':
+          level = lo;
+          levelLabel = 'suporte';
+          touch = true;
+          break;
+        case 'resistance':
+          level = hi;
+          levelLabel = 'resistência';
+          touch = true;
+          break;
+        case 'range':
+          level = direction === 1 ? lo : hi;
+          levelLabel = 'borda do range';
+          touch = true;
+          break;
+        default:
+          level =
+            direction === 1 ? last.high + buffer : last.low - buffer;
+          levelLabel = 'rompimento do candle atual';
+      }
     }
     const entry = last?.close || 0,
       stop =
@@ -357,7 +472,12 @@ export class RuleStrategy implements StrategyEvaluator {
         'data',
         'Dados e timeframes fechados',
         enough,
-        'M1: 22+ barras; M5: 22+ barras; indicadores adicionais exigem aquecimento próprio.',
+        requirements
+          .map(
+            (r) =>
+              `${r.timeframe === '1m' ? 'M1' : 'M5'}: ${r.bars}+ barras da sessão atual (${r.reason})`,
+          )
+          .join('; ') + '.',
       ),
       condition(
         'context',
@@ -446,6 +566,17 @@ export class RuleStrategy implements StrategyEvaluator {
       detectedAt: s.asOf,
       validUntil: s.asOf + p.lifetimeMinutes * 60,
       regime: f.regimes,
+      warmup,
+      proximity:
+        enough && last && level !== null
+          ? {
+              level,
+              label: levelLabel,
+              distancePoints: touch
+                ? Math.abs(last.close - level)
+                : Math.max(0, direction * (level - last.close)),
+            }
+          : undefined,
     };
   }
 }
@@ -455,6 +586,25 @@ const pullback: StrategyEvaluator = {
     ...definition(original.id, 'Tendência + pullback + confirmação'),
     parameters: { ...pullbackParameters, lifetimeMinutes: 10 },
     timeframes: ['15m', '5m', '1m'],
+    dataRequirements: [
+      {
+        timeframe: '15m',
+        bars:
+          pullbackParameters.contextSlowPeriod +
+          pullbackParameters.contextSlopeBars,
+        reason: 'Contexto EMA4/8 M15 + inclinação',
+      },
+      {
+        timeframe: '5m',
+        bars: pullbackParameters.structureLookbackBars,
+        reason: 'Estrutura M5 da sessão atual',
+      },
+      {
+        timeframe: '1m',
+        bars: pullbackParameters.confirmationCloses + 1,
+        reason: 'Fechamentos de confirmação M1',
+      },
+    ],
   },
   evaluate(s, f) {
     const analysis = original.evaluate(s),
@@ -478,6 +628,15 @@ const pullback: StrategyEvaluator = {
       detectedAt: s.asOf,
       validUntil: s.asOf + 600,
       regime: f.regimes,
+      warmup: warmupStatus(
+        this.definition.dataRequirements!,
+        {
+          '15m': f.frames['15m']?.count,
+          '5m': f.frames['5m']?.count,
+          '1m': f.frames['1m']?.count,
+        },
+        s.asOf,
+      ),
       projected: p
         ? {
             entry: p.entry,

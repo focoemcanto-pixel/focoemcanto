@@ -1,7 +1,33 @@
 'use client';
 import { useEffect, useRef, useState, useId } from 'react';
 import { observationGroups, marketReading } from './decision-view';
-import type { ScannerResult, SetupWatch } from '../../trade/scanner/types';
+import type { Proposal } from '../../trade/bridge/approval';
+import type {
+  Hypothesis,
+  ScannerResult,
+  SetupWatch,
+} from '../../trade/scanner/types';
+const stageLabel: Record<string, string> = {
+  CONFIRMED: 'CONFIRMADO',
+  WAITING_TRIGGER: 'AGUARDANDO GATILHO',
+  FORMING: 'FORMANDO',
+  FAR: 'LONGE DO GATILHO',
+  REJECTED: 'REJEITADA',
+  WARMING_UP: 'AQUECENDO DADOS',
+  UNAVAILABLE_DATA: 'DADOS INDISPONÍVEIS',
+  DISABLED: 'DESATIVADA',
+};
+const blockerLabel: Record<string, string> = {
+  REGIME_MISMATCH: 'contexto incompatível',
+  CONTEXT_NOT_MET: 'contexto da regra ausente',
+  RISK_OUT_OF_BOUNDS: 'risco técnico fora dos limites',
+  INVALID_LEVELS: 'níveis inválidos',
+  FEED_NOT_LIVE: 'feed antigo ou offline',
+  DATA_UNAVAILABLE: 'dado ainda não fornecido pelo feed',
+  WARMING_UP: 'aguardando barras da sessão atual',
+  DISABLED: 'desativada',
+  DIRECTION_CONFLICT: 'conflito compra × venda',
+};
 const labels: Record<string, string> = {
   FORMING: 'EM FORMAÇÃO',
   WAITING_TRIGGER: 'AGUARDANDO GATILHO',
@@ -13,6 +39,7 @@ const labels: Record<string, string> = {
   ACCEPTED: 'ACEITO NO PAPER',
   OPEN_PAPER: 'PAPER ABERTO',
   CLOSED_PAPER: 'PAPER ENCERRADO',
+  RISK_BLOCKED: 'BLOQUEADA POR RISCO',
   INSUFFICIENT_DATA: 'DADOS INSUFICIENTES',
   UNAVAILABLE_DATA: 'DADOS INDISPONÍVEIS',
   REJECTED: 'DESCARTADA PELAS REGRAS',
@@ -23,6 +50,31 @@ const time = (n: number) =>
   new Date(n * 1000).toLocaleTimeString('pt-BR', {
     timeZone: 'America/Sao_Paulo',
   });
+const clock = (n: number) =>
+  new Date(n * 1000).toLocaleTimeString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+const money = (n: number) =>
+  n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+/** One short line saying why a hypothesis is where it is. */
+function hypothesisReason(h: Hypothesis) {
+  if (h.stage === 'WARMING_UP')
+    return h.warmup?.readyAt
+      ? `${h.warmup.frames
+          .filter((f) => f.have < f.need)
+          .map(
+            (f) =>
+              `${f.timeframe === '1m' ? 'M1' : f.timeframe === '5m' ? 'M5' : 'M15'} ${f.have}/${f.need}`,
+          )
+          .join(' · ')} · previsto ${clock(h.warmup.readyAt)}`
+      : 'aguardando barras da sessão atual';
+  if (h.blockers.length)
+    return `motivo: ${blockerLabel[h.blockers[0].code] || h.blockers[0].code}`;
+  if (h.stage === 'CONFIRMED') return 'todas as condições obrigatórias';
+  return h.missing.length ? `falta: ${h.missing[0]}` : '';
+}
 export default function ScannerPanel({
   source,
   cursor,
@@ -41,6 +93,17 @@ export default function ScannerPanel({
       watches: SetupWatch[];
       scope: string;
       feedLive: boolean;
+      proposalBlocks?: { setupWatchId: string; strategy: string; reason: string }[];
+      technicalProposals?: {
+        setupWatchId: string;
+        strategy: string;
+        proposal: Proposal;
+      }[];
+      riskPolicy?: {
+        paper: { maxRiskBRL: number | null; source: string };
+        maxContracts: number;
+        pointValue: number | null;
+      };
     }>(),
     [error, setError] = useState(''),
     [stats, setStats] = useState<any[]>([]),
@@ -216,8 +279,29 @@ export default function ScannerPanel({
       ? !!initial &&
         initial.summary.UNAVAILABLE_DATA < initial.candidates.length
       : data?.feedLive === true);
-  const visible = feedAvailable ? grouped : [];
+  // A watch whose structure moved away (FAR) or was blocked stays in the history, not on the desk.
+  const stageNow = (id: string) =>
+    scan?.hypotheses?.find((h) => h.id === id)?.stage;
+  const visible = feedAvailable
+    ? grouped.filter((g) => {
+        const stage = stageNow(g.watch.candidate.definition.id);
+        return !stage || stage === 'FORMING' || stage === 'WAITING_TRIGGER';
+      })
+    : [];
   const primary = visible[0];
+  const desk = feedAvailable ? scan?.desk : undefined,
+    coverage = scan?.desk?.coverage,
+    hypotheses = scan?.hypotheses || [],
+    stageCount = (stage: string) =>
+      feedAvailable ? hypotheses.filter((h) => h.stage === stage).length : 0,
+    nearest = (desk?.nearest || [])
+      .map((id) => hypotheses.find((h) => h.id === id))
+      .filter((h): h is Hypothesis => !!h),
+    confirmed = feedAvailable
+      ? (scan?.candidates || []).filter(
+          (c) => c.state === 'CONFIRMED' && c.analysis.setup,
+        )
+      : [];
   const focused =
     scan?.opportunities.find((c) => c.state === 'CONFIRMED') ||
     scan?.opportunities.find((c) => c.state === 'WAITING_TRIGGER') ||
@@ -268,14 +352,19 @@ export default function ScannerPanel({
           {source === 'mt5' && !feedAvailable ? 'AGUARDANDO FEED' : 'ATIVO'}
         </span>
       </div>
-      <h3>{reading.monitoring} estratégias monitoradas</h3>
+      <h3>{coverage?.registered ?? reading.evaluated} estratégias cadastradas</h3>
       <p>
-        {scan?.summary.CONFIRMED || 0} confirmada(s) ·{' '}
-        {scan?.summary.WAITING_TRIGGER || 0} aguardando gatilho
+        {feedAvailable ? (coverage?.operational ?? 0) : 0} operacionais com os
+        dados atuais · {coverage?.awaitingData ?? 0} aguardando dados adicionais
+        {feedAvailable && coverage?.warmingUp
+          ? ` · ${coverage.warmingUp} aquecendo${coverage.nextReadyAt ? ` (a partir de ${clock(coverage.nextReadyAt)})` : ''}`
+          : ''}
       </p>
       <small>
-        {reading.evaluated} avaliações, incluindo hipóteses sem dados. O motor
-        continua trabalhando nos bastidores.
+        {scan?.summary.CONFIRMED || 0} confirmada(s) ·{' '}
+        {scan?.summary.WAITING_TRIGGER || 0} aguardando gatilho ·{' '}
+        {stageCount('FORMING')} em formação · {stageCount('FAR')} longe do
+        gatilho · {scan?.summary.REJECTED || 0} rejeitada(s)
       </small>
       <button
         ref={openButton}
@@ -303,7 +392,9 @@ export default function ScannerPanel({
         key={w.id}
       >
         <div className="trade-observation-heading">
-          <span className="trade-eyebrow">{labels[w.state]}</span>
+          <span className="trade-eyebrow">
+            {w.state === 'FORMING' ? 'SETUP EM FORMAÇÃO' : labels[w.state]}
+          </span>
           <strong className={c.analysis.trend === 'down' ? 'short' : 'long'}>
             {c.analysis.trend === 'down' ? 'VENDA' : 'COMPRA'}
           </strong>
@@ -315,18 +406,33 @@ export default function ScannerPanel({
         </p>
         <p className="trade-observation-next">
           <span>O QUE FALTA</span>
-          {missing?.label || 'Aguardar a proposta'}
-          <small>{c.trigger}</small>
+          {c.analysis.conditions
+            .filter((x) => !x.met)
+            .map((x) => x.label)
+            .join(' · ') ||
+            missing?.label ||
+            'Aguardar a proposta'}
+          <small>
+            Gatilho: {c.trigger}
+            {c.proximity?.level != null &&
+              ` · ${c.proximity.label}: ${num(c.proximity.level)}`}
+            {c.proximity?.distancePoints != null &&
+              c.proximity.distancePoints > 0 &&
+              ` (${num(c.proximity.distancePoints)} pts)`}
+          </small>
+        </p>
+        <p className="trade-hypothesis-note">
+          Ainda não é uma recomendação de entrada.
         </p>
         {!p && <p className="trade-observation-next">Aguardando estrutura válida para calcular entrada, stop e alvo.</p>}
         {p && (
           <div className="trade-projected-levels">
             <div>
-              <small>PROJEÇÃO PRELIMINAR</small>
+              <small>PROJEÇÃO PRELIMINAR · REFERÊNCIA</small>
               <strong>{num(p.entry)}</strong>
             </div>
             <div>
-              <small>STOP TÉCNICO</small>
+              <small>INVALIDAÇÃO PRELIMINAR</small>
               <strong>{num(p.stop)}</strong>
             </div>
             <div>
@@ -421,8 +527,9 @@ export default function ScannerPanel({
               {professor ? 'Raciocínio completo' : 'Detalhes do motor'}
             </h2>
             <p>
-              {reading.evaluated} estratégias avaliadas ·{' '}
-              {scan?.summary.REJECTED || 0} descartadas · {reading.regime}
+              {coverage?.registered ?? reading.evaluated} cadastradas ·{' '}
+              {feedAvailable ? (coverage?.operational ?? 0) : 0} operacionais ·{' '}
+              {coverage?.awaitingData ?? 0} aguardando dados · {reading.regime}
             </p>
           </div>
           <button onClick={closeDrawer} aria-label="Fechar detalhes do motor">
@@ -430,9 +537,69 @@ export default function ScannerPanel({
           </button>
         </header>
         <p className="trade-drawer-note">
-          Regras, indicadores e condições de cada hipótese. A primeira hipótese
-          em foco representa o estado atual; não há ranking de rentabilidade.
+          Regras, indicadores e condições de cada hipótese. A ordem mostra a
+          proximidade do gatilho com pontuação explicada; não é ranking de
+          rentabilidade e nunca confirma um setup.
         </p>
+        <section className="trade-diagnostics" aria-label="Diagnóstico das estratégias">
+          <span className="trade-eyebrow">
+            DIAGNÓSTICO · {hypotheses.length} ESTRATÉGIAS
+          </span>
+          {!feedAvailable && source === 'mt5' && (
+            <p className="trade-operation-error">
+              Feed antigo ou offline: nenhuma hipótese é avaliada.
+            </p>
+          )}
+          {hypotheses.map((h) => (
+            <details key={h.id} data-stage={h.stage}>
+              <summary>
+                <strong>{h.name}</strong>
+                <span>
+                  {h.total > 0 &&
+                  !['WARMING_UP', 'UNAVAILABLE_DATA', 'DISABLED'].includes(h.stage)
+                    ? `${h.met}/${h.total} · `
+                    : ''}
+                  {stageLabel[h.stage]}
+                </span>
+                <small>{hypothesisReason(h)}</small>
+              </summary>
+              <p>{h.why}</p>
+              {h.blockers.map((b) => (
+                <p key={b.code}>
+                  {blockerLabel[b.code] || b.code}: {b.message}
+                </p>
+              ))}
+              {h.factors.length > 0 && (
+                <table>
+                  <caption>
+                    Pontuação {h.score}/100 · posição {h.rank}. Soma dos pontos
+                    dividida pelos pesos aplicáveis; não é previsão de resultado.
+                  </caption>
+                  <tbody>
+                    {h.factors.map((f) => (
+                      <tr key={f.key}>
+                        <th scope="row">{f.label}</th>
+                        <td>
+                          {num(f.points)} / {f.weight}
+                        </td>
+                        <td>{f.detail}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {h.projection && (
+                <p>
+                  PROJEÇÃO PRELIMINAR (não é proposta): referência{' '}
+                  {num(h.projection.entry)} · invalidação{' '}
+                  {num(h.projection.stop)} · alvo {num(h.projection.target)} ·
+                  válida até {clock(h.validUntil)}.
+                </p>
+              )}
+              <p>Gatilho: {h.trigger}</p>
+            </details>
+          ))}
+        </section>
         {renderLibrary()}
       </div>
     </div>
@@ -454,25 +621,175 @@ export default function ScannerPanel({
           {error}
         </p>
       )}
-      {!primary && (
-        <div className="trade-no-opportunity">
-          <span className="trade-eyebrow">
-            {scan?.summary.CONFIRMED && feedAvailable
-              ? 'HIPÓTESE CONFIRMADA'
-              : 'NENHUMA ENTRADA AGORA'}
-          </span>
-          <h3>
-            {scan?.summary.CONFIRMED && feedAvailable
-              ? 'Confira a proposta PAPER.'
-              : 'Continuarei acompanhando.'}
-          </h3>
+      {desk?.verdict === 'CONFLICT' && (
+        <div className="trade-no-opportunity" data-verdict="CONFLICT">
+          <span className="trade-eyebrow">{desk.headline}</span>
+          <h3>Proposta bloqueada.</h3>
+          <p className="trade-operation-error">{desk.detail}</p>
+        </div>
+      )}
+      {desk?.verdict === 'CONFIRMED' &&
+        confirmed.slice(0, 1).map((c) => {
+          const setup = c.analysis.setup!,
+            error = data?.proposalBlocks?.find(
+              (x) => x.strategy === c.definition.id,
+            ),
+            tp = data?.technicalProposals?.find(
+              (x) => x.strategy === c.definition.id,
+            )?.proposal,
+            blocked = tp?.proposalState === 'RISK_BLOCKED',
+            perContract =
+              tp?.riskPerContractBRL ??
+              (data?.riskPolicy?.pointValue
+                ? setup.riskPoints * data.riskPolicy.pointValue
+                : null),
+            limit = tp?.sizing?.maxRiskBRL ?? null,
+            source = tp?.sizing?.maxRiskSource;
+          return (
+            <article
+              className="trade-observation featured"
+              data-verdict="CONFIRMED"
+              data-proposal={tp?.proposalState}
+              key={setup.id}
+            >
+              <div className="trade-observation-heading">
+                <span className="trade-eyebrow">SETUP CONFIRMADO</span>
+                <strong className={setup.direction === 'short' ? 'short' : 'long'}>
+                  {setup.direction === 'short' ? 'VENDA' : 'COMPRA'}
+                </strong>
+              </div>
+              <h3>{c.definition.name}</h3>
+              <p className="trade-observation-progress">
+                {setup.conditions.length} de {setup.conditions.length} condições
+                · v{c.definition.version} · {time(setup.timestamp)}
+              </p>
+              <div className="trade-projected-levels">
+                <div>
+                  <small>ENTRADA / REFERÊNCIA</small>
+                  <strong>{num(setup.entry)}</strong>
+                </div>
+                <div>
+                  <small>STOP TÉCNICO</small>
+                  <strong>{num(setup.stop)}</strong>
+                </div>
+                <div>
+                  <small>ALVO</small>
+                  <strong>{num(setup.targets[0])}</strong>
+                </div>
+                <div>
+                  <small>RISCO TÉCNICO · R/R</small>
+                  <strong>
+                    {num(setup.riskPoints)} pts · 1 : {num(setup.rr)}
+                  </strong>
+                </div>
+              </div>
+              {tp && (
+                <div
+                  className="trade-execution-status"
+                  data-state={tp.proposalState}
+                  role="status"
+                >
+                  <span>
+                    PROPOSTA TÉCNICA · STATUS DE EXECUÇÃO
+                  </span>
+                  <strong>
+                    {blocked
+                      ? tp.riskBlock?.code === 'RISK_LIMIT_NOT_CONFIGURED'
+                        ? 'NÃO EXECUTÁVEL · LIMITE DE RISCO NÃO CONFIGURADO'
+                        : 'NÃO EXECUTÁVEL COM O LIMITE ATUAL'
+                      : `PRONTA · ${tp.quantity} contrato(s)`}
+                  </strong>
+                  <small>
+                    Risco mínimo · 1 contrato ={' '}
+                    {perContract != null ? money(perContract) : '—'} · limite
+                    configurado {limit != null ? money(limit) : 'ausente'}
+                    {!blocked && ` · risco total ${money(tp.riskBRL)}`}
+                  </small>
+                  <details>
+                    <summary>
+                      {blocked ? 'Entender o bloqueio' : 'Entender o tamanho'}
+                    </summary>
+                    {blocked ? (
+                      <>
+                        <p>{tp.riskBlock?.message}</p>
+                        <p>
+                          Diferença:{' '}
+                          {tp.riskBlock?.excessBRL != null
+                            ? money(tp.riskBlock.excessBRL)
+                            : '—'}{' '}
+                          · quantidade permitida: 0.
+                        </p>
+                        <p>
+                          A proposta técnica segue em observação hipotética para
+                          estudo. Não é uma operação PAPER nem uma ordem.
+                        </p>
+                      </>
+                    ) : (
+                      <p>
+                        {tp.sizing?.rule}. A quantidade se adapta ao risco; o
+                        stop técnico não é alterado.
+                      </p>
+                    )}
+                    <p>
+                      Limite:{' '}
+                      {source === 'compat-default'
+                        ? 'valor de compatibilidade do laboratório PAPER — defina TRADE_PAPER_MAX_RISK_BRL para torná-lo explícito'
+                        : source || '—'}
+                      .
+                    </p>
+                  </details>
+                </div>
+              )}
+              {!tp && error && (
+                <p className="trade-operation-error" role="status">
+                  PROPOSTA TÉCNICA INDISPONÍVEL · {error.reason}
+                </p>
+              )}
+              {!blocked && !error && (
+                <p className="trade-observation-next">
+                  <span>PRÓXIMO PASSO</span>
+                  A proposta operacional está na mesa acima. A decisão de entrar
+                  é sua.
+                  <small>
+                    Nenhuma ordem é enviada sem a sua confirmação.
+                  </small>
+                </p>
+              )}
+            </article>
+          );
+        })}
+      {!primary && desk?.verdict !== 'CONFIRMED' && desk?.verdict !== 'CONFLICT' && (
+        <div className="trade-no-opportunity" data-verdict={desk?.verdict}>
+          <span className="trade-eyebrow">NENHUMA ENTRADA AGORA</span>
+          <h3>Continuarei acompanhando.</h3>
           <p>
             {source === 'mt5' && !feedAvailable
               ? 'Feed antigo ou offline. Novas confirmações estão bloqueadas.'
-              : `O motor acompanha ${reading.monitoring} estratégias. ${reading.regime}.`}
+              : desk?.verdict === 'WARMING_UP'
+                ? `${desk.detail}${coverage?.nextReadyAt ? ` Primeiras estratégias a partir de ${clock(coverage.nextReadyAt)}.` : ''}`
+                : `${desk?.detail || `O motor acompanha ${reading.monitoring} estratégias.`} ${reading.regime}.`}
           </p>
         </div>
       )}
+      {nearest.length > 0 &&
+        (!primary || nearest.some((h) => h.stage === 'FAR')) &&
+        desk?.verdict !== 'CONFLICT' && (
+          <section className="trade-nearest" aria-label="Hipóteses mais próximas">
+            <span className="trade-eyebrow">
+              {nearest.length > 1 ? 'MAIS PRÓXIMAS' : 'MAIS PRÓXIMA'}
+            </span>
+            <ol>
+              {nearest.map((h) => (
+                <li key={h.id} title={h.why}>
+                  <strong>{h.name}</strong>
+                  <span>
+                    {h.met}/{h.total} condições · {stageLabel[h.stage]}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        )}
       {primary && card(primary, true)}
       {visible.length > 1 && (
         <details className="trade-other-opportunities">

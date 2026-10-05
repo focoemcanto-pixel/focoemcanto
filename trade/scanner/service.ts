@@ -1,4 +1,4 @@
-import { config, rpc, type BridgeEnv } from '../bridge/config';
+import { config, rpc, paperRiskLimit, type BridgeEnv } from '../bridge/config';
 import { MT5MarketDataProvider, feedStatus } from '../bridge/mt5';
 import {
   generateMockCandles,
@@ -6,7 +6,11 @@ import {
   CandleAggregator,
 } from '../core/providers';
 import { scanMarket, advanceWatches } from './engine';
-import { makeProposal } from '../bridge/approval';
+import {
+  buildTechnicalProposal,
+  sizeProposal,
+  type Proposal,
+} from '../bridge/approval';
 import { scannerParameters } from './strategies';
 import { instrumentValue } from '../bridge/instruments';
 import type { SetupWatch, ScannerResult } from './types';
@@ -59,12 +63,94 @@ export async function runScanner(
     throw new Error(
       'Replay voltou no tempo. Inicie uma nova sessão para preservar o histórico anterior.',
     );
+  const risk = paperRiskLimit(env),
+    pointValue = (() => {
+      try {
+        return instrumentValue(symbol, 'PAPER', data?.state).pointValue;
+      } catch {
+        return null;
+      }
+    })(),
+    riskPolicy = {
+      paper: risk,
+      maxContracts: c.maxContracts,
+      pointValue,
+    };
+  /**
+   * Confirmed setup → technical proposal → central Risk Engine. A setup whose single contract
+   * exceeds the limit is persisted as RISK_BLOCKED (quantity 0) for hypothetical study; it is
+   * never sent to the PAPER provider and never becomes an order. Idempotent per watch.
+   */
+  const propose = async (watches: SetupWatch[], regimes: string[]) => {
+    const technicalProposals: {
+        setupWatchId: string;
+        strategy: string;
+        proposal: Proposal;
+      }[] = [],
+      proposalBlocks: { setupWatchId: string; strategy: string; reason: string }[] = [];
+    if (!available) return { technicalProposals, proposalBlocks };
+    for (const w of watches) {
+      if (
+        !['CONFIRMED', 'PROPOSED', 'RISK_BLOCKED'].includes(w.state) ||
+        w.lastAsOf !== snapshot.asOf ||
+        w.candidate.analysis.conflicts.length ||
+        !w.candidate.analysis.setup
+      )
+        continue;
+      const strategy = w.candidate.definition.id;
+      try {
+        const contract = instrumentValue(symbol, 'PAPER', data?.state),
+          technical = buildTechnicalProposal(w.candidate.analysis, {
+            mode: 'PAPER',
+            source,
+            symbol,
+            cursor: source === 'mt5' ? snapshot.asOf : cursor,
+            asOf: snapshot.asOf,
+            liveAuthorized: false,
+          }),
+          p = sizeProposal(technical, {
+            pointValue: contract.pointValue,
+            currency: contract.currency,
+            pointValueSource: contract.source,
+            maxContracts: c.maxContracts,
+            maxRiskBRL: risk.maxRiskBRL,
+            maxRiskSource: risk.source,
+          });
+        const saved = await rpc(env, 'trade_propose', {
+          p_owner: tradeOwner,
+          p_bridge: c.bridgeId,
+          p_proposal: {
+            ...p,
+            scope,
+            setupWatchId: w.id,
+            participants: w.participants,
+            regimes,
+          },
+        });
+        technicalProposals.push({
+          setupWatchId: w.id,
+          strategy,
+          proposal: (saved?.payload as Proposal) || p,
+        });
+      } catch (e) {
+        proposalBlocks.push({
+          setupWatchId: w.id,
+          strategy,
+          reason: e instanceof Error ? e.message.slice(0, 300) : 'Proposta indisponível',
+        });
+      }
+    }
+    return { technicalProposals, proposalBlocks };
+  };
   if (old.asOf === snapshot.asOf) {
+    const scan = scanMarket(snapshot, undefined, available);
     return {
       ...old,
-      scan: scanMarket(snapshot, undefined, available),
+      scan,
       feedLive: available,
       scope,
+      riskPolicy,
+      ...(await propose(old.watches || [], scan.regimes)),
     };
   }
   let watches: SetupWatch[] = old.watches || [],
@@ -104,42 +190,7 @@ export async function runScanner(
       feedLive: available,
     },
   });
-  if (available) {
-    for (const w of (saved.watches || []) as SetupWatch[]) {
-      if (
-        w.state !== 'CONFIRMED' ||
-        w.lastAsOf !== snapshot.asOf ||
-        w.candidate.analysis.conflicts.length ||
-        !w.candidate.analysis.setup
-      )
-        continue;
-      const contract = instrumentValue(symbol, 'PAPER', data?.state),
-        p = makeProposal(w.candidate.analysis, {
-          mode: 'PAPER',
-          source,
-          symbol,
-          quantity: 1,
-          max: c.maxContracts,
-          pointValue: contract.pointValue,
-          currency: contract.currency,
-          pointValueSource: contract.source,
-          cursor: source === 'mt5' ? snapshot.asOf : cursor,
-          asOf: snapshot.asOf,
-          liveAuthorized: false,
-        });
-      await rpc(env, 'trade_propose', {
-        p_owner: tradeOwner,
-        p_bridge: c.bridgeId,
-        p_proposal: {
-          ...p,
-          scope,
-          setupWatchId: w.id,
-          participants: w.participants,
-          regimes: scan.regimes,
-        },
-      });
-    }
-  }
+  const proposals = await propose(saved.watches || [], scan.regimes);
   return {
     ...(await rpc(env, 'trade_scanner_read', {
       p_owner: tradeOwner,
@@ -147,5 +198,7 @@ export async function runScanner(
     })),
     feedLive: available,
     scope,
+    riskPolicy,
+    ...proposals,
   };
 }

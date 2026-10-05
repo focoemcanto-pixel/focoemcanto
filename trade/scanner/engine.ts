@@ -5,6 +5,7 @@ import type { Timeframe } from '../core/types';
 import type { MarketSnapshot } from '../core/types';
 import { calculateFeatures } from './features';
 import { strategyRegistry, scannerParameters } from './strategies';
+import { buildHypotheses, deskSummary } from './proximity';
 import type {
   ScannerResult,
   StrategyEvaluator,
@@ -122,6 +123,8 @@ export function scanMarket(
       });
     }
   }
+  const feedBlocked = snapshot.source === 'live' && !feedLive,
+    hypotheses = buildHypotheses(candidates, feedBlocked);
   return {
     lastBar: snapshot.candles['1m'].at(-1),
     asOf: snapshot.asOf,
@@ -131,6 +134,8 @@ export function scanMarket(
     opportunities,
     groups,
     summary,
+    hypotheses,
+    desk: deskSummary(hypotheses, candidates, feedBlocked),
   };
 }
 const transitions: Record<WatchState, WatchState[]> = {
@@ -155,8 +160,10 @@ const transitions: Record<WatchState, WatchState[]> = {
     'EXPIRED',
     'REJECTED_BY_USER',
   ],
-  CONFIRMED: ['PROPOSED', 'INVALIDATED', 'EXPIRED'],
+  CONFIRMED: ['PROPOSED', 'RISK_BLOCKED', 'INVALIDATED', 'EXPIRED'],
   PROPOSED: ['ACCEPTED', 'REJECTED_BY_USER', 'INVALIDATED', 'EXPIRED'],
+  // Technical proposal exists but the risk limit allows zero contracts. Terminal; never an order.
+  RISK_BLOCKED: [],
   ACCEPTED: ['OPEN_PAPER', 'CLOSED_PAPER'],
   REJECTED_BY_USER: [],
   INVALIDATED: [],
@@ -271,6 +278,7 @@ export function advanceWatches(
             'EXPIRED',
             'CLOSED_PAPER',
             'REJECTED_BY_USER',
+            'RISK_BLOCKED',
           ].includes(w.state),
       )
     )

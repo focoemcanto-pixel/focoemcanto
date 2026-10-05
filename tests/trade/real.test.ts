@@ -197,6 +197,12 @@ const blocks: Record<string, (f: ReturnType<typeof fixture>) => void> = {
   'local account': (f) => (f.ctx.bridge.state.localAccountAuthorized = false),
   'local financial limits': (f) =>
     (f.ctx.bridge.state.localLimits.maxRiskBRL = 0),
+  'policy risk limit not configured': (f) =>
+    delete (f.ctx.policy as any).max_risk_brl,
+  'risk blocked proposal': (f) =>
+    Object.assign(f.p, { proposalState: 'RISK_BLOCKED', quantity: 0, riskBRL: 0 }),
+  'proposal not sized by the risk engine': (f) =>
+    delete (f.p as any).proposalState,
 };
 for (const [name, change] of Object.entries(blocks))
   test('REAL fail-closed: ' + name, () => {
@@ -310,6 +316,7 @@ async function database() {
     '20261005000359_real_execution_fail_closed.sql',
     '20261005091111_pre_real_homologation.sql',
     '20261005092318_pre_real_account_mode.sql',
+    '20261005150000_risk_blocked_technical_proposal.sql',
   ])
     await db.exec(readFileSync('supabase/migrations/' + name, 'utf8'));
   return db;
@@ -700,4 +707,81 @@ test('Postgres rechecks additive financial limits even with every old gate autho
  if(value===0){f.p.quantity=3;assert.equal(await valid(),false);f.p.quantity=1;continue;}
  await db.query(`update trade_execution_policy set ${column}=$1`,[value]);assert.equal(await valid(),false);await db.exec('update trade_execution_policy set account_trade_mode=2,max_position_contracts=2,max_orders_per_session=5,max_orders_per_day=10,max_notional_brl=1000000');}
  }finally{await db.close();}
+});
+
+test('REAL RISK_BLOCKED: no readiness, nonce, signature, provider call, proof or command', async () => {
+  const db = await database(),
+    f = fixture(),
+    original = globalThis.fetch,
+    called: string[] = [];
+  try {
+    await seed(db, f);
+    const blocked = { ...f.p, id: crypto.randomUUID(), quantity: 0, riskBRL: 0, potentialBRL: 0, proposalState: 'RISK_BLOCKED' as const, setup: { ...f.p.setup, id: 'risk-blocked-real' } };
+    const r = realReadiness(f.ctx, f.env, blocked, f.now);
+    assert.equal(r.canExecute, false);
+    assert.equal(r.gates.find((g) => g.key === 'sizing')?.ok, false);
+    const row = (await db.query<any>('select trade_propose($1,$2,$3) result', ['focoos-admin', bridge, blocked])).rows[0].result;
+    assert.equal(row.state, 'BLOQUEADA POR RISCO');
+    await assert.rejects(
+      db.query('select trade_propose($1,$2,$3)', ['focoos-admin', bridge, { ...blocked, id: crypto.randomUUID(), setup: { ...blocked.setup, id: 'bad' }, quantity: 1 }]),
+      /zero quantity/,
+    );
+    const c = await signed({ ...f, p: { ...blocked, quantity: 1 } as any });
+    await assert.rejects(
+      db.query("select trade_real_prepare('focoos-admin',$1,$2,$3,$4,2,$5,15000,true)", [blocked.id, 'a'.repeat(64), c, {}, account]),
+    );
+    await assert.rejects(
+      db.query("insert into trade_bridge_commands(id,bridge_id,payload,expires_at) values($1,$2,$3,now()+interval '1 minute')", [blocked.id, bridge, c]),
+    );
+    // The new guards alone also refuse, with the older approval triggers switched off.
+    await db.exec('alter table trade_bridge_commands disable trigger trade_real_proof; alter table trade_bridge_commands disable trigger trade_require_human_approval');
+    await assert.rejects(
+      db.query("insert into trade_bridge_commands(id,bridge_id,payload,expires_at) values($1,$2,$3,now()+interval '1 minute')", [blocked.id, bridge, c]),
+      /Risk blocked proposal cannot become an order/,
+    );
+    await db.exec('alter table trade_bridge_commands enable trigger trade_real_proof; alter table trade_bridge_commands enable trigger trade_require_human_approval');
+    await assert.rejects(
+      db.query("insert into trade_real_confirmations(proposal_id,owner_id,nonce_hash,expires_at,command,snapshot) values($1,'focoos-admin',$2,now()+interval '1 minute',$3,'{}')", [blocked.id, 'a'.repeat(64), c]),
+      /Risk blocked proposal cannot be prepared/,
+    );
+    globalThis.fetch = (async (u: any, init: any) => {
+      const name = String(u).split('/').pop()!;
+      called.push(name);
+      const args = Object.values(JSON.parse(String(init?.body)));
+      try {
+        const q = await db.query<any>(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`, args);
+        return Response.json(q.rows[0].result);
+      } catch (e: any) {
+        return Response.json({ code: e.code }, { status: 400 });
+      }
+    }) as any;
+    const { onRequestPost } = await import('../../functions/api/trade/operations');
+    const env = { ...f.env, TRADE_SUPABASE_URL: 'https://fixture.invalid', TRADE_SUPABASE_SERVICE_KEY: 'fixture' };
+    const post = (body: any) =>
+      onRequestPost({ env, request: new Request('https://fixture.invalid/operations', { method: 'POST', body: JSON.stringify({ mode: 'REAL', cursor: 180, ...body }) }) });
+    for (const body of [
+      { action: 'prepare-real', id: blocked.id },
+      { action: 'confirm', id: blocked.id, nonce: 'x'.repeat(64), confirmation: 'CONFIRMAR ORDEM REAL' },
+    ]) {
+      const res = await post(body);
+      assert.equal(res.status, 409);
+      assert.match(((await res.json()) as any).error, /RISK_BLOCKED/);
+    }
+    assert.ok(!called.some((n) => /trade_real_(prepare|confirm)|trade_inspection_|trade_bridge_enqueue|trade_confirm/.test(n)), called.join());
+    assert.equal((await db.query('select * from trade_bridge_commands')).rows.length, 0);
+    assert.equal((await db.query('select * from trade_real_confirmations')).rows.length, 0);
+    // H: an executable REAL proposal still needs the explicit second human confirmation.
+    const ready = { ...f.p, id: crypto.randomUUID(), setup: { ...f.p.setup, id: 'ready-real' } };
+    await db.query('select trade_propose($1,$2,$3)', ['focoos-admin', bridge, ready]);
+    await db.query("update trade_operation_proposals set state='CONFIRMADA' where id=$1", [ready.id]);
+    called.length = 0;
+    const unconfirmed = await post({ action: 'confirm', id: ready.id, nonce: 'y'.repeat(64) });
+    assert.equal(unconfirmed.status, 409);
+    assert.match(((await unconfirmed.json()) as any).error, /Segunda confirmação humana REAL obrigatória/);
+    assert.ok(!called.includes('trade_real_confirm'));
+    assert.equal((await db.query('select * from trade_bridge_commands')).rows.length, 0);
+  } finally {
+    globalThis.fetch = original;
+    await db.close();
+  }
 });
