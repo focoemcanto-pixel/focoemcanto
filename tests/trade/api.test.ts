@@ -73,7 +73,8 @@ test('Professor uses fallback without claiming AI, no entry when setup incomplet
   const r = await professor({
     request: new Request(origin + '/api/trade/professor', {
       method: 'POST',
-      body: JSON.stringify({ cursor: 30, question: 'Qual meu risco?' }),
+      // 15 closed M1 bars: below every rule's warm-up. (At 30, M1-only rules may legitimately confirm.)
+      body: JSON.stringify({ cursor: 15, question: 'Qual meu risco?' }),
     }),
     env: {},
   });

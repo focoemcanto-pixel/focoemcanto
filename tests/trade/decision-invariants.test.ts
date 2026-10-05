@@ -16,7 +16,10 @@ test('production 193k Friday structure cannot become a stop for Monday 208k; no 
  assert.ok(snapshot.candles['5m'].some(c=>c.low===193000));
  assert.ok(decision.candles['5m'].every(c=>c.low===208200));
  assert.equal(a.projected,undefined);assert.equal(a.setup,undefined);
- assert.ok(scanMarket(snapshot).candidates.every(c=>!c.analysis.setup && !c.projected));
+ // Rules may now evaluate today's M1 structure, but no level may come from Friday's 193k session.
+ const levels=scanMarket(snapshot).candidates.flatMap(c=>[c.analysis.setup?.stop,c.analysis.setup?.entry,c.projected?.stop,c.projected?.entry,c.analysis.support,c.analysis.resistance]).filter((v):v is number=>v!==undefined);
+ assert.ok(levels.length>0);
+ assert.ok(levels.every(v=>v>=208000),JSON.stringify(levels));
  const gap=today.filter((_,i)=>i!==30);const s=snapshotOf(gap,'live');
  assert.equal(currentStructure(s.candles['1m'],s.asOf,'1m','WINV26').length,4);
  assert.equal(currentStructure(s.candles['5m'],s.asOf,'5m','WINV26').length,0);

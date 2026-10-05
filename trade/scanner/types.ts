@@ -27,7 +27,8 @@ export type WatchState =
   | 'INVALIDATED'
   | 'EXPIRED'
   | 'OPEN_PAPER'
-  | 'CLOSED_PAPER';
+  | 'CLOSED_PAPER'
+  | 'RISK_BLOCKED';
 export interface InstrumentSpecification {
   symbol: string;
   assetClass: string;
@@ -51,9 +52,27 @@ export interface StrategyDefinition {
   eligibleRegimes: Regime[];
   ineligibleRegimes: Regime[];
   requiredData: string[];
+  /** Closed current-session bars each timeframe needs before the rule can be evaluated. */
+  dataRequirements?: DataRequirement[];
   parameters: Record<string, number>;
   enabled: boolean;
   unavailableReason?: string;
+}
+export interface DataRequirement {
+  timeframe: Timeframe;
+  bars: number;
+  reason: string;
+}
+export interface Warmup {
+  frames: { timeframe: Timeframe; have: number; need: number }[];
+  /** Earliest close time at which every frame has enough bars, if the session keeps printing. */
+  readyAt: number | null;
+}
+/** Distance from the last close to the level that would fire the trigger. Diagnostic only. */
+export interface TriggerProximity {
+  level: number | null;
+  label: string;
+  distancePoints: number | null;
 }
 export interface StrategyCandidate {
   definition: StrategyDefinition;
@@ -71,6 +90,74 @@ export interface StrategyCandidate {
   detectedAt: number;
   validUntil: number;
   regime: Regime[];
+  warmup?: Warmup;
+  proximity?: TriggerProximity;
+}
+export type HypothesisStage =
+  | 'CONFIRMED'
+  | 'WAITING_TRIGGER'
+  | 'FORMING'
+  | 'FAR'
+  | 'REJECTED'
+  | 'WARMING_UP'
+  | 'UNAVAILABLE_DATA'
+  | 'DISABLED';
+export type HypothesisBlockerCode =
+  | 'REGIME_MISMATCH'
+  | 'CONTEXT_NOT_MET'
+  | 'RISK_OUT_OF_BOUNDS'
+  | 'INVALID_LEVELS'
+  | 'FEED_NOT_LIVE'
+  | 'DATA_UNAVAILABLE'
+  | 'WARMING_UP'
+  | 'DISABLED'
+  | 'DIRECTION_CONFLICT';
+/** Visible, explained state of one registered strategy. Never a recommendation or a proposal. */
+export interface Hypothesis {
+  id: string;
+  version: string;
+  name: string;
+  stage: HypothesisStage;
+  direction: 'long' | 'short' | null;
+  met: number;
+  total: number;
+  missing: string[];
+  blockers: { code: HypothesisBlockerCode; message: string }[];
+  factors: {
+    key: string;
+    label: string;
+    points: number;
+    weight: number;
+    detail: string;
+  }[];
+  score: number;
+  rank: number;
+  why: string;
+  trigger: string;
+  projection: { entry: number; stop: number; target: number } | null;
+  validUntil: number;
+  warmup?: Warmup;
+}
+export type DeskVerdict =
+  | 'CONFIRMED'
+  | 'CONFLICT'
+  | 'WAITING_TRIGGER'
+  | 'FORMING'
+  | 'WARMING_UP'
+  | 'FEED_NOT_LIVE'
+  | 'NOTHING';
+export interface DeskSummary {
+  verdict: DeskVerdict;
+  headline: string;
+  detail: string;
+  nearest: string[];
+  coverage: {
+    registered: number;
+    operational: number;
+    awaitingData: number;
+    warmingUp: number;
+    nextReadyAt: number | null;
+  };
 }
 export interface SetupWatch {
   id: string;
@@ -106,4 +193,6 @@ export interface ScannerResult {
   opportunities: StrategyCandidate[];
   groups: { primary: string; participants: string[] }[];
   summary: Record<CandidateState, number>;
+  hypotheses?: Hypothesis[];
+  desk?: DeskSummary;
 }
