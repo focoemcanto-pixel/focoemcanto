@@ -8,7 +8,46 @@ export type BridgeEnv = {
   TRADE_EXECUTION_ENABLED?: string;
   TRADE_MAX_CONTRACTS?: string;
   TRADE_FEED_MAX_AGE_MS?: string;
+  /** PAPER per-trade risk limit in BRL. Preferred over TRADE_MAX_RISK_BRL. */
+  TRADE_PAPER_MAX_RISK_BRL?: string;
+  /** Shared per-trade risk limit in BRL, PAPER fallback only. REAL reads the database policy. */
+  TRADE_MAX_RISK_BRL?: string;
 };
+/**
+ * Legacy PAPER laboratory default, kept so existing deployments keep proposing. It is reported as
+ * 'compat-default' everywhere it is used and never applies to REAL.
+ */
+export const paperCompatMaxRiskBRL = 100;
+/** PAPER per-trade risk limit. Invalid explicit values fail closed (no quantity), never fall back. */
+export function paperRiskLimit(env: BridgeEnv): {
+  maxRiskBRL: number | null;
+  source: string;
+} {
+  for (const key of ['TRADE_PAPER_MAX_RISK_BRL', 'TRADE_MAX_RISK_BRL'] as const) {
+    const raw = env[key];
+    if (raw === undefined || raw === '') continue;
+    const value = Number(raw);
+    return Number.isFinite(value) && value > 0
+      ? { maxRiskBRL: value, source: key }
+      : { maxRiskBRL: null, source: `${key} inválido` };
+  }
+  return { maxRiskBRL: paperCompatMaxRiskBRL, source: 'compat-default' };
+}
+/** REAL per-trade risk limit: the approved policy, tightened by the EA local limit. No defaults. */
+export function realRiskLimit(ctx: any): {
+  maxRiskBRL: number | null;
+  source: string;
+} {
+  const policy = ctx?.policy?.max_risk_brl,
+    local = ctx?.bridge?.state?.localLimits?.maxRiskBRL,
+    pos = (v: unknown): v is number =>
+      typeof v === 'number' && Number.isFinite(v) && v > 0;
+  if (!pos(policy))
+    return { maxRiskBRL: null, source: 'policy.max_risk_brl ausente' };
+  return pos(local) && local < policy
+    ? { maxRiskBRL: local, source: 'EA localLimits.maxRiskBRL' }
+    : { maxRiskBRL: policy, source: 'policy.max_risk_brl' };
+}
 export function config(env: BridgeEnv) {
   const maxContracts = Number(env.TRADE_MAX_CONTRACTS ?? 1);
   const maxAgeMs = Number(env.TRADE_FEED_MAX_AGE_MS ?? 15000);

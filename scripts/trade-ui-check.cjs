@@ -34,6 +34,7 @@ let simulateMissingBridge=false;
     '20261005000359_real_execution_fail_closed.sql',
     '20261005091111_pre_real_homologation.sql',
     '20261005092318_pre_real_account_mode.sql',
+    '20261005150000_risk_blocked_technical_proposal.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   globalThis.fetch = async (url, init) => {
@@ -433,6 +434,8 @@ let simulateMissingBridge=false;
     bridgeId:'xp-mt5-primary',symbol:'WINV26',session:'ui-inspection',batch:0,accountHash:'a'.repeat(64),
     ticks:[{symbol:'WINV26',timeMsc:Date.now(),bid:price-5,ask:price,last:price,volume:1,flags:0}],candles:liveFixture.candles,events:[],
     state:{protocolVersion:2,connected:true,executionAllowed:false,tickSize:5,tickValue:1,currency:'BRL',positions:[],orders:[]}},'a'.repeat(64)]);
+  // REAL sizing needs an explicit policy risk limit (absent = RISK_BLOCKED). Policy stays disabled: REAL remains disarmed.
+  await db.query("insert into trade_execution_policy(bridge_id,enabled,max_risk_brl) values('xp-mt5-primary',false,10000)");
   await page.setViewportSize({width:1440,height:1100});
   await page.getByRole('combobox',{name:'Fonte de mercado'}).selectOption('mt5');
   await page.getByRole('button',{name:'REAL BLOQUEADO',exact:true}).click();

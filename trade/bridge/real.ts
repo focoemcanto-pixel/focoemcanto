@@ -1,6 +1,6 @@
 import { config, rpc, type BridgeEnv } from './config';
 import { feedStatus } from './mt5';
-import type { Proposal } from './approval';
+import { isExecutable, type Proposal } from './approval';
 import { commandCanonical, type BrokerCommand } from './protocol';
 export type RealGate = {
   key: string;
@@ -226,6 +226,8 @@ export function realReadiness(
   add('exposure','Limites de exposição',Number.isInteger(policy.max_position_contracts) && policy.max_position_contracts>0 && pos(policy.max_notional_brl),'Defina exposição máxima em contratos e valor nocional.');
   if (p) {
     add('inspection','Proposta habilitada para execução',p.inspectionOnly !== true,'Esta proposta é somente para inspeção; nunca se transforma em ordem. Gere outra após futura autorização.');
+    // RISK_BLOCKED keeps the technical levels for study; it never becomes readiness, nonce or order.
+    add('sizing','Dimensionada pelo limite de risco',p.proposalState === 'READY' && isExecutable(p) && pos(policy.max_risk_brl),p.proposalState === 'RISK_BLOCKED' ? 'BLOQUEADA POR RISCO: 1 contrato excede o limite atual; quantidade permitida 0.' : 'Proposta sem dimensionamento pelo Risk Engine ou limite REAL ausente.');
     add('notional','Exposição da proposta',p.quantity<=policy.max_position_contracts && pos(price) && pos(value) && price*value*p.quantity<=policy.max_notional_brl,'Exposição excede política ou limite não configurado.');
     const aligned = (v: number) =>
       pos(s.tickSize) &&

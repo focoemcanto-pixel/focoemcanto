@@ -1,4 +1,4 @@
-import type { ExecutionApprovalProvider } from './approval';
+import { isExecutable, type ExecutionApprovalProvider } from './approval';
 import type { MarketDataProvider } from '../core/providers';
 import { aggregateCandles } from '../core/providers';
 import type { Candle, Timeframe } from '../core/types';
@@ -104,6 +104,7 @@ export class MT5BrokerExecutionProvider implements BrokerExecutionProvider, Exec
     const c = config(this.env);
     if (
       p.mode !== 'REAL' ||
+      !isExecutable(p) ||
       !intent ||
       intent.command.id !== p.id ||
       !c.execution

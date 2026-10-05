@@ -3,6 +3,8 @@ import {
   rpc,
   persistenceFailure,
   PersistenceError,
+  paperRiskLimit,
+  realRiskLimit,
   type BridgeEnv,
 } from '../../../trade/bridge/config';
 import {
@@ -11,8 +13,9 @@ import {
   feedStatus,
 } from '../../../trade/bridge/mt5';
 import {
-  approvalPolicy,
-  makeProposal,
+  buildTechnicalProposal,
+  sizeProposal,
+  isExecutable,
   executionView,
   type Proposal,
 } from '../../../trade/bridge/approval';
@@ -27,6 +30,7 @@ import {
 } from '../../../trade/bridge/real';
 import {
   paperExecution,
+  hypotheticalObservation,
   PaperExecutionProvider,
 } from '../../../trade/bridge/paper';
 import { instrumentValue } from '../../../trade/bridge/instruments';
@@ -129,7 +133,8 @@ export async function onRequestPost({
             a.version === m.analysis.version,
         );
       const inspectionOnly = body.mode === 'REAL' && !realReadiness(ctx, env).canExecute;
-      const p = makeProposal(
+      // 1) Technical proposal: levels from the setup only. 2) Risk Engine: quantity/eligibility.
+      const technical = buildTechnicalProposal(
         body.mode === 'REAL'
           ? { ...m.analysis, stage: auth?.stage || m.analysis.stage }
           : m.analysis,
@@ -137,25 +142,49 @@ export async function onRequestPost({
           mode: body.mode,
           source: body.source,
           symbol: m.snapshot.symbol,
-          quantity: body.quantity,
-          max: c.maxContracts,
-          pointValue: contract.pointValue,
-          currency: contract.currency,
-          pointValueSource: contract.source,
           cursor: body.source === 'mt5' ? m.snapshot.asOf : body.cursor,
           asOf: m.snapshot.asOf,
           liveAuthorized: auth?.live_authorized === true,
           inspectionOnly,
         },
       );
-      if (body.mode === 'REAL' && !inspectionOnly) assertReady(realReadiness(ctx, env, p));
-      return Response.json(
-        await rpc(env, 'trade_propose', {
-          p_owner: owner,
+      // REAL never borrows the PAPER limit: no approved policy limit means RISK_BLOCKED.
+      const limit = body.mode === 'REAL' ? realRiskLimit(ctx) : paperRiskLimit(env);
+      const p = sizeProposal(technical, {
+        pointValue: contract.pointValue,
+        currency: contract.currency,
+        pointValueSource: contract.source,
+        maxContracts: c.maxContracts,
+        maxRiskBRL: limit.maxRiskBRL,
+        maxRiskSource: limit.source,
+        requestedQuantity: body.quantity ?? undefined,
+      });
+      audit = {
+        ...audit,
+        proposalState: p.proposalState,
+        riskBlock: p.riskBlock,
+        requestedOrder: { ...audit.requestedOrder, quantity: p.quantity },
+      };
+      if (body.mode === 'REAL' && !inspectionOnly && isExecutable(p))
+        assertReady(realReadiness(ctx, env, p));
+      const saved = await rpc(env, 'trade_propose', {
+        p_owner: owner,
+        p_bridge: c.bridgeId,
+        p_proposal: p,
+      });
+      if (body.mode === 'REAL' && !isExecutable(p))
+        await rpc(env, 'trade_real_audit', {
           p_bridge: c.bridgeId,
-          p_proposal: p,
-        }),
-      );
+          p_payload: {
+            ...audit,
+            proposalId: p.id,
+            action: 'propose',
+            status: 'RISK_BLOCKED',
+            reason: p.riskBlock?.message || 'Proposta sem quantidade executável.',
+            timestamp: new Date().toISOString(),
+          },
+        }).catch(() => {});
+      return Response.json(saved);
     }
     if (!['confirm', 'discard', 'prepare-real'].includes(body.action))
       throw new Error('Ação inválida');
@@ -182,6 +211,13 @@ export async function onRequestPost({
       riskBRL: p.riskBRL,
       riskPoints: p.riskPoints,
     };
+    if (
+      ['prepare-real', 'confirm'].includes(body.action) &&
+      (row.state === 'BLOQUEADA POR RISCO' || !isExecutable(p))
+    )
+      throw new Error(
+        'RISK_BLOCKED: proposta técnica não executável com o limite atual. Nenhuma ordem foi enviada.',
+      );
     if (p.mode === 'REAL' && p.inspectionOnly && ['prepare-real','confirm'].includes(body.action)) {
       const ctx=await realContext(env),readiness=realReadiness(ctx,env,p);
       const snapshot={...audit,inspectionOnly:true,gates:readiness.gates,policy:readiness.limits,feed:{symbol:ctx.bridge?.symbol,receivedAt:ctx.bridge?.receivedAt},strategy:p.setup.strategy,version:p.setup.version};
@@ -281,8 +317,14 @@ export async function onRequestPost({
         }),
       );
     }
-    if (p.mode === 'PAPER' && body.action === 'confirm')
+    if (p.mode === 'PAPER' && body.action === 'confirm') {
+      const limit = paperRiskLimit(env);
+      if (limit.maxRiskBRL === null || p.riskBRL > limit.maxRiskBRL + 1e-9)
+        throw new Error(
+          'RISK_LIMIT_CHANGED: o risco desta proposta excede o limite PAPER atual. Gere uma nova proposta.',
+        );
       return Response.json(await new PaperExecutionProvider(env).approve(p));
+    }
     return Response.json(
       await rpc(env, 'trade_confirm', {
         p_owner: owner,
@@ -343,6 +385,27 @@ export async function onRequestGet({
           )
         : generateMockCandles().slice(0, Math.max(0, Math.min(420, cursor)));
     for (const row of rows) {
+      if (
+        row.state === 'BLOQUEADA POR RISCO' &&
+        row.payload.source === source &&
+        !row.hypothetical_execution?.exitTime
+      ) {
+        // Study only: no quantity, no money, no provider. Outcome in R, MFE/MAE and duration.
+        const hypothetical = hypotheticalObservation(
+          row.payload,
+          candles,
+          row.hypothetical_execution,
+        );
+        if (hypothetical) {
+          await rpc(env, 'trade_hypothetical_observe', {
+            p_owner: owner,
+            p_id: row.id,
+            p_execution: hypothetical,
+          });
+          row.hypothetical_execution = hypothetical;
+        }
+        continue;
+      }
       if (
         row.state === 'DESCARTADA' &&
         row.payload.mode === 'PAPER' &&
