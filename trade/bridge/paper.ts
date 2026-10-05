@@ -94,6 +94,13 @@ export function paperExecution(p: Proposal, candles: Candle[], previous?: any) {
             : 'TARGET',
       openedAt,
       closedAt: exitTime,
+      // Explicit fill model: market at the next closed bar's open. Slippage vs. the proposed entry.
+      fillModel: 'next-bar-open-v1',
+      plannedEntry: p.entry,
+      slippagePoints: sign * (entry - p.entry),
+      plannedRiskPoints: p.riskPoints,
+      plannedRR: p.rr,
+      quantity: p.quantity,
       mfePoints,
       maePoints,
       mfeR: riskPoints ? mfePoints / riskPoints : null,

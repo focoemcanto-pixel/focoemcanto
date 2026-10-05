@@ -195,4 +195,27 @@ export interface ScannerResult {
   summary: Record<CandidateState, number>;
   hypotheses?: Hypothesis[];
   desk?: DeskSummary;
+  /** Objective features the rules saw at asOf (current-session, closed bars only). For setup snapshots. */
+  context?: MarketContextSnapshot;
+}
+export type FrameContext = {
+  bars: number;
+  close: number | null;
+  emaFast: number | null;
+  emaSlow: number | null;
+  atr: number | null;
+  rsi: number | null;
+  macd: number | null;
+  signal: number | null;
+  support: number | null;
+  resistance: number | null;
+  volumeRatio: number | null;
+  momentum: number | null;
+  rangeHigh: number | null;
+  rangeLow: number | null;
+};
+export interface MarketContextSnapshot {
+  version: string;
+  regimes: Regime[];
+  frames: Record<'1m' | '5m' | '15m', FrameContext>;
 }
