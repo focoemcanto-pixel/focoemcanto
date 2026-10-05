@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import type { Proposal } from '../../trade/bridge/approval';
+import { remainingPositionRiskBRL } from '../../trade/core/risk-engine';
 const num = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const money = (v: number | null | undefined) =>
@@ -136,6 +137,8 @@ export default function OperationsPanel({
       matching[0],
     p: Proposal | undefined = row?.payload,
     x = row?.execution;
+  const riskBlocked =
+    row?.state === 'BLOQUEADA POR RISCO' || p?.proposalState === 'RISK_BLOCKED';
   const ready = readiness?.canExecute === true && source === 'mt5',
     preview = !!p && p.mode !== mode;
   const priority =
@@ -300,14 +303,18 @@ export default function OperationsPanel({
               <h3>
                 {preview
                   ? 'PRÉVIA DA MESMA HIPÓTESE PAPER'
-                  : row.state === 'CONFIRMADA'
-                    ? x?.status || 'ENVIANDO'
-                    : row.state}
+                  : riskBlocked
+                    ? 'PROPOSTA TÉCNICA · NÃO EXECUTÁVEL'
+                    : row.state === 'CONFIRMADA'
+                      ? x?.status || 'ENVIANDO'
+                      : row.state}
               </h3>
             </div>
             <strong className="trade-operation-instrument">
               {p.direction === 'BUY' ? 'COMPRA' : 'VENDA'} · {p.symbol} ·{' '}
-              {p.quantity} contrato(s)
+              {riskBlocked
+                ? 'quantidade permitida: 0'
+                : `${p.quantity} contrato(s)`}
             </strong>
             <p className="trade-operation-method">
               Método: {strategyNames[p.setup.strategy] || p.setup.strategy}
@@ -319,16 +326,44 @@ export default function OperationsPanel({
               <dd>{num(p.sl)}</dd>
               <dt>Take profit</dt>
               <dd>{num(p.tp)}</dd>
-              <dt>Risco estimado</dt>
+              <dt>{riskBlocked ? 'Risco técnico' : 'Risco estimado'}</dt>
               <dd>
-                {num(p.riskPoints)} pts · {money(p.riskBRL)}
+                {num(p.riskPoints)} pts
+                {!riskBlocked && ` · ${money(p.riskBRL)}`}
               </dd>
-              <dt>Potencial estimado</dt>
+              <dt>{riskBlocked ? 'Potencial técnico' : 'Potencial estimado'}</dt>
               <dd>
-                {num(p.potentialPoints)} pts · {money(p.potentialBRL)}
+                {num(p.potentialPoints)} pts
+                {!riskBlocked && ` · ${money(p.potentialBRL)}`}
               </dd>
+              {riskBlocked && (
+                <>
+                  <dt>Risco mínimo · 1 contrato</dt>
+                  <dd>{money(p.riskPerContractBRL)}</dd>
+                  <dt>Limite configurado</dt>
+                  <dd>
+                    {p.sizing?.maxRiskBRL != null
+                      ? money(p.sizing.maxRiskBRL)
+                      : 'ausente'}
+                  </dd>
+                </>
+              )}
               <dt>Risco/retorno</dt>
               <dd>1 : {num(p.rr)}</dd>
+              {p.sizing && !riskBlocked && (
+                <>
+                  <dt>Tamanho pelo risco</dt>
+                  <dd>
+                    {p.quantity} contrato(s) · {money(p.sizing.riskPerContractBRL)}{' '}
+                    por contrato · limite {money(p.sizing.maxRiskBRL)}
+                  </dd>
+                </>
+              )}
+              <dt>Snapshot · validade</dt>
+              <dd>
+                {new Date(p.asOf * 1000).toLocaleTimeString('pt-BR')} · até{' '}
+                {new Date(p.expiresAt).toLocaleTimeString('pt-BR')}
+              </dd>
             </dl>
             <details className="trade-operation-reason">
               <summary>Entender esta estratégia</summary>
@@ -355,7 +390,26 @@ export default function OperationsPanel({
               slippage. Proposta válida até{' '}
               {new Date(p.expiresAt).toLocaleTimeString('pt-BR')}.
             </small>
-            {!preview && row.state === 'AGUARDANDO CONFIRMAÇÃO' && (
+            {riskBlocked && (
+              <>
+                <p className="trade-operation-error" role="status">
+                  RISCO ACIMA DO LIMITE ·{' '}
+                  {p.riskBlock?.message ||
+                    'Proposta técnica não executável com o limite atual.'}
+                </p>
+                <div className="trade-operation-actions">
+                  <button className="trade-primary" disabled>
+                    {mode === 'PAPER' ? 'ENTRAR NO PAPER' : 'ENTRAR · ORDEM REAL'}
+                  </button>
+                </div>
+                <p className="trade-operation-caption">
+                  {row.hypothetical_execution?.exitTime
+                    ? `Observação hipotética encerrada: ${row.hypothetical_execution.exitReason === 'STOP' ? 'stop' : 'alvo'} · ${num(row.hypothetical_execution.resultR)}R · MFE ${num(row.hypothetical_execution.mfeR)}R · MAE ${num(row.hypothetical_execution.maeR)}R · ${num(row.hypothetical_execution.durationMinutes)} min.`
+                    : 'Em observação hipotética para estudo. Não é uma operação PAPER nem uma ordem.'}
+                </p>
+              </>
+            )}
+            {!preview && !riskBlocked && row.state === 'AGUARDANDO CONFIRMAÇÃO' && (
               <div className="trade-operation-actions">
                 <button
                   className="trade-primary"
@@ -414,9 +468,13 @@ export default function OperationsPanel({
                   <dd>
                     {x?.position
                       ? money(
-                          Math.abs(x.position.price - x.position.sl) *
-                            p.pointValue *
+                          remainingPositionRiskBRL(
+                            p.direction === 'BUY' ? 'long' : 'short',
+                            x.position.price,
+                            x.position.sl,
                             x.position.volume,
+                            p.pointValue,
+                          ),
                         )
                       : '—'}
                   </dd>
@@ -435,7 +493,7 @@ export default function OperationsPanel({
           </>
         )}
       </details>
-      {mode === 'REAL' && (!p || preview) && (
+      {mode === 'REAL' && (!p || preview || riskBlocked) && (
         <button
           className="trade-primary"
           disabled={busy || source !== 'mt5' || !activeComplete}
@@ -516,12 +574,18 @@ export default function OperationsPanel({
               {r.payload.mode} · {r.payload.direction} · {r.payload.symbol}
             </strong>
             <p>
-              {r.execution?.status || r.state} ·{' '}
+              {r.state === 'BLOQUEADA POR RISCO'
+                ? 'PROPOSTA TÉCNICA · BLOQUEADA POR RISCO'
+                : r.execution?.status || r.state}{' '}
+              ·{' '}
               {new Date(r.created_at).toLocaleString('pt-BR')}
             </p>
             {r.hypothetical_execution?.exitTime && (
               <p>
-                Você não entrou. Resultado hipotético para estudo:{' '}
+                {r.state === 'BLOQUEADA POR RISCO'
+                  ? 'Não executável pelo limite de risco.'
+                  : 'Você não entrou.'}{' '}
+                Resultado hipotético para estudo:{' '}
                 {num(r.hypothetical_execution.resultR)}R ·{' '}
                 {money(r.hypothetical_execution.resultBRL)}
               </p>

@@ -2266,3 +2266,171 @@
   font-size: 10px;
   margin-top: 5px;
 }
+
+/* Copilot: nearest hypotheses and strategy diagnostics (compact, same visual language). */
+.trade-hypothesis-note {
+  font-size: 11px;
+  letter-spacing: 0.4px;
+  color: #90a0ae;
+  margin: 6px 0 0;
+}
+.trade-nearest {
+  padding: 14px 0 4px;
+}
+.trade-nearest ol {
+  list-style: none;
+  counter-reset: nearest;
+  margin: 10px 0 0;
+  padding: 0;
+}
+.trade-nearest li {
+  counter-increment: nearest;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid #1d2933;
+  font-size: 13px;
+}
+.trade-nearest li strong {
+  font-weight: 500;
+  color: #dfe6ec;
+}
+.trade-nearest li strong::before {
+  content: counter(nearest) '. ';
+  color: #6f7f8d;
+}
+.trade-nearest li span {
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  color: #90a0ae;
+  white-space: nowrap;
+}
+.trade-diagnostics {
+  margin: 4px 0 22px;
+}
+.trade-diagnostics > details {
+  border-top: 1px solid #1d2933;
+  padding: 10px 0;
+}
+.trade-diagnostics summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  list-style: none;
+}
+.trade-diagnostics summary::-webkit-details-marker {
+  display: none;
+}
+.trade-diagnostics summary strong {
+  font-weight: 500;
+  color: #dfe6ec;
+}
+.trade-diagnostics summary span {
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  color: #b9c4cd;
+  white-space: nowrap;
+}
+.trade-diagnostics summary small {
+  grid-column: 1 / -1;
+  font-size: 11px;
+  color: #7f8e9b;
+}
+.trade-diagnostics details[data-stage='CONFIRMED'] summary span,
+.trade-diagnostics details[data-stage='WAITING_TRIGGER'] summary span {
+  color: #d8b681;
+}
+.trade-diagnostics details[data-stage='UNAVAILABLE_DATA'] summary strong,
+.trade-diagnostics details[data-stage='WARMING_UP'] summary strong,
+.trade-diagnostics details[data-stage='DISABLED'] summary strong {
+  color: #8893a7;
+}
+.trade-diagnostics details p,
+.trade-diagnostics caption {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #90a0ae;
+  text-align: left;
+  margin: 8px 0 0;
+}
+.trade-diagnostics table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #90a0ae;
+}
+.trade-diagnostics th,
+.trade-diagnostics td {
+  text-align: left;
+  font-weight: 400;
+  padding: 4px 8px 4px 0;
+  vertical-align: top;
+  border-top: 1px solid #17222b;
+}
+.trade-diagnostics td:nth-child(2) {
+  white-space: nowrap;
+  color: #b9c4cd;
+}
+@media (max-width: 720px) {
+  .trade-diagnostics td:nth-child(3) {
+    display: none;
+  }
+}
+
+/* Confirmed setup: technical proposal and its execution status, kept apart from the setup itself. */
+.trade-execution-status {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid #2b3945;
+  border-left: 2px solid #96c8af;
+  border-radius: 10px;
+  background: #0f1a22;
+}
+.trade-execution-status[data-state='RISK_BLOCKED'] {
+  border-left-color: #d8b681;
+}
+.trade-execution-status > span {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 1.2px;
+  color: #7f8e9b;
+}
+.trade-execution-status > strong {
+  display: block;
+  margin: 6px 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: #dfe6ec;
+}
+.trade-execution-status[data-state='RISK_BLOCKED'] > strong {
+  color: #d8b681;
+}
+.trade-execution-status > small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #90a0ae;
+}
+.trade-execution-status details {
+  margin-top: 8px;
+}
+.trade-execution-status summary {
+  cursor: pointer;
+  font-size: 12px;
+  color: #d8b681;
+}
+.trade-execution-status details p {
+  font-size: 12px;
+  line-height: 1.6;
+  color: #90a0ae;
+  margin: 6px 0 0;
+}
+.trade-execution-status + .trade-observation-next {
+  margin-top: 16px;
+}
