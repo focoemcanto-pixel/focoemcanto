@@ -267,3 +267,65 @@ test('22: a STALE feed creates no observation and no actionable proposal', async
     await w.close();
   }
 });
+
+test('catch-up: a setup confirmed on an intermediate candle of a batch is still recorded (no selection bias)', async () => {
+  const w = await world();
+  try {
+    // Polled every candle vs. one poll that processes the same candles at once.
+    for (let c = 30; c <= 120; c++) await runScanner(w.env as any, 'replay', c, 'step');
+    await runScanner(w.env as any, 'replay', 30, 'jump');
+    await runScanner(w.env as any, 'replay', 120, 'jump');
+    const rows = await w.obs(),
+      key = (o: any) => `${o.strategy_id}|${o.confirmed_at}|${o.direction}`,
+      step = new Set(rows.filter((o: any) => o.scope.endsWith(':step')).map(key)),
+      jump = rows.filter((o: any) => o.scope.endsWith(':jump'));
+    assert.ok(step.size > 0);
+    // Everything recorded poll-by-poll is also recorded by the batch. (The batch can record more:
+    // poll-by-poll, an active proposal suppresses new watches of the same strategy/direction.)
+    const jumpKeys = new Set(jump.map(key));
+    for (const k of step) assert.ok(jumpKeys.has(k), k);
+    // Every watch that ever reached CONFIRMED in the batch has its observation.
+    const final: any = await runScanner(w.env as any, 'replay', 120, 'jump');
+    for (const x of final.watches.filter((x: any) => x.candidate.analysis.setup && x.confirmedAt))
+      assert.ok(jump.some((o: any) => o.watch_id === x.id), x.id);
+    // A batch confirmation that is gone by the latest candle was never presentable: MISSED, never proposed.
+    const gone = jump.filter((o: any) => o.lifecycle === 'MISSED' && o.snapshot.quote === null);
+    assert.ok(gone.length > 0);
+    for (const o of gone) assert.equal(o.proposal_id, null);
+    // The book at that minute is unknown and is not invented.
+    for (const o of jump.filter((o: any) => o.market_as_of < 120 * 60)) assert.equal(o.snapshot.quote, null);
+  } finally {
+    await w.close();
+  }
+});
+
+test('17: the Professor answers performance only from LAB statistics and never claims a small sample works', async () => {
+  const { performanceAnswer, performanceQuestion } = await import('../../functions/api/trade/professor');
+  assert.ok(performanceQuestion.test('essa estratégia funciona?'));
+  assert.ok(performanceQuestion.test('qual o desempenho da continuação em ema'));
+  assert.ok(!performanceQuestion.test('onde fica o suporte?'));
+  const one: LabObservation = {
+    id: 'a', source: 'LIVE', strategyId: 'ema_continuation_v1', version: '1.2.0', direction: 'BUY', confirmedAt: 1, lifecycle: 'BLOCKED_RISK',
+    outcome: { status: 'TARGET_FIRST', resultR: 2, mfeR: 2, maeR: -0.3, minutesToTarget: 12, minutesToStop: null, barsTracked: 12 }, paper: null,
+    features: { hourBRT: 10, weekday: 'Mon', regimes: [], rr: 2, trend5m: 'UP' },
+  };
+  const text = performanceAnswer(labAnalytics([one]).groups, 'ema_continuation_v1');
+  assert.match(text, /1 observações, N=1/);
+  assert.match(text, /AMOSTRA INSUFICIENTE/);
+  assert.doesNotMatch(text, /PROMISSORA:|Expectativa 2/);
+  assert.match(performanceAnswer([], 'x'), /não tem setups confirmados/);
+});
+
+test('8: histogram counts every result once (open end buckets); funnel separates proposed from never-proposed', async () => {
+  const { funnel } = await import('../../trade/lab/analytics');
+  const m = metrics([-4, -1.5, -1, 0.5, 2, 5].map((r, i) => ({ at: i, r, mfeR: null, maeR: null, minutes: null, direction: 'BUY', f: { hourBRT: null, weekday: null, regimes: [], rr: null, trend5m: null } })) as any);
+  assert.equal(m.histogram.reduce((s: number, b: any) => s + b.count, 0), 6);
+  assert.equal(m.histogram[0].count, 1); // −4R falls in the open low bucket
+  assert.equal(m.histogram.at(-1)!.count, 1); // +5R falls in the open high bucket
+  assert.equal(m.maxDrawdownR, 6.5);
+  assert.equal(m.maxLossStreak, 3);
+  assert.equal(m.profitFactor, 7.5 / 6.5);
+  const base = { source: 'LIVE', strategyId: 's', version: '1', direction: 'BUY', confirmedAt: 1, outcome: null, paper: null, features: {} } as any;
+  const f = funnel(['MISSED', 'INVALIDATED', 'CANCELLED', 'BLOCKED_RISK', 'PROPOSED', 'PAPER_ACTIVE'].map((lifecycle, i) => ({ ...base, id: String(i), lifecycle })), 9);
+  assert.deepEqual([f.detected, f.confirmed, f.proposed, f.missed, f.invalidated, f.cancelled, f.blockedRisk, f.paper], [9, 6, 3, 1, 1, 1, 1, 1]);
+});

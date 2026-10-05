@@ -81,10 +81,11 @@ export function metrics(rows: Sample[], p = labParameters) {
   const n = r.length,
     expectancy = mean(r),
     recent = r.slice(-p.degradationWindow);
+  // 1R buckets; the end buckets are open (< −2R and ≥ 3R) so every result is counted exactly once.
   const histogram = [-3, -2, -1, 0, 1, 2, 3].map((lo) => ({
-    from: lo,
-    to: lo + 1,
-    count: r.filter((x) => x >= lo && x < lo + 1).length,
+    from: lo === -3 ? null : lo,
+    to: lo === 3 ? null : lo + 1,
+    count: r.filter((x) => (lo === -3 || x >= lo) && (lo === 3 || x < lo + 1)).length,
   }));
   return {
     n,
@@ -159,7 +160,7 @@ export function labAnalytics(observations: LabObservation[], p = labParameters) 
     groups: [...groups.values()]
       .map((g) => {
         const m = metrics(g.resolved, p);
-        return { strategyId: g.strategyId, version: g.version, dataset: g.dataset, observations: Object.values(g.statuses).reduce((a, b) => a + b, 0), statuses: g.statuses, metrics: m, ...strategyStatus(m, p), segments: segments(g.resolved, p) };
+        return { strategyId: g.strategyId, version: g.version, dataset: g.dataset, observations: Object.values(g.statuses).reduce((a: number, b: number) => a + b, 0), statuses: g.statuses, metrics: m, ...strategyStatus(m, p), segments: segments(g.resolved, p) };
       })
       .sort((a, b) => b.observations - a.observations),
   };
@@ -170,12 +171,15 @@ export function funnel(observations: LabObservation[], detected: number) {
   return {
     detected,
     confirmed: observations.length,
-    proposed: count((o) => o.lifecycle !== 'CONFIRMED'),
+    // Reached the Risk Engine (READY or RISK_BLOCKED proposal); MISSED/INVALIDATED/CANCELLED never did.
+    proposed: count((o) => !['CONFIRMED', 'MISSED', 'INVALIDATED', 'CANCELLED'].includes(o.lifecycle)),
     paper: count((o) => o.lifecycle.startsWith('PAPER')),
     ignored: count((o) => o.lifecycle === 'IGNORED'),
     blockedRisk: count((o) => o.lifecycle === 'BLOCKED_RISK'),
     missed: count((o) => o.lifecycle === 'MISSED'),
     expired: count((o) => o.lifecycle === 'EXPIRED'),
+    invalidated: count((o) => o.lifecycle === 'INVALIDATED'),
+    cancelled: count((o) => o.lifecycle === 'CANCELLED'),
     outcomes: {
       targetFirst: count((o) => o.outcome?.status === 'TARGET_FIRST'),
       stopFirst: count((o) => o.outcome?.status === 'STOP_FIRST'),

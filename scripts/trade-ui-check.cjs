@@ -39,6 +39,7 @@ let simulateMissingBridge=false;
     '20261005150000_risk_blocked_technical_proposal.sql',
     '20261006090000_real_session_arming.sql',
     '20261006120000_setup_observation_lab.sql',
+    '20261006130000_lab_notes_index.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   // Fixture ticks are stamped in real UTC; the production broker-wall clock is covered in real-session.test.ts.
@@ -339,6 +340,18 @@ let simulateMissingBridge=false;
   await page.getByRole('heading', { name: 'Setups, resultados e estatística por estratégia', exact: true }).waitFor();
   await page.getByText('HOJE · XP/MT5 LIVE', { exact: true }).waitFor();
   await page.screenshot({ path: '.trade-qa/lab.png', fullPage: true });
+  // Small N is never presented as a conclusion.
+  const badges = await page.locator('.trade-lab-card summary em').allTextContents();
+  assert.ok(badges.length > 0, 'LAB shows at least one strategy card');
+  assert.ok(badges.every((b) => b === 'AMOSTRA INSUFICIENTE'), `small N only: ${badges.join(', ')}`);
+  // Origin filter keeps datasets apart.
+  await page.getByLabel('Origem dos dados').selectOption('PAPER_FORWARD');
+  assert.ok((await page.locator('.trade-lab-card').count()) < badges.length || badges.length === 0);
+  await page.getByLabel('Origem dos dados').selectOption('ALL');
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'LAB mobile overflow');
+  await page.screenshot({ path: '.trade-qa/lab-mobile.png', fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 1100 });
   await page.getByRole('button', { name: 'Copiloto', exact: true }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('button', { name: 'Estratégias', exact: true }).click();
