@@ -26,6 +26,8 @@ const migrations = [
   '20261005122031_bridge_market_clock.sql',
   '20261005150000_risk_blocked_technical_proposal.sql',
   '20261006090000_real_session_arming.sql',
+  '20261009090000_real_risk_settings.sql',
+  '20261009091000_real_arm_failure_list.sql',
 ];
 const env = {
   TRADE_SUPABASE_URL: 'https://fixture.invalid',
@@ -136,11 +138,14 @@ async function world() {
     const policy = await api('real-config', {
       action: 'policy',
       confirmation: 'SALVAR CONFIGURAÇÃO REAL',
-      policy: {
+      settings: {
         enabled: true,
         rolloverConfirmed: true,
-        maxRiskBRL: 10000,
-        maxDailyLossBRL: 100000,
+        capitalBRL: 100000,
+        riskModel: 'FIXED_BRL',
+        riskValue: 10000,
+        dailyLossUnit: 'BRL',
+        dailyLossValue: 100000,
         maxSlippagePoints: 1000,
         maxContracts: 2,
         maxNotionalBRL: 100000000,

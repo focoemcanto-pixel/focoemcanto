@@ -4,6 +4,7 @@ import {
   persistenceFailure,
   PersistenceError,
   realRiskLimit,
+  realRiskCap,
   type BridgeEnv,
 } from '../../../trade/bridge/config';
 import {
@@ -152,7 +153,7 @@ export async function onRequestPost({
       // REAL never borrows the PAPER limit: no approved policy limit means RISK_BLOCKED.
       const riskStatus = body.mode === 'REAL' ? null : await paperRiskStatus(env),
         paperPolicy = riskStatus ? paperRiskPolicy(riskStatus) : null;
-      const limit = body.mode === 'REAL' ? realRiskLimit(ctx) : paperPolicy!;
+      const limit = body.mode === 'REAL' ? realRiskLimit(ctx, env) : paperPolicy!;
       const sized = sizeProposal(technical, {
         pointValue: contract.pointValue,
         currency: contract.currency,
@@ -272,7 +273,7 @@ export async function onRequestPost({
               env,
             ),
             referencePrice: p.entry,
-            maxRiskBRL: ctx.policy.max_risk_brl,
+            maxRiskBRL: realRiskCap(env) === null ? ctx.policy.max_risk_brl : Math.min(ctx.policy.max_risk_brl, realRiskCap(env)!),
             maxLossBRL: ctx.policy.max_daily_loss_brl,
             maxSlippagePoints: ctx.policy.max_slippage_points,
           },

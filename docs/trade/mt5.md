@@ -28,8 +28,9 @@ A auditoria encontrou Next.js 14 App Router com export estático, Cloudflare Pag
 | `TRADE_FEED_MAX_AGE_MS` | Default `15000`; máximo `60000` |
 | `TRADE_PAPER_MAX_RISK_BRL` | Limite de risco por operação PAPER em BRL (ex.: `100`). Recomendado definir explicitamente |
 | `TRADE_MAX_RISK_BRL` | Fallback do limite PAPER quando `TRADE_PAPER_MAX_RISK_BRL` não existe. Nunca usado no REAL |
+| `TRADE_REAL_MAX_RISK_BRL` | Opcional. Teto administrativo do 1R REAL em BRL. Sem valor = sem teto extra; valor inválido bloqueia o REAL. Só aperta: o limite efetivo é o menor entre gestão REAL, EA e este teto |
 
-Sem `TRADE_PAPER_MAX_RISK_BRL`/`TRADE_MAX_RISK_BRL`, o PAPER usa R$ 100 identificado como `compat-default`; valor inválido bloqueia em vez de cair no default. O limite REAL vem apenas de `trade_execution_policy.max_risk_brl` (ausente = REAL bloqueado por risco). Veja [hypothesis-to-proposal-2026-10-05.md](hypothesis-to-proposal-2026-10-05.md).
+Sem `TRADE_PAPER_MAX_RISK_BRL`/`TRADE_MAX_RISK_BRL`, o PAPER usa R$ 100 identificado como `compat-default`; valor inválido bloqueia em vez de cair no default. O limite REAL vem apenas de `trade_execution_policy.max_risk_brl` (ausente = REAL bloqueado por risco), gerado pela **GESTÃO DE RISCO · REAL** (abaixo). Veja [hypothesis-to-proposal-2026-10-05.md](hypothesis-to-proposal-2026-10-05.md).
 
 Marque token e chave Supabase como **secrets**. Nenhuma variável `NEXT_PUBLIC_*`. Repita o deploy depois de configurar. REST `/rpc` deve estar habilitado no Supabase; tabelas e funções só concedem acesso a `service_role`, RLS habilitado, sem grants para anon/authenticated. O FocoOS continua autenticando usuários no backend.
 
@@ -103,7 +104,7 @@ Nada desta seção envia ordem. Armar a sessão, liberar o kill switch e autoriz
    - Se o valor do backend estiver errado, todo lote do EA é recusado com `BRIDGE_ACCOUNT_MISMATCH` e o feed para. Nenhuma ordem sai nesse caso.
 4. **Ligar a execução no backend.** Só depois que o painel REAL mostrar *fingerprint do EA = backend*, defina `TRADE_EXECUTION_ENABLED=true` no mesmo lugar e faça um novo deploy. Essa flag sozinha não libera ordem: continuam obrigatórios política, limites, estratégia autorizada, sessão armada, kill switch liberado, proposta READY, nonce e as duas confirmações humanas.
 5. **Tomar as decisões que são só do operador.** O checklist mostra cada uma em **Decisões do operador**:
-   - Na política REAL: risco máximo por operação, perda máxima diária, slippage máximo, exposição nocional, ordens por sessão e por dia, e confirmação do rollover. Conta, símbolo e vencimento são preenchidos pelo servidor a partir do MT5.
+   - Na **GESTÃO DE RISCO · REAL** (/trade → REAL → Configuração REAL): capital operacional, como definir 1R (percentual do capital, até 10%, ou valor fixo), perda máxima diária (em R ou R$), operações por sessão e por dia, duração da sessão, contratos, desvio máximo, exposição nocional e confirmação do rollover. O servidor calcula o 1R, grava uma versão imutável e auditada (`trade_real_risk_settings_versions` e `trade_bridge_audit`, com valor anterior e novo) e gera a política REAL. Conta, símbolo e vencimento vêm do servidor e do MT5. Uma política que não veio dessa gestão (`risk_settings_version` vazio) não basta para armar. Salvar desarma qualquer sessão armada e nunca envia ordem. O capital operacional é planejamento e não é o saldo da XP; o painel mostra saldo e margem da corretora à parte. A gestão REAL é independente da gestão PAPER.
    - Nas entradas do EA: `MaxRiskBRL`, `MaxLoss24hBRL` e `MaxSlippagePoints`, que precisam ser iguais ou menores que os da política.
    - Autorizar cada estratégia/versão separadamente.
 
