@@ -136,6 +136,39 @@ test('explicit backend gate, account, quantity, expiry and protective prices req
   const c = validateCommand(command(), env);
   assert.ok(commandWire(c).includes(`CMD|${c.id}|BUY|WINV26|1`));
 });
+test('backend volume rule mirrors the EA: whole contracts only for BUY/SELL/CLOSE', () => {
+  for (const action of ['BUY', 'SELL', 'CLOSE'])
+    for (const volume of [0, 0.5, 1.5])
+      assert.throws(
+        () =>
+          validateCommand(
+            { ...command(), action, volume, ticket: action === 'CLOSE' ? '123' : '0' },
+            env,
+          ),
+        /Volume\/preços inválidos/,
+      );
+  assert.throws(() => validateCommand({ ...command(), volume: -1 }, env));
+  assert.equal(
+    validateCommand(
+      { ...command(), action: 'SLTP', volume: 0, ticket: '123' },
+      env,
+    ).volume,
+    0,
+  );
+});
+test('EA command guards group mixed &&/|| explicitly (no MQL5 warning 80)', () => {
+  const s = readFileSync('mt5/FocoTradeBridge.mq5', 'utf8');
+  assert.ok(
+    s.includes(
+      'volume<0 || volume>MaxContracts || ((action=="BUY" || action=="SELL" || action=="CLOSE") && (volume<1 || MathFloor(volume)!=volume))',
+    ),
+  );
+  assert.ok(
+    s.includes(
+      '(action=="BUY" && (sl>=req.price || tp<=req.price)) || (action=="SELL" && (sl<=req.price || tp>=req.price))',
+    ),
+  );
+});
 test('Postgres bridge deduplicates batches/commands, quarantines lost responses, persists events and blocks client reads', async () => {
   const db = new PGlite();
   try {
