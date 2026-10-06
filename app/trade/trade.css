@@ -2839,3 +2839,7 @@
 .trade-real-groups section[data-kind='DECISION'] [data-ok='false'] strong { color: #d8b681; }
 .trade-real-groups ul { margin: 4px 0 0; padding-left: 18px; font-size: 11px; color: #90a0ae; line-height: 1.6; }
 .trade-real-groups li[data-kind='DECISION'] { color: #d8b681; }
+.trade-perf-alert { border: 1px solid #8a5a4a; border-radius: 8px; padding: 8px 12px; margin: 8px 0; color: #f09a83; font-size: 12px; }
+.trade-perf-alert p { margin: 2px 0; }
+.trade-perf-exec tr[data-current='true'] th, .trade-perf-exec tr[data-current='true'] td { background: #15212b; }
+.trade-perf-exec tr[data-alert='true'] th { color: #f09a83; }
