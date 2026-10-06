@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
+import RealChecklist from './RealChecklist';
 import type { Proposal } from '../../trade/bridge/approval';
 import { remainingPositionRiskBRL } from '../../trade/core/risk-engine';
 import RealSessionPanel from './RealSessionPanel';
@@ -260,30 +261,28 @@ export default function OperationsPanel({
           <summary>
             {readiness?.status || 'REAL INDISPONÍVEL'} · checklist completo
             <span className="trade-real-gate-count">
-              {readiness?.gates?.filter((g: any) => !g.ok).length ?? '—'}{' '}
-              verificações bloqueadas · ver checklist
+              {readiness?.gates
+                ? `${readiness.gates.filter((g: any) => !g.ok && g.kind === 'TECHNICAL').length} técnica(s) · ${readiness.gates.filter((g: any) => !g.ok && g.kind === 'DECISION').length} decisão(ões) sua(s) · ${readiness.gates.filter((g: any) => !g.ok && g.kind === 'SESSION').length} controle(s) de sessão`
+                : '—'}{' '}
+              · ver checklist
             </span>
           </summary>
           {source !== 'mt5' && (
             <p>Selecione XP / MetaTrader 5 para utilizar dados reais.</p>
           )}
-          {(
-            readiness?.gates || [
-              {
-                key: 'loading',
-                label: 'Verificação server-side',
-                ok: false,
-                reason: 'Aguardando validação da persistência e dos gates.',
-              },
-            ]
-          ).map((g: any) => (
-            <div key={g.key} data-ok={g.ok}>
-              <strong>
-                {g.ok ? '✓' : '○'} {g.label}
-              </strong>
-              {!g.ok && <small>{g.reason}</small>}
-            </div>
-          ))}
+          <RealChecklist
+            gates={
+              readiness?.gates || [
+                {
+                  key: 'loading',
+                  label: 'Verificação server-side',
+                  ok: false,
+                  kind: 'TECHNICAL',
+                  reason: 'Aguardando validação da persistência e dos gates.',
+                },
+              ]
+            }
+          />
         </details>
       )}
       <details

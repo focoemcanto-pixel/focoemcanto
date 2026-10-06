@@ -3,6 +3,14 @@ import { feedStatus } from './mt5';
 import { isExecutable, type Proposal } from './approval';
 import { commandCanonical, type BrokerCommand } from './protocol';
 export type GateScope = 'static' | 'session' | 'operation';
+/**
+ * What a failing gate needs. TECHNICAL: configuration/infrastructure that can be fixed without any risk
+ * decision. DECISION: a choice only the operator can make (limits, policy approval, strategy, rollover).
+ * SESSION: deliberate per-session human controls (arm, kill switch). OPERATION: checked per order.
+ * Classification is display only: a gate's ok value never depends on it.
+ */
+export type GateKind = 'TECHNICAL' | 'DECISION' | 'SESSION' | 'OPERATION';
+export type GateCheck = { label: string; ok: boolean; kind: 'TECHNICAL' | 'DECISION'; action: string };
 export type RealGate = {
   key: string;
   label: string;
@@ -10,7 +18,13 @@ export type RealGate = {
   reason: string;
   /** static: configured once · session: armed/disarmed from the UI · operation: every order. */
   scope: GateScope;
+  kind: GateKind;
+  /** Concrete next step for a failing gate (where and what), never a secret value. */
+  action: string;
+  checks?: GateCheck[];
 };
+const decisionGates = new Set(['policy', 'authorization', 'limits', 'rollover', 'daily', 'frequency', 'exposure']);
+const sessionControls = new Set(['armed', 'kill']);
 /** Gates that are configuration, set once (backend env, policy, authorization, EA inputs). */
 const staticGates = new Set(['backend','policy','authorization','account','protocol','symbol','expiration','rollover','limits','local','metadata','exposure']);
 /** Gates evaluated per order on a concrete proposal. */
@@ -33,8 +47,41 @@ export function realReadiness(
     feed = feedStatus(b, env, now),
     local = s.localLimits || {};
   const gates: RealGate[] = [];
-  const add = (key: string, label: string, ok: unknown, reason: string) =>
-    gates.push({ key, label, ok: ok === true, reason, scope: scopeOf(key) });
+  const add = (key: string, label: string, ok: unknown, reason: string, checks?: GateCheck[]) => {
+    const scope = scopeOf(key),
+      failing = (checks || []).filter((x) => !x.ok),
+      kind: GateKind =
+        scope === 'operation'
+          ? 'OPERATION'
+          : sessionControls.has(key)
+            ? 'SESSION'
+            : failing.some((x) => x.kind === 'TECHNICAL')
+              ? 'TECHNICAL'
+              : failing.length || decisionGates.has(key)
+                ? 'DECISION'
+                : 'TECHNICAL';
+    gates.push({ key, label, ok: ok === true, reason, scope, kind, action: failing[0]?.action || reason, ...(checks ? { checks } : {}) });
+  };
+  const check = (label: string, ok: unknown, kind: GateCheck['kind'], action: string): GateCheck => ({ label, ok: ok === true, kind, action });
+  const accountConfigured = /^[a-f0-9]{64}$/.test(c.accountHash);
+  // EA v2.07+ reports every component of its local execution gate; v2.06 only the combined result.
+  const eg = s.executionGate,
+    eaChecks: GateCheck[] = eg
+      ? [
+          check('EnableExecution=true nas entradas do EA', eg.input, 'TECHNICAL', 'MT5 → propriedades do EA → Entradas: EnableExecution=true.'),
+          check('Botão Algo Trading do terminal ligado', eg.terminalAlgoTrading, 'TECHNICAL', 'MT5 → barra de ferramentas: ligue o botão Algo Trading (verde).'),
+          check("'Permitir Algo Trading' no EA", eg.eaAlgoTrading, 'TECHNICAL', "MT5 → propriedades do EA → Comum: marque 'Permitir Algo Trading'."),
+          check('Conta com negociação permitida', eg.accountTradeAllowed, 'TECHNICAL', 'A conta não permite negociar agora (investidor/somente leitura ou bloqueio da corretora): verifique com a XP.'),
+          check('Corretora permite Expert Advisor na conta', eg.accountExpertAllowed, 'TECHNICAL', 'A XP não permite negociação por EA nesta conta: habilite com a corretora.'),
+        ]
+      : [
+          check(
+            'Permissões de execução do MT5',
+            s.executionAllowed,
+            'TECHNICAL',
+            "O EA reporta executionAllowed=false. EnableExecution=true não basta: confira o botão Algo Trading do terminal, 'Permitir Algo Trading' nas propriedades do EA e se a conta permite EA. Instale o EA v2.07 para ver qual item falta.",
+          ),
+        ];
   const pos = (v: unknown) =>
     typeof v === 'number' && Number.isFinite(v) && v > 0;
   const recent = (v: unknown) =>
@@ -55,6 +102,14 @@ export function realReadiness(
     'Execução backend',
     c.execution,
     'TRADE_EXECUTION_ENABLED permanece false até ativação deliberada.',
+    [
+      check(
+        'TRADE_EXECUTION_ENABLED=true no backend',
+        c.execution,
+        'TECHNICAL',
+        'Cloudflare Pages → focoemcanto → Settings → Variables and Secrets (Production): TRADE_EXECUTION_ENABLED=true e novo deploy. Faça isso só depois do fingerprint conferir; sozinha a flag não libera ordem.',
+      ),
+    ],
   );
   add(
     'policy',
@@ -92,6 +147,7 @@ export function realReadiness(
     'EA execution habilitado',
     s.executionAllowed === true,
     'EnableExecution=false ou permissões MT5 bloqueadas.',
+    eaChecks,
   );
   add(
     'bridge',
@@ -116,6 +172,17 @@ export function realReadiness(
       s.accountTradeMode === 2 && policy.account_trade_mode === 2 &&
       policy.account_hash === c.accountHash,
     'Conta autorizada não configurada ou divergente.',
+    [
+      check(
+        'TRADE_ACCOUNT_HASH configurado no backend',
+        accountConfigured,
+        'TECHNICAL',
+        'Copie o fingerprint impresso pelo EA v2.07 na aba Experts ("account fingerprint") para Cloudflare Pages → Variables (Production): TRADE_ACCOUNT_HASH. Nunca use o número da conta.',
+      ),
+      check('Fingerprint do EA = backend', accountConfigured && b?.accountHash === c.accountHash, 'TECHNICAL', 'TRADE_ACCOUNT_HASH diverge do fingerprint que este EA envia: copie novamente do log do EA.'),
+      check('Conta REAL (não demo)', s.accountTradeMode === 2, 'TECHNICAL', 'O MT5 não reporta conta REAL.'),
+      check('Política REAL vinculada a esta conta', policy.account_hash === c.accountHash && policy.account_trade_mode === 2, 'DECISION', 'Salve a política REAL (conta, símbolo e contrato são preenchidos pelo servidor).'),
+    ],
   );
   add(
     'protocol',
@@ -131,6 +198,10 @@ export function realReadiness(
     'Símbolo autorizado',
     b?.bridgeId === c.bridgeId && b?.symbol === c.symbol && policy.symbol === c.symbol && (!p || p.symbol === c.symbol),
     'Símbolo da proposta/política/bridge divergente.',
+    [
+      check('Bridge e símbolo do EA = backend', b?.bridgeId === c.bridgeId && b?.symbol === c.symbol, 'TECHNICAL', 'BridgeId/TradeSymbol do EA divergem de TRADE_BRIDGE_ID/TRADE_MT5_SYMBOL.'),
+      check('Símbolo gravado na política', policy.symbol === c.symbol, 'DECISION', 'Salve a política REAL: o símbolo vem do servidor.'),
+    ],
   );
   add(
     'expiration',
@@ -140,6 +211,10 @@ export function realReadiness(
       pos(s.expirationTime) &&
       s.expirationTime * 1000 > now,
     'Vencimento confirmado e metadado de expiração do MT5 necessários.',
+    [
+      check('Vencimento informado pelo MT5 no futuro', pos(s.expirationTime) && s.expirationTime * 1000 > now, 'TECHNICAL', 'O MT5 não informa vencimento futuro para este símbolo: contrato vencido ou rollover necessário.'),
+      check('Vencimento gravado na política', typeof policy.contract_expires_at === 'string' && Date.parse(policy.contract_expires_at) > now, 'DECISION', 'Salve a política REAL: o vencimento é copiado do MT5 pelo servidor.'),
+    ],
   );
   add(
     'rollover',
@@ -170,6 +245,12 @@ export function realReadiness(
       Number.isInteger(policy.max_positions) &&
       policy.max_positions >= 1,
     'Defina limites financeiros, de posições, contratos e desvio.',
+    [
+      check('Risco máximo por operação (R$)', pos(policy.max_risk_brl), 'DECISION', 'Você decide: risco máximo por operação na política REAL.'),
+      check('Perda máxima diária (R$)', pos(policy.max_daily_loss_brl), 'DECISION', 'Você decide: perda máxima diária na política REAL.'),
+      check('Desvio máximo (pontos)', pos(policy.max_slippage_points), 'DECISION', 'Você decide: slippage máximo na política REAL.'),
+      check('Contratos e posições máximos', Number.isInteger(policy.max_contracts) && policy.max_contracts >= 1 && Number.isInteger(policy.max_positions) && policy.max_positions >= 1, 'DECISION', 'Você decide: contratos por ordem (o servidor limita a TRADE_MAX_CONTRACTS).'),
+    ],
   );
   add(
     'local',
@@ -183,6 +264,13 @@ export function realReadiness(
       Number.isInteger(local.maxPositions) &&
       local.maxPositions >= 1,
     'Fingerprint e limites locais do EA ausentes; zero mantém REAL bloqueado.',
+    [
+      check('ExpectedAccountFingerprint do EA confere', s.localAccountAuthorized, 'TECHNICAL', 'MT5 → propriedades do EA → Entradas: ExpectedAccountFingerprint = fingerprint impresso pelo próprio EA (aba Experts).'),
+      check('MaxContracts e MaxPositions do EA', Number.isInteger(local.maxContracts) && local.maxContracts >= 1 && Number.isInteger(local.maxPositions) && local.maxPositions >= 1, 'TECHNICAL', 'Entradas do EA: MaxContracts e MaxPositions ≥ 1.'),
+      check('MaxRiskBRL do EA (risco por operação)', pos(local.maxRiskBRL), 'DECISION', 'Você decide: MaxRiskBRL nas entradas do EA (igual ou menor que o limite da política).'),
+      check('MaxLoss24hBRL do EA (perda diária)', pos(local.maxLossBRL), 'DECISION', 'Você decide: MaxLoss24hBRL nas entradas do EA.'),
+      check('MaxSlippagePoints do EA', pos(local.maxSlippagePoints), 'DECISION', 'Você decide: MaxSlippagePoints nas entradas do EA.'),
+    ],
   );
   const meta =
     s.currency === 'BRL' &&
@@ -322,15 +410,28 @@ export function realReadiness(
   );
   const unavailable = armingGates.filter((g) => g.scope === 'static' && !g.ok);
   const canArm = !armed && armingGates.every((g) => g.ok);
+  // Infrastructure (technical) vs. operator decisions: a missing risk decision is never shown as a fault.
+  const pendingTechnical = armingGates.filter((g) => !g.ok && g.kind === 'TECHNICAL'),
+    pendingDecisions = gates.filter((g) => !g.ok && g.kind === 'DECISION'),
+    phase = armed ? 'ARMED' : pendingTechnical.length ? 'INFRA_PENDING' : pendingDecisions.length ? 'AWAITING_OPERATOR' : 'READY_DISARMED',
+    item = (g: RealGate) => ({ key: g.key, label: g.label, action: g.action, checks: (g.checks || []).filter((x) => !x.ok).map((x) => ({ label: x.label, kind: x.kind, action: x.action })) });
   return {
     status: armed
       ? canExecute
         ? 'REAL ARMADO · PRONTO PARA CONFIRMAÇÃO'
         : 'REAL ARMADO'
-      : unavailable.length
-        ? 'REAL INDISPONÍVEL'
-        : 'REAL BLOQUEADO',
+      : pendingTechnical.length
+        ? 'REAL INDISPONÍVEL · INFRAESTRUTURA PENDENTE'
+        : pendingDecisions.length
+          ? 'INFRAESTRUTURA PRONTA · AGUARDANDO DECISÕES DO OPERADOR'
+          : unavailable.length
+            ? 'REAL INDISPONÍVEL'
+            : 'REAL BLOQUEADO · SESSÃO DESARMADA',
     state: armed ? 'ARMED' : unavailable.length ? 'UNAVAILABLE' : 'BLOCKED',
+    phase,
+    infrastructureReady: pendingTechnical.length === 0,
+    pendingTechnical: pendingTechnical.map(item),
+    pendingDecisions: pendingDecisions.map(item),
     armed,
     canArm,
     armingGates,
@@ -355,6 +456,14 @@ export function realReadiness(
       feedAgeMs: feed.ageMs,
       bridgeConnected: s.connected === true && recent(b?.receivedAt),
       eaExecutionAllowed: s.executionAllowed === true,
+      eaVersion: typeof s.eaVersion === 'string' ? s.eaVersion : null,
+      eaExecutionGate: s.executionGate ?? null,
+      accountHashConfigured: accountConfigured,
+      bridgeAccountMatches: accountConfigured && b?.accountHash === c.accountHash,
+      localFingerprintMatches: s.localAccountAuthorized === true,
+      freeMarginBRL: Number.isFinite(s.freeMargin) ? s.freeMargin : null,
+      contractExpiresAtMT5: pos(s.expirationTime) ? new Date(s.expirationTime * 1000).toISOString() : null,
+      transport: s.transport ?? null,
       policyLoaded: policy.enabled === true,
       positions: Array.isArray(s.positions) ? s.positions.length : null,
       orders: Array.isArray(s.orders) ? s.orders.length : null,

@@ -90,6 +90,9 @@ export async function onRequestPost({
           operationsStatus.checkedAt,
         ).toISOString(),
         transport: 'supabase-rpc',
+        // Booleans only: whether TRADE_ACCOUNT_HASH exists and equals this EA's fingerprint. Never the value.
+        accountHashConfigured: /^[a-f0-9]{64}$/.test(c.accountHash),
+        accountHashMatchesBatch: /^[a-f0-9]{64}$/.test(c.accountHash) && c.accountHash === batch.accountHash,
         verifiedAt: new Date().toISOString(),
       },
     };
