@@ -104,6 +104,7 @@ function fixture() {
     },
     policy: {
       enabled: true,
+      risk_settings_version: 1,
       account_hash: account,
       symbol: p.symbol,
       contract_expires_at: new Date(now + 86400000).toISOString(),
@@ -335,6 +336,8 @@ async function database() {
     '20261005122031_bridge_market_clock.sql',
     '20261005150000_risk_blocked_technical_proposal.sql',
     '20261006090000_real_session_arming.sql',
+    '20261009090000_real_risk_settings.sql',
+    '20261009091000_real_arm_failure_list.sql',
   ])
     await db.exec(readFileSync('supabase/migrations/' + name, 'utf8'));
   // Fixtures stamp ticks in real UTC; production XP is broker-wall (see real-session.test.ts).
@@ -370,7 +373,7 @@ async function seed(
       f.ctx.policy.session_windows,
     ],
   );
-  await db.exec('update trade_execution_policy set account_trade_mode=2,max_position_contracts=2,max_orders_per_session=5,max_orders_per_day=10,max_notional_brl=1000000');
+  await db.exec('update trade_execution_policy set risk_settings_version=1,account_trade_mode=2,max_position_contracts=2,max_orders_per_session=5,max_orders_per_day=10,max_notional_brl=1000000');
   await db.query(
     `insert into trade_live_authorizations(strategy_id,version,live_authorized,stage)values($1,$2,true,'live-monitoring')on conflict(strategy_id,version)do update set live_authorized=true,stage='live-monitoring'`,
     [f.p.setup.strategy, f.p.setup.version],

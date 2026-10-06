@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import RealChecklist from './RealChecklist';
+import { oneRBRL } from '../../trade/bridge/risk-model';
 const money = (v: number | null | undefined) =>
   v == null
     ? 'ausente'
@@ -304,7 +305,55 @@ export default function RealSessionPanel({
   );
 }
 
-/** One-time static configuration: risk policy and per-version live authorization. */
+/** Accepts "10.000,50", "10000.5" or "1,5". Empty or invalid → NaN (never a hidden default). */
+const parse = (v: unknown) => {
+  const t = String(v ?? '').trim().replace(/\s|R\$/g, '');
+  if (!t) return NaN;
+  const n = Number(t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t);
+  return Number.isFinite(n) ? n : NaN;
+};
+const brl = (v: number | null | undefined) =>
+  v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const plain = (v: number | null | undefined) => (v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 }));
+// Operational starting points (editable). Capital and 1R are never prefilled: they are the operator's decision.
+const starting = {
+  capitalBRL: '',
+  riskModel: 'PCT_CAPITAL',
+  riskValue: '',
+  dailyLossUnit: 'R',
+  dailyLossValue: '3',
+  maxContracts: '1',
+  maxOrdersPerSession: '3',
+  maxOrdersPerDay: '5',
+  maxSessionMinutes: '120',
+  maxSlippagePoints: '50',
+  maxNotionalBRL: '50000',
+  rolloverConfirmed: false,
+  enabled: false,
+};
+type RealForm = typeof starting;
+const fromSettings = (s: any, symbol: string, policy: any): RealForm => ({
+  capitalBRL: String(s.capitalBRL).replace('.', ','),
+  riskModel: s.riskModel,
+  riskValue: String(s.riskValue).replace('.', ','),
+  dailyLossUnit: s.dailyLossUnit,
+  dailyLossValue: String(s.dailyLossValue).replace('.', ','),
+  maxContracts: String(s.maxContracts),
+  maxOrdersPerSession: String(s.maxOrdersPerSession),
+  maxOrdersPerDay: String(s.maxOrdersPerDay),
+  maxSessionMinutes: String(s.maxSessionMinutes),
+  maxSlippagePoints: String(s.maxSlippagePoints).replace('.', ','),
+  maxNotionalBRL: String(s.maxNotionalBRL).replace('.', ','),
+  // Rollover confirmation is per contract: a new symbol needs a new explicit confirmation.
+  rolloverConfirmed: s.rolloverConfirmed === true && s.symbol === symbol && policy?.rollover_confirmed === true,
+  enabled: s.enabled === true && policy?.enabled === true,
+});
+
+/**
+ * Static REAL configuration: GESTÃO DE RISCO · REAL (capital operacional → 1R → policy) and per-version live
+ * authorization. Saving never arms REAL, never releases the kill switch and never sends an order; it disarms
+ * any armed session. Capital operacional is a planning number, shown apart from the XP balance/margin.
+ */
 function RealConfig({
   source,
   onChanged,
@@ -314,32 +363,22 @@ function RealConfig({
 }) {
   const [open, setOpen] = useState(false),
     [data, setData] = useState<any>(null),
-    [form, setForm] = useState<Record<string, any>>({}),
+    [form, setForm] = useState<RealForm>(starting),
+    [ack, setAck] = useState(false),
     [message, setMessage] = useState(''),
-    [busy, setBusy] = useState(false);
+    [busy, setBusy] = useState(false),
+    editing = useRef(false);
   const load = async () => {
     const r = await fetch('/api/trade/real-config', { cache: 'no-store' });
     const d = await r.json().catch(() => ({}));
     if (!r.ok) return setMessage(d.error || 'Configuração indisponível');
     setData(d);
-    const p = d.policy || {};
-    setForm({
-      maxRiskBRL: p.max_risk_brl ?? '',
-      maxDailyLossBRL: p.max_daily_loss_brl ?? '',
-      maxSlippagePoints: p.max_slippage_points ?? '',
-      maxContracts: p.max_contracts ?? 1,
-      maxNotionalBRL: p.max_notional_brl ?? '',
-      maxOrdersPerSession: p.max_orders_per_session ?? '',
-      maxOrdersPerDay: p.max_orders_per_day ?? '',
-      maxSessionMinutes: p.max_session_minutes ?? 120,
-      rolloverConfirmed: p.rollover_confirmed === true && p.symbol === d.symbol,
-      enabled: p.enabled === true,
-    });
+    if (!editing.current) setForm(d.riskSettings ? fromSettings(d.riskSettings, d.symbol, d.policy) : starting);
   };
   useEffect(() => {
     if (open && source === 'mt5') load();
   }, [open, source]);
-  const send = async (body: unknown) => {
+  const send = async (body: unknown, done: string) => {
     setBusy(true);
     setMessage('');
     try {
@@ -349,8 +388,10 @@ function RealConfig({
         body: JSON.stringify(body),
       });
       const d = await r.json().catch(() => ({}));
-      if (!r.ok) throw new Error(d.error || 'Configuração recusada');
-      setMessage('Salvo. Qualquer sessão REAL armada foi desarmada.');
+      if (!r.ok) throw new Error(String(d.error || 'Configuração recusada').replace(/^REAL_RISK_SETTINGS_INVALID:\s*/, ''));
+      editing.current = false;
+      setAck(false);
+      setMessage(done);
       await load();
       await onChanged();
     } catch (e) {
@@ -359,20 +400,35 @@ function RealConfig({
       setBusy(false);
     }
   };
-  const field = (key: string, label: string, step = 'any') => (
-    <label key={key}>
+  const set = (k: keyof RealForm, v: string | boolean) => {
+    editing.current = true;
+    setAck(false);
+    setForm((f) => ({ ...f, [k]: v }));
+  };
+  const capital = parse(form.capitalBRL),
+    value = parse(form.riskValue),
+    oneR = capital > 0 && value > 0 ? oneRBRL(capital, form.riskModel as any, value) : NaN,
+    daily = parse(form.dailyLossValue),
+    dailyBRL = form.dailyLossUnit === 'R' ? daily * oneR : daily,
+    numbers = {
+      maxContracts: parse(form.maxContracts),
+      maxOrdersPerSession: parse(form.maxOrdersPerSession),
+      maxOrdersPerDay: parse(form.maxOrdersPerDay),
+      maxSessionMinutes: parse(form.maxSessionMinutes),
+      maxSlippagePoints: parse(form.maxSlippagePoints),
+      maxNotionalBRL: parse(form.maxNotionalBRL),
+    },
+    complete = [capital, value, daily, ...Object.values(numbers)].every((v) => Number.isFinite(v) && v > 0);
+  const field = (key: keyof RealForm, label: string, placeholder: string, mode: 'decimal' | 'numeric' = 'decimal') => (
+    <label>
       {label}
-      <input
-        type="number"
-        step={step}
-        value={form[key] ?? ''}
-        onChange={(e) => setForm({ ...form, [key]: e.target.value })}
-      />
+      <input inputMode={mode} placeholder={placeholder} value={String(form[key])} onChange={(e) => set(key, e.target.value)} />
     </label>
   );
+  const s = data?.riskSettings;
   return (
     <details className="trade-real-config" onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
-      <summary>Configuração REAL · uma vez</summary>
+      <summary>Configuração REAL · gestão de risco e estratégias</summary>
       {source !== 'mt5' ? (
         <p>Selecione XP / MetaTrader 5.</p>
       ) : !data ? (
@@ -385,62 +441,166 @@ function RealConfig({
             {data.symbol} · execução backend{' '}
             {data.executionBackendEnabled ? 'habilitada' : 'desabilitada (TRADE_EXECUTION_ENABLED)'}
           </p>
-          <div className="trade-real-config-grid">
-            {field('maxRiskBRL', 'Limite de risco por operação (R$)')}
-            {field('maxDailyLossBRL', 'Perda máxima diária (R$)')}
-            {field('maxSlippagePoints', 'Desvio máximo (pontos)')}
-            {field('maxContracts', `Contratos máximos (≤ ${data.maxContractsCap})`, '1')}
-            {field('maxNotionalBRL', 'Exposição nocional máxima (R$)')}
-            {field('maxOrdersPerSession', 'Ordens por sessão', '1')}
-            {field('maxOrdersPerDay', 'Ordens por dia', '1')}
-            {field('maxSessionMinutes', 'Duração máxima da sessão armada (min)', '1')}
-          </div>
-          <label className="trade-real-ack">
-            <input
-              type="checkbox"
-              checked={!!form.rolloverConfirmed}
-              onChange={(e) => setForm({ ...form, rolloverConfirmed: e.target.checked })}
-            />{' '}
-            Confirmo que {data.symbol} é o contrato vigente
-            {data.contractExpiresAt ? ` (vencimento MT5 ${new Date(data.contractExpiresAt).toLocaleDateString('pt-BR')})` : ''}.
-          </label>
-          <label className="trade-real-ack">
-            <input
-              type="checkbox"
-              checked={!!form.enabled}
-              onChange={(e) => setForm({ ...form, enabled: e.target.checked })}
-            />{' '}
-            Permitir sessões REAL nesta conta (ainda exige armar e confirmar cada ordem).
-          </label>
-          <button
-            disabled={busy}
-            onClick={() =>
-              send({ action: 'policy', policy: form, confirmation: 'SALVAR CONFIGURAÇÃO REAL' })
-            }
-          >
-            SALVAR CONFIGURAÇÃO REAL
-          </button>
-          <h4>Estratégias autorizadas para REAL (por versão)</h4>
-          {data.strategies.map((s: any) => {
+          <section className="trade-risk" data-mode="REAL">
+            <span className="trade-eyebrow">GESTÃO DE RISCO · REAL</span>
+            <strong>{s ? `1R = ${brl(Number(s.oneRBRL))} · versão ${s.version}` : 'GESTÃO DE RISCO REAL NÃO CONFIGURADA · aguardando sua configuração'}</strong>
+            <dl className="trade-risk-current">
+              <dt>Capital operacional (planejamento)</dt>
+              <dd>{s ? brl(Number(s.capitalBRL)) : '—'}</dd>
+              <dt>Saldo / margem da corretora (XP)</dt>
+              <dd>
+                {brl(data.brokerBalanceBRL)} / margem livre {brl(data.brokerFreeMarginBRL)} · capacidade de execução; sem margem a XP recusa
+                a ordem mesmo dentro do 1R.
+              </dd>
+              {data.riskCapBRL != null && (
+                <>
+                  <dt>Teto administrativo de 1R</dt>
+                  <dd>{data.riskCapBRL > 0 ? brl(data.riskCapBRL) : 'inválido · REAL bloqueado'}</dd>
+                </>
+              )}
+            </dl>
+            <form
+              className="trade-risk-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                send(
+                  {
+                    action: 'policy',
+                    confirmation: 'SALVAR CONFIGURAÇÃO REAL',
+                    settings: { ...numbers, capitalBRL: capital, riskModel: form.riskModel, riskValue: value, dailyLossUnit: form.dailyLossUnit, dailyLossValue: daily, rolloverConfirmed: form.rolloverConfirmed, enabled: form.enabled },
+                  },
+                  'Gestão REAL salva e política REAL atualizada. Qualquer sessão REAL armada foi desarmada; nenhuma ordem foi enviada.',
+                );
+              }}
+            >
+              {field('capitalBRL', 'Capital operacional (R$) — planejamento, não é o saldo da XP', 'ex.: 2.000,00')}
+              <fieldset className="trade-risk-model">
+                <legend>Como definir 1R?</legend>
+                <label>
+                  <input type="radio" name="realRiskModel" checked={form.riskModel === 'PCT_CAPITAL'} onChange={() => set('riskModel', 'PCT_CAPITAL')} />
+                  Percentual do capital
+                </label>
+                <label>
+                  <input type="radio" name="realRiskModel" checked={form.riskModel === 'FIXED_BRL'} onChange={() => set('riskModel', 'FIXED_BRL')} />
+                  Valor fixo
+                </label>
+              </fieldset>
+              {form.riskModel === 'PCT_CAPITAL'
+                ? field('riskValue', 'Risco por operação (% do capital, até 10%)', 'ex.: 5')
+                : field('riskValue', '1R (R$)', 'ex.: 100,00')}
+              <fieldset className="trade-risk-model">
+                <legend>Perda máxima diária em</legend>
+                <label>
+                  <input type="radio" name="realDailyUnit" checked={form.dailyLossUnit === 'R'} onChange={() => set('dailyLossUnit', 'R')} />R
+                </label>
+                <label>
+                  <input type="radio" name="realDailyUnit" checked={form.dailyLossUnit === 'BRL'} onChange={() => set('dailyLossUnit', 'BRL')} />
+                  R$
+                </label>
+              </fieldset>
+              {field('dailyLossValue', form.dailyLossUnit === 'R' ? 'Perda máxima diária (R)' : 'Perda máxima diária (R$)', form.dailyLossUnit === 'R' ? 'ex.: 3' : 'ex.: 300,00')}
+              {field('maxOrdersPerSession', 'Máximo de operações por sessão', 'ex.: 3', 'numeric')}
+              {field('maxOrdersPerDay', 'Máximo de operações por dia', 'ex.: 5', 'numeric')}
+              {field('maxSessionMinutes', 'Duração máxima da sessão armada (min)', 'ex.: 120', 'numeric')}
+              {field('maxContracts', `Máximo de contratos por operação (até ${data.maxContractsCap})`, 'ex.: 1', 'numeric')}
+              <label>
+                Máximo de posições simultâneas
+                <input value="1" disabled readOnly />
+              </label>
+              {field('maxSlippagePoints', 'Desvio máximo aceito entre a proposta e a execução (pontos)', 'ex.: 50')}
+              {field('maxNotionalBRL', 'Exposição máxima (valor nocional: preço × R$ por ponto × contratos, em R$)', 'ex.: 50.000,00')}
+              <label className="trade-real-ack">
+                <input type="checkbox" checked={form.rolloverConfirmed} onChange={(e) => set('rolloverConfirmed', e.target.checked)} /> Confirmo que{' '}
+                {data.symbol} é o contrato vigente
+                {data.contractExpiresAt ? ` (vencimento MT5 ${new Date(data.contractExpiresAt).toLocaleDateString('pt-BR')})` : ''}. Um novo contrato exige nova confirmação.
+              </label>
+              <label className="trade-real-ack">
+                <input type="checkbox" checked={form.enabled} onChange={(e) => set('enabled', e.target.checked)} /> Permitir sessões REAL nesta conta (ainda
+                exige estratégia autorizada, armar a sessão e confirmar cada ordem duas vezes).
+              </label>
+              <div className="trade-risk-summary" aria-live="polite">
+                <span className="trade-eyebrow">RESUMO ANTES DE SALVAR</span>
+                <dl>
+                  <dt>Capital operacional</dt>
+                  <dd>{brl(capital)}</dd>
+                  <dt>Risco por operação</dt>
+                  <dd>{form.riskModel === 'PCT_CAPITAL' ? (Number.isFinite(value) ? `${plain(value)}% do capital` : '—') : 'valor fixo'}</dd>
+                  <dt>SEU 1R REAL</dt>
+                  <dd data-risk-preview="real-one-r">
+                    <strong>{brl(oneR)}</strong>
+                  </dd>
+                  <dt>Perda máxima diária</dt>
+                  <dd>
+                    {form.dailyLossUnit === 'R' && Number.isFinite(daily) ? `${plain(daily)}R · ` : ''}
+                    {brl(dailyBRL)}
+                  </dd>
+                  <dt>Contratos / posições</dt>
+                  <dd>
+                    {plain(numbers.maxContracts)} / 1
+                  </dd>
+                  <dt>Operações por sessão / dia</dt>
+                  <dd>
+                    {plain(numbers.maxOrdersPerSession)} / {plain(numbers.maxOrdersPerDay)}
+                  </dd>
+                  <dt>Sessão · desvio · exposição</dt>
+                  <dd>
+                    {plain(numbers.maxSessionMinutes)} min · {plain(numbers.maxSlippagePoints)} pts · {brl(numbers.maxNotionalBRL)}
+                  </dd>
+                </dl>
+                <small>Calculado na tela; o servidor recalcula o 1R, grava uma nova versão auditada e gera a política REAL.</small>
+              </div>
+              <label className="trade-real-ack">
+                <input type="checkbox" checked={ack} onChange={(e) => setAck(e.target.checked)} /> Revisei o resumo: estes passam a ser os limites
+                REAL. Salvar desarma qualquer sessão armada e não envia ordem.
+              </label>
+              <button className="trade-primary" disabled={busy || !complete || !ack}>
+                SALVAR CONFIGURAÇÃO REAL
+              </button>
+              <small>
+                A estrutura define o stop; o stop define o risco por contrato; o 1R define a quantidade (arredondada para baixo). Se 1 contrato
+                excede o 1R, a proposta fica BLOQUEADA POR RISCO — o stop nunca é aproximado. O EA aplica o menor entre os limites dele e os da
+                política: ele só aperta, nunca amplia. Esta gestão é só do REAL; a do PAPER continua separada.
+              </small>
+            </form>
+            {data.riskHistory?.length > 0 && (
+              <details>
+                <summary>Histórico da gestão REAL</summary>
+                <ul>
+                  {data.riskHistory.map((h: any) => (
+                    <li key={h.version}>
+                      v{h.version} · {new Date(h.createdAt).toLocaleString('pt-BR')} · capital {brl(Number(h.capitalBRL))} ·{' '}
+                      {h.riskModel === 'FIXED_BRL' ? 'fixo' : `${plain(Number(h.riskValue))}%`} · 1R {brl(Number(h.oneRBRL))} · diário{' '}
+                      {brl(Number(h.dailyLossBRL))} · {h.enabled ? 'sessões permitidas' : 'sessões não permitidas'}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </section>
+          <h4>Estratégias autorizadas para REAL (por versão) · decisão sua</h4>
+          {data.strategies.map((st: any) => {
             const a = data.authorizations.find(
-              (x: any) => x.strategy_id === s.id && x.version === s.version,
+              (x: any) => x.strategy_id === st.id && x.version === st.version,
             );
             const on = a?.live_authorized === true && a?.stage === 'live-monitoring';
             return (
-              <div key={s.id} className="trade-real-authorization">
+              <div key={st.id} className="trade-real-authorization">
                 <span>
-                  {s.name} · v{s.version} · {on ? 'AUTORIZADA' : 'não autorizada'}
+                  {st.name} · v{st.version} · {on ? 'AUTORIZADA' : 'não autorizada'}
                 </span>
                 <button
                   disabled={busy}
                   onClick={() =>
-                    send({
-                      action: 'authorize',
-                      strategy: s.id,
-                      version: s.version,
-                      authorized: !on,
-                      confirmation: 'AUTORIZAR ESTRATÉGIA REAL',
-                    })
+                    send(
+                      {
+                        action: 'authorize',
+                        strategy: st.id,
+                        version: st.version,
+                        authorized: !on,
+                        confirmation: 'AUTORIZAR ESTRATÉGIA REAL',
+                      },
+                      on ? 'Autorização revogada.' : 'Estratégia autorizada para REAL.',
+                    )
                   }
                 >
                   {on ? 'Revogar' : 'Autorizar'}

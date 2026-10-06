@@ -1,4 +1,4 @@
-import { config, rpc, type BridgeEnv } from './config';
+import { config, rpc, realRiskCap, type BridgeEnv } from './config';
 import { feedStatus } from './mt5';
 import { isExecutable, type Proposal } from './approval';
 import { commandCanonical, type BrokerCommand } from './protocol';
@@ -23,10 +23,10 @@ export type RealGate = {
   action: string;
   checks?: GateCheck[];
 };
-const decisionGates = new Set(['policy', 'authorization', 'limits', 'rollover', 'daily', 'frequency', 'exposure']);
+const decisionGates = new Set(['cap', 'policy', 'authorization', 'limits', 'rollover', 'daily', 'frequency', 'exposure']);
 const sessionControls = new Set(['armed', 'kill']);
 /** Gates that are configuration, set once (backend env, policy, authorization, EA inputs). */
-const staticGates = new Set(['backend','policy','authorization','account','protocol','symbol','expiration','rollover','limits','local','metadata','exposure']);
+const staticGates = new Set(['cap','backend','policy','authorization','account','protocol','symbol','expiration','rollover','limits','local','metadata','exposure']);
 /** Gates evaluated per order on a concrete proposal. */
 const operationGates = new Set(['inspection','sizing','notional','quantity','prices','risk','proposal']);
 const scopeOf = (key: string): GateScope =>
@@ -111,11 +111,16 @@ export function realReadiness(
       ),
     ],
   );
+  const managed = Number.isInteger(policy.risk_settings_version) && policy.risk_settings_version > 0;
   add(
     'policy',
     'Política REAL aprovada',
-    policy.enabled === true,
+    policy.enabled === true && managed,
     'Aprovação explícita da política de risco necessária.',
+    [
+      check('Gestão de Risco REAL configurada (capital operacional e 1R)', managed, 'DECISION', '/trade → REAL → GESTÃO DE RISCO · REAL: defina capital operacional, 1R e limites e salve. A política REAL é gerada a partir dela.'),
+      check('Sessões REAL permitidas na política', policy.enabled === true, 'DECISION', 'Na GESTÃO DE RISCO · REAL marque "Permitir sessões REAL" e salve.'),
+    ],
   );
   add(
     'authorization',
@@ -272,6 +277,9 @@ export function realReadiness(
       check('MaxSlippagePoints do EA', pos(local.maxSlippagePoints), 'DECISION', 'Você decide: MaxSlippagePoints nas entradas do EA.'),
     ],
   );
+  const cap = realRiskCap(env),
+    capOk = cap === null || (cap > 0 && pos(policy.max_risk_brl) && policy.max_risk_brl <= cap);
+  add('cap', 'Teto administrativo de risco', capOk, cap === 0 ? 'TRADE_REAL_MAX_RISK_BRL inválido: REAL bloqueado.' : '1R da política acima do teto administrativo TRADE_REAL_MAX_RISK_BRL.');
   const meta =
     s.currency === 'BRL' &&
     [0,1,2].includes(s.marginMode) &&
@@ -384,10 +392,10 @@ export function realReadiness(
       'Risco financeiro da proposta',
       meta &&
         risk * value * p.quantity <=
-          Math.min(policy.max_risk_brl, local.maxRiskBRL) &&
+          Math.min(policy.max_risk_brl, local.maxRiskBRL, cap ?? Infinity) &&
         p.pointValue === value &&
         Math.abs(p.riskBRL - p.riskPoints * p.pointValue * p.quantity) < 1e-6 &&
-        p.riskBRL <= Math.min(policy.max_risk_brl, local.maxRiskBRL),
+        p.riskBRL <= Math.min(policy.max_risk_brl, local.maxRiskBRL, cap ?? Infinity),
       'Risco ou valor monetário excede limite/está divergente.',
     );
     add(
@@ -485,6 +493,8 @@ export function realReadiness(
         policy.max_contracts || c.maxContracts,
       ),
       maxRiskBRL: policy.max_risk_brl ?? null,
+      riskCapBRL: cap,
+      riskSettingsVersion: policy.risk_settings_version ?? null,
       maxDailyLossBRL: policy.max_daily_loss_brl ?? null,
       maxPositions: policy.max_positions ?? null,
       maxPositionContracts: policy.max_position_contracts ?? null,

@@ -8,23 +8,41 @@ export type BridgeEnv = {
   TRADE_EXECUTION_ENABLED?: string;
   TRADE_MAX_CONTRACTS?: string;
   TRADE_FEED_MAX_AGE_MS?: string;
+  /** Optional administrative ceiling for REAL 1R (BRL). Unset = no extra ceiling; set but invalid = 0 (fail closed). */
+  TRADE_REAL_MAX_RISK_BRL?: string;
 };
 // PAPER risk comes only from the persisted, versioned risk settings (trade/bridge/risk-settings.ts).
 // There is no hardcoded or environment fallback: without settings a PAPER proposal is RISK_BLOCKED.
-/** REAL per-trade risk limit: the approved policy, tightened by the EA local limit. No defaults. */
-export function realRiskLimit(ctx: any): {
+/** Administrative REAL 1R ceiling: null when not configured; an invalid value blocks everything (0). */
+export function realRiskCap(env?: BridgeEnv): number | null {
+  const raw = env?.TRADE_REAL_MAX_RISK_BRL;
+  if (raw === undefined || raw === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
+/**
+ * REAL per-trade risk limit: the approved policy (materialized from GESTÃO DE RISCO · REAL), tightened by
+ * the EA local limit and the administrative ceiling. A lower layer can only tighten, never widen. No defaults.
+ */
+export function realRiskLimit(ctx: any, env?: BridgeEnv): {
   maxRiskBRL: number | null;
   source: string;
 } {
   const policy = ctx?.policy?.max_risk_brl,
     local = ctx?.bridge?.state?.localLimits?.maxRiskBRL,
+    cap = realRiskCap(env),
     pos = (v: unknown): v is number =>
       typeof v === 'number' && Number.isFinite(v) && v > 0;
   if (!pos(policy))
     return { maxRiskBRL: null, source: 'policy.max_risk_brl ausente' };
-  return pos(local) && local < policy
-    ? { maxRiskBRL: local, source: 'EA localLimits.maxRiskBRL' }
-    : { maxRiskBRL: policy, source: 'policy.max_risk_brl' };
+  if (cap === 0)
+    return { maxRiskBRL: null, source: 'TRADE_REAL_MAX_RISK_BRL inválido' };
+  let limit = { maxRiskBRL: policy, source: 'policy.max_risk_brl' };
+  if (pos(local) && local < limit.maxRiskBRL)
+    limit = { maxRiskBRL: local, source: 'EA localLimits.maxRiskBRL' };
+  if (cap !== null && cap < limit.maxRiskBRL)
+    limit = { maxRiskBRL: cap, source: 'teto administrativo TRADE_REAL_MAX_RISK_BRL' };
+  return limit;
 }
 export function config(env: BridgeEnv) {
   const maxContracts = Number(env.TRADE_MAX_CONTRACTS ?? 1);
@@ -138,7 +156,7 @@ export async function rpc(
     if(name.startsWith('trade_inspection_') && data?.code==='P0001' && ['Inspection proposal invalid','Inspection nonce already consumed','Inspection confirmation invalid or expired'].includes(data?.message))
       throw new Error('Confirmação de inspeção inválida, reutilizada ou expirada. Gere uma nova proposta.');
     // Deliberate REAL-session/configuration refusals carry a safe, explicit code for the operator.
-    if(data?.code==='P0001' && typeof data?.message==='string' && /^(ARM_BLOCKED|POLICY_|AUTHORIZATION_|Kill switch is released|RISK_SETTINGS_INVALID|QUANTITY_)/.test(data.message))
+    if(data?.code==='P0001' && typeof data?.message==='string' && /^(ARM_BLOCKED|POLICY_|AUTHORIZATION_|Kill switch is released|RISK_SETTINGS_INVALID|REAL_RISK_SETTINGS_INVALID|QUANTITY_)/.test(data.message))
       throw new Error(data.message.slice(0,300));
     const code =
       data?.code === 'P0001' && data?.message === 'Another EA session owns the lease'

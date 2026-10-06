@@ -63,6 +63,7 @@ function ready() {
     bridge: { bridgeId: 'xp-mt5-primary', symbol: 'WINV26', accountHash: account, receivedAt: new Date(now).toISOString(), killSwitch: false, tick: { symbol: 'WINV26', timeMsc: now, bid: 135420, ask: 135425, last: 135425, volume: 1, flags: 0 }, state },
     policy: {
       enabled: true,
+      risk_settings_version: 1,
       account_hash: account,
       symbol: 'WINV26',
       contract_expires_at: new Date(now + 86400000).toISOString(),
