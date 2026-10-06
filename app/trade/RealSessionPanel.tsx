@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import RealChecklist from './RealChecklist';
 const money = (v: number | null | undefined) =>
   v == null
     ? 'ausente'
@@ -88,9 +89,11 @@ export default function RealSessionPanel({
         <strong>
           {state === 'ARMED'
             ? 'REAL ARMADO'
-            : state === 'BLOCKED'
-              ? 'REAL BLOQUEADO'
-              : 'REAL INDISPONÍVEL'}
+            : source === 'mt5' && real?.status
+              ? real.status
+              : state === 'BLOCKED'
+                ? 'REAL BLOQUEADO'
+                : 'REAL INDISPONÍVEL'}
         </strong>
         {state === 'ARMED' && (
           <small>
@@ -110,13 +113,28 @@ export default function RealSessionPanel({
           <small>
             {source !== 'mt5'
               ? 'Selecione XP / MetaTrader 5.'
-              : `Motivo: ${missing.filter((g: any) => g.scope === 'static').map((g: any) => g.label).join(' · ') || 'configuração REAL incompleta'}.`}
+              : real?.pendingTechnical || real?.pendingDecisions
+                ? `${real.pendingTechnical?.length ? `Infraestrutura pendente: ${real.pendingTechnical.map((g: any) => g.label).join(' · ')}. ` : 'Infraestrutura pronta. '}${real.pendingDecisions?.length ? `Aguardando suas decisões: ${real.pendingDecisions.map((g: any) => g.label).join(' · ')}.` : ''}`
+                : `Motivo: ${missing.filter((g: any) => g.scope === 'static').map((g: any) => g.label).join(' · ') || 'configuração REAL incompleta'}.`}
           </small>
         )}
       </div>
       <dl className="trade-real-overview">
         <dt>Conta</dt>
-        <dd>{o.accountMatches ? 'fingerprint confere' : 'fingerprint não confere / não configurado'}{o.accountTradeMode === 2 ? ' · conta REAL' : o.accountTradeMode == null ? '' : ' · conta não-REAL'}</dd>
+        <dd>
+          {o.accountMatches
+            ? 'fingerprint confere (EA, backend e política)'
+            : o.accountHashConfigured === false
+              ? 'TRADE_ACCOUNT_HASH não configurado no backend'
+              : o.bridgeAccountMatches === false
+                ? 'fingerprint do EA diverge do backend'
+                : o.bridgeAccountMatches
+                  ? 'EA = backend · falta vincular à política'
+                  : 'fingerprint não confere / não configurado'}
+          {o.localFingerprintMatches === false ? ' · ExpectedAccountFingerprint do EA vazio/divergente' : ''}
+          {o.accountTradeMode === 2 ? ' · conta REAL' : o.accountTradeMode == null ? '' : ' · conta não-REAL'}
+          {o.freeMarginBRL != null ? ` · margem livre ${money(o.freeMarginBRL)}` : ''}
+        </dd>
         <dt>Símbolo</dt>
         <dd>{o.symbol || '—'}</dd>
         <dt>Feed (dados de mercado)</dt>
@@ -132,7 +150,22 @@ export default function RealSessionPanel({
           {d?.eaVersion ? ` · v${d.eaVersion}` : ''}
         </dd>
         <dt>Execução no EA</dt>
-        <dd data-readiness="ea-execution">{d ? (d.eaExecution === 'ENABLED' ? 'HABILITADA' : d.eaExecution === 'DISABLED' ? 'DESABILITADA' : 'DESCONHECIDA') : o.eaExecutionAllowed ? 'HABILITADA' : 'DESABILITADA'}</dd>
+        <dd data-readiness="ea-execution">
+          {d ? (d.eaExecution === 'ENABLED' ? 'HABILITADA' : d.eaExecution === 'DISABLED' ? 'DESABILITADA' : 'DESCONHECIDA') : o.eaExecutionAllowed ? 'HABILITADA' : 'DESABILITADA'}
+          {o.eaExecutionAllowed !== true && o.eaExecutionGate
+            ? ` · ${[
+                !o.eaExecutionGate.input && 'EnableExecution=false',
+                !o.eaExecutionGate.terminalAlgoTrading && 'botão Algo Trading desligado',
+                !o.eaExecutionGate.eaAlgoTrading && "'Permitir Algo Trading' desmarcado no EA",
+                !o.eaExecutionGate.accountTradeAllowed && 'conta sem negociação',
+                !o.eaExecutionGate.accountExpertAllowed && 'corretora não permite EA',
+              ]
+                .filter(Boolean)
+                .join(' · ')}`
+            : o.eaExecutionAllowed !== true && o.bridgeConnected
+              ? ' · EnableExecution=true não basta: permissões do MT5 bloqueadas (detalhe no EA v2.07)'
+              : ''}
+        </dd>
         <dt>Sessão REAL · kill switch</dt>
         <dd data-readiness="session">
           {d?.realSession === 'ARMED' ? 'ARMADA' : d?.realSession === 'NOT_ARMED' ? 'NÃO ARMADA' : 'DESCONHECIDA'} · kill switch{' '}
@@ -149,9 +182,9 @@ export default function RealSessionPanel({
           </>
         )}
         <dt>Policy</dt>
-        <dd>{o.policyLoaded ? 'carregada' : 'não configurada'}</dd>
+        <dd>{o.policyLoaded ? 'carregada' : 'não salva · aguardando seus limites (conta, símbolo e contrato vêm do servidor)'}</dd>
         <dt>Limite por operação</dt>
-        <dd>{money(limits.maxRiskBRL)}</dd>
+        <dd>{limits.maxRiskBRL == null ? 'você decide (ausente)' : money(limits.maxRiskBRL)}</dd>
         <dt>Contratos máx · perda diária máx</dt>
         <dd>
           {limits.maxContracts ?? '—'} · {money(limits.maxDailyLossBRL)}
@@ -220,15 +253,8 @@ export default function RealSessionPanel({
               Armar NÃO envia ordem. Durante a sessão, cada ordem ainda exige
               proposta READY, seu clique e a confirmação final.
             </p>
-            <div className="trade-real-checklist" role="list">
-              {(real?.armingGates || []).map((g: any) => (
-                <div key={g.key} data-ok={g.ok} role="listitem">
-                  <strong>
-                    {g.ok ? '✓' : '○'} {g.label}
-                  </strong>
-                  {!g.ok && <small>{g.reason}</small>}
-                </div>
-              ))}
+            <div className="trade-real-checklist">
+              <RealChecklist gates={real?.armingGates || []} />
             </div>
             <label>
               Duração{' '}

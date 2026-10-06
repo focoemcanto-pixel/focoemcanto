@@ -49,7 +49,7 @@ Marque token e chave Supabase como **secrets**. Nenhuma variável `NEXT_PUBLIC_*
    - `ApiOrigin`: `https://focoemcanto.com` (sem barra final).
    - `BridgeId`: o mesmo backend; demais limites podem manter defaults documentados.
 9. Confirme **OK**. Para o teste de dados, não habilite negociação automática: timer e WebRequest são independentes de permissão de ordens. Mesmo se o terminal estiver autorizado para outras operações, `EnableExecution=false` bloqueia este EA.
-10. Abra **Toolbox/Caixa de Ferramentas → Experts**. Procure **HTTP 200** (EA v2 não registra fingerprint privado) no gráfico. HTTP -1/erro 4014/4060: confira URL autorizada e rede. HTTP 401: tokens não coincidem. HTTP 400: veja configuração do backend/persistência/símbolo/conta. Segredos nunca aparecem no log.
+10. Abra **Toolbox/Caixa de Ferramentas → Experts**. Procure **HTTP 200** no gráfico. O EA v2.07 imprime aqui, uma vez ao iniciar, o fingerprint da conta (veja *Homologação REAL*). HTTP -1/erro 4014/4060: confira URL autorizada e rede. HTTP 401: tokens não coincidem. HTTP 400: veja configuração do backend/persistência/símbolo/conta. Segredos nunca aparecem no log.
 11. Abra `focoemcanto.com/trade`, faça login FocoOS e selecione **XP / MetaTrader 5** em **Fonte de mercado**. O gráfico deve mostrar histórico e o painel mostrar último tick, idade, Bid/Ask/Last. **LIVE** exige tick recente e heartbeat conectado; fora do pregão pode estar corretamente OFFLINE mesmo com HTTP 200.
 12. Deixe terminal e Mac ligados, conectados e sem repouso. Fechar o MT5, suspender o Mac ou perder rede para o feed. Ao reabrir o MT5, confirme que o gráfico manteve o EA e observe a reconexão.
 
@@ -84,3 +84,27 @@ Testes TS/API + Postgres/PGlite validam autenticador, payload, idempotência, cl
 Para EA v2 e pipeline REAL desarmado, siga [real-execution.md](real-execution.md).
 
 > Feed STALE com heartbeat e candles atuais após reabrir o MT5: ver [feed-backlog-2026-10-05.md](feed-backlog-2026-10-05.md) (EA v2.06).
+
+## Homologação REAL (EA v2.07)
+
+Nada desta seção envia ordem. Armar a sessão, liberar o kill switch e autorizar uma estratégia continuam sendo ações humanas separadas, feitas depois e pelo próprio operador.
+
+1. **Instalar o EA v2.07.** Baixe o mesmo arquivo `mt5/FocoTradeBridge.mq5`, compile no MetaEditor e reanexe ao gráfico WINV26 com as mesmas entradas. A troca pode gerar um `BRIDGE_SESSION_LEASE_CONFLICT` por até 15 s: é o lease protegendo a sessão anterior, e ele se resolve sozinho.
+2. **Ler o estado real do gate.** Em **Experts**, a linha `execution gate:` agora mostra `ARMED` somente quando o MT5 permite executar. Antes, mostrava `ARMED` sempre que a entrada `EnableExecution` era `true`. Se aparecer `LOCKED (...)`, o motivo vem escrito entre parênteses:
+   - botão **Algo Trading** do terminal desligado;
+   - **Permitir Algo Trading** desmarcado nas propriedades do EA;
+   - conta sem permissão de negociar;
+   - corretora não permitindo EA na conta.
+3. **Copiar o fingerprint da conta.** Também em **Experts**, procure `account fingerprint (ExpectedAccountFingerprint / TRADE_ACCOUNT_HASH): <64 caracteres hex>`.
+   - É o SHA-256 de `login@servidor`, não o número da conta. Ele só aparece no log local do MT5.
+   - Cole exatamente esse valor em dois lugares:
+     - nas entradas do EA, em `ExpectedAccountFingerprint`. A mesma linha do log passa a mostrar `MATCHES`.
+     - no Cloudflare, em **Pages → focoemcanto → Settings → Variables and Secrets (Production)**, na variável `TRADE_ACCOUNT_HASH`. Depois faça um novo deploy.
+   - Se o valor do backend estiver errado, todo lote do EA é recusado com `BRIDGE_ACCOUNT_MISMATCH` e o feed para. Nenhuma ordem sai nesse caso.
+4. **Ligar a execução no backend.** Só depois que o painel REAL mostrar *fingerprint do EA = backend*, defina `TRADE_EXECUTION_ENABLED=true` no mesmo lugar e faça um novo deploy. Essa flag sozinha não libera ordem: continuam obrigatórios política, limites, estratégia autorizada, sessão armada, kill switch liberado, proposta READY, nonce e as duas confirmações humanas.
+5. **Tomar as decisões que são só do operador.** O checklist mostra cada uma em **Decisões do operador**:
+   - Na política REAL: risco máximo por operação, perda máxima diária, slippage máximo, exposição nocional, ordens por sessão e por dia, e confirmação do rollover. Conta, símbolo e vencimento são preenchidos pelo servidor a partir do MT5.
+   - Nas entradas do EA: `MaxRiskBRL`, `MaxLoss24hBRL` e `MaxSlippagePoints`, que precisam ser iguais ou menores que os da política.
+   - Autorizar cada estratégia/versão separadamente.
+
+**HTTP 1003, bytes 0.** `1003` não é status HTTP: é uma falha de transporte do próprio MT5, sem resposta do servidor. O backend não tem nenhum caminho que responda corpo vazio. O EA v2.07 registra `TRANSPORT_FAILURE` e reenvia o mesmo lote durável. O backend deduplica esse lote: nada se perde e nenhum comando é gerado. A contagem aparece em `state.transport`.

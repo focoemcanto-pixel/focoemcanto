@@ -2832,3 +2832,10 @@
   .trade-perf-answer > strong { font-size: 32px; }
   .trade-perf-funnel li { min-width: calc(50% - 6px); }
 }
+/* REAL checklist grouped by what each item needs */
+.trade-real-groups { display: grid; gap: 12px; }
+.trade-real-groups h4 { margin: 4px 0 6px; font-size: 11px; letter-spacing: 0.8px; text-transform: uppercase; color: #b9c4cd; font-weight: 500; }
+.trade-real-groups h4 small { text-transform: none; letter-spacing: 0; color: #7f8e9b; font-weight: 400; margin-left: 6px; }
+.trade-real-groups section[data-kind='DECISION'] [data-ok='false'] strong { color: #d8b681; }
+.trade-real-groups ul { margin: 4px 0 0; padding-left: 18px; font-size: 11px; color: #90a0ae; line-height: 1.6; }
+.trade-real-groups li[data-kind='DECISION'] { color: #d8b681; }

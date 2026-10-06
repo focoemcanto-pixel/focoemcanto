@@ -1,5 +1,5 @@
 #property strict
-#property version "2.06"
+#property version "2.07"
 #property description "Foco Trade XP/MT5 bridge. Execution disabled by default."
 input string ApiOrigin="https://focoemcanto.com";
 input string BridgeToken="";
@@ -34,6 +34,9 @@ bool historyReady=false,protectionFault=false;
 long historyAsOfMsc=0; double loss24hBRL=0;
 long tickGapFromMsc=0,tickGapToMsc=0,tickGapAtMsc=0; // last backlog skipped (broker-wall ms), reported in state
 int lastExchangeHttpStatus=0;long lastExchangeAckAt=0;
+// Transport failures with no HTTP response (MT5 WebRequest status outside 100..599, e.g. 1003): counted and
+// reported in the next batch. The same durable batch is always retried; nothing is converted into success.
+int transportFailures=0,lastTransportStatus=0;long lastTransportFailureAt=0;string lastGateText="";
 string Q(string s) { StringReplace(s,"\\","\\\\"); StringReplace(s,"\"","\\\""); StringReplace(s,"\r","\\r"); StringReplace(s,"\n","\\n"); return "\""+s+"\""; }
 string N(double n) { return DoubleToString(n,8); }
 string B(bool b) { return b?"true":"false"; }
@@ -144,7 +147,21 @@ string OrdersJson() {
  }return j+"]";
 }
 bool ExecutionAllowed(){return EnableExecution && TerminalInfoInteger(TERMINAL_TRADE_ALLOWED) && MQLInfoInteger(MQL_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_ALLOWED) && AccountInfoInteger(ACCOUNT_TRADE_EXPERT);}
-string StateJson(){HistoryHealth();ProtectionHealth();return "{\"marketClock\":{\"basis\":\"broker-wall\",\"serverNowSeconds\":"+(string)(long)TimeTradeServer()+",\"utcNowSeconds\":"+(string)(long)TimeGMT()+",\"utcOffsetSeconds\":"+(string)((long)TimeTradeServer()-(long)TimeGMT())+"},\"protocolVersion\":2,\"eaVersion\":\"2.06\",\"tickGap\":{\"fromMsc\":"+(string)tickGapFromMsc+",\"toMsc\":"+(string)tickGapToMsc+",\"atMsc\":"+(string)tickGapAtMsc+"},\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"accountTradeMode\":"+(string)AccountInfoInteger(ACCOUNT_TRADE_MODE)+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
+// Every component of the local execution gate, so "EnableExecution=true" is never mistaken for an armed EA.
+string GateJson(){return "{\"input\":"+B(EnableExecution)+",\"terminalAlgoTrading\":"+B((bool)TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))+",\"eaAlgoTrading\":"+B((bool)MQLInfoInteger(MQL_TRADE_ALLOWED))+",\"accountTradeAllowed\":"+B((bool)AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))+",\"accountExpertAllowed\":"+B((bool)AccountInfoInteger(ACCOUNT_TRADE_EXPERT))+",\"allowed\":"+B(ExecutionAllowed())+"}";}
+string GateText(){
+ if(ExecutionAllowed())return "ARMED";
+ string r="";
+ if(!EnableExecution)r+=" EnableExecution=false;";
+ if(!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))r+=" botao Algo Trading do terminal desligado;";
+ if(!MQLInfoInteger(MQL_TRADE_ALLOWED))r+=" 'Permitir Algo Trading' desmarcado nas propriedades do EA;";
+ if(!AccountInfoInteger(ACCOUNT_TRADE_ALLOWED))r+=" conta sem permissao de negociacao;";
+ if(!AccountInfoInteger(ACCOUNT_TRADE_EXPERT))r+=" corretora nao permite Expert Advisor nesta conta;";
+ // MQL5 StringTrim* modify in place and return a count, so trim explicitly.
+ if(StringLen(r)>1)r=StringSubstr(r,1,StringLen(r)-2);
+ return "LOCKED ("+r+")";
+}
+string StateJson(){HistoryHealth();ProtectionHealth();return "{\"marketClock\":{\"basis\":\"broker-wall\",\"serverNowSeconds\":"+(string)(long)TimeTradeServer()+",\"utcNowSeconds\":"+(string)(long)TimeGMT()+",\"utcOffsetSeconds\":"+(string)((long)TimeTradeServer()-(long)TimeGMT())+"},\"protocolVersion\":2,\"eaVersion\":\"2.07\",\"executionGate\":"+GateJson()+",\"transport\":{\"failures\":"+(string)transportFailures+",\"lastStatus\":"+(string)lastTransportStatus+",\"lastFailureAt\":"+(string)lastTransportFailureAt+"},\"tickGap\":{\"fromMsc\":"+(string)tickGapFromMsc+",\"toMsc\":"+(string)tickGapToMsc+",\"atMsc\":"+(string)tickGapAtMsc+"},\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"accountTradeMode\":"+(string)AccountInfoInteger(ACCOUNT_TRADE_MODE)+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
 string CandlesJson(){MqlRates rates[];int count;datetime closed=iTime(TradeSymbol,PERIOD_M1,1);
  if(lastBar==0)count=CopyRates(TradeSymbol,PERIOD_M1,1,HistoryBars,rates);else count=CopyRates(TradeSymbol,PERIOD_M1,lastBar,closed,rates);
  if(count>0)lastBar=rates[count-1].time;string j="[";
@@ -287,7 +304,11 @@ int OnInit(){
  if(!Save(prefix+"ledger.txt",durable))return INIT_FAILED;FileDelete(prefix+"reply.txt",FILE_COMMON);
  }
  if(pending!="" && JsonField(JsonField(pending,"state"),"protocolVersion")!="2")Print("Legacy pending detected; safe transport upgrade scheduled");
- Print("Foco Trade v2.06; execution enabled: ",EnableExecution);
+ Print("Foco Trade v2.07; EnableExecution input: ",EnableExecution,"; execution gate: ",GateText());
+ // Local terminal log only (never sent anywhere else): the exact value for ExpectedAccountFingerprint in
+ // these inputs and TRADE_ACCOUNT_HASH in the backend. SHA-256 of login@server; not the login itself.
+ Print("Foco Trade account fingerprint (ExpectedAccountFingerprint / TRADE_ACCOUNT_HASH): ",accountHash,"; ExpectedAccountFingerprint ",ExpectedAccountFingerprint==""?"EMPTY":(ExpectedAccountFingerprint==accountHash?"MATCHES":"MISMATCH"));
+ lastGateText=GateText();
  EventSetTimer(PollSeconds);return INIT_SUCCEEDED;
 }
 void OnDeinit(const int reason){EventKillTimer();if(lockHandle!=INVALID_HANDLE)FileClose(lockHandle);}
@@ -312,14 +333,17 @@ void OnTimer(){
  ResetLastError();
  int status=WebRequest("POST",ApiOrigin+"/api/trade/bridge/exchange","Authorization: Bearer "+BridgeToken+"\r\nContent-Type: application/json\r\n",HttpTimeoutMs,body,response,headers);
  int networkError=GetLastError();string reply=CharArrayToString(response,0,WHOLE_ARRAY,CP_UTF8);
+ if(status<100 || status>599){transportFailures++;lastTransportStatus=status;lastTransportFailureAt=(long)TimeGMT()*1000;Print("Foco Trade TRANSPORT_FAILURE: no HTTP response (MT5 status ",status,"; network error ",networkError,"; bytes ",ArraySize(response),"). Durable batch ",JsonField(pending,"batch")," kept; retrying the same batch.");lastExchangeHttpStatus=status;return;}
  if(status!=200){lastExchangeHttpStatus=status;Print("Foco Trade response shape: ",ResponseShape(reply),"; bytes: ",ArraySize(response),"; content type JSON: ",StringFind(headers,"application/json")>=0);Print("Foco Trade exchange HTTP ",status,": ",BackendErrorCode(reply),status<0?"; network error "+(string)networkError:"","; session ",StringSubstr(JsonField(pending,"session"),0,12),"; batch ",JsonField(pending,"batch"),". Retrying same durable batch.");return;}
  if(StringFind(reply,"OK\n")!=0){Print("Invalid bridge response; retaining batch");return;}
  if(!Save(prefix+"reply.txt",reply)){Print("Cannot persist response; no order sent");return;}
  string lines[];StringSplit(reply,'\n',lines);for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"CMD2|")==0)Execute(lines[i]);
- if(lastExchangeHttpStatus!=200)Print("Foco Trade exchange HTTP 200 OK; execution gate: ",EnableExecution?"ARMED":"LOCKED");
+ string gate=GateText();
+ if(lastExchangeHttpStatus!=200 || gate!=lastGateText)Print("Foco Trade exchange HTTP 200 OK; execution gate: ",gate);
+ lastGateText=gate;
  lastExchangeHttpStatus=200;lastExchangeAckAt=(long)TimeGMT()*1000;
  FileDelete(prefix+"reply.txt",FILE_COMMON);pending="";FileDelete(prefix+"pending.txt",FILE_COMMON);
- Comment("Foco Trade\n",TradeSymbol," / XP-MT5\nHTTP 200\nExecution gate: ",EnableExecution?"ARMED":"LOCKED","\nLast tick ms: ",lastMsc);
+ Comment("Foco Trade\n",TradeSymbol," / XP-MT5\nHTTP 200\nExecution gate: ",lastGateText,"\nLast tick ms: ",lastMsc);
 }
 void OnTradeTransaction(const MqlTradeTransaction &trans,const MqlTradeRequest &request,const MqlTradeResult &result){
  // No network in callback. Durable event + next-heartbeat history reconciliation.
