@@ -228,7 +228,7 @@ void Execute(string line){
  // Tick time is labelled with the broker server clock (XP: BRT wall time), so freshness is measured
  // against TimeTradeServer(), never TimeGMT(). Command expiry above stays on real UTC (TimeGMT).
  MqlTick tick;long serverNowMs=(long)TimeTradeServer()*1000;if(!SymbolInfoTick(TradeSymbol,tick) || (serverNowMs-tick.time_msc>15000 || tick.time_msc>serverNowMs+2000)){ResultEvent(id,"rejected",0,0,0);return;}
- if(volume<0 || volume>MaxContracts || (action=="BUY" || action=="SELL" || action=="CLOSE") && (volume<1 || MathFloor(volume)!=volume)){ResultEvent(id,"rejected",0,0,0);return;}
+ if(volume<0 || volume>MaxContracts || ((action=="BUY" || action=="SELL" || action=="CLOSE") && (volume<1 || MathFloor(volume)!=volume))){ResultEvent(id,"rejected",0,0,0);return;}
  MqlTradeRequest req={};MqlTradeResult res={};MqlTradeCheckResult check={};
  req.magic=MagicNumber;req.symbol=TradeSymbol;req.comment=Tag(id);req.volume=volume;req.sl=sl;req.tp=tp;req.deviation=MaxDeviationPoints;
  long filling=SymbolInfoInteger(TradeSymbol,SYMBOL_FILLING_MODE);req.type_filling=(filling&SYMBOL_FILLING_FOK)!=0?ORDER_FILLING_FOK:ORDER_FILLING_IOC;
@@ -242,7 +242,7 @@ void Execute(string line){
  for(int i=0;i<OrdersTotal();i++){if(OrderGetTicket(i)>0 && OrderGetString(ORDER_SYMBOL)==TradeSymbol)exposure+=OrderGetDouble(ORDER_VOLUME_CURRENT);}
  if(exposure+volume>MaxContracts || sl<=0 || tp<=0){ResultEvent(id,"rejected",0,0,0);return;}
  req.action=TRADE_ACTION_DEAL;req.type=action=="BUY"?ORDER_TYPE_BUY:ORDER_TYPE_SELL;req.price=action=="BUY"?tick.ask:tick.bid;
- if(action=="BUY" && (sl>=req.price || tp<=req.price) || action=="SELL" && (sl<=req.price || tp>=req.price)){ResultEvent(id,"rejected",0,0,0);return;}
+ if((action=="BUY" && (sl>=req.price || tp<=req.price)) || (action=="SELL" && (sl<=req.price || tp>=req.price))){ResultEvent(id,"rejected",0,0,0);return;}
  double tickSize=SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE),distance=(double)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(TradeSymbol,SYMBOL_POINT),riskProfit;
  double remoteRisk=StringToDouble(p[11]),remoteLoss=StringToDouble(p[12]),remoteSlip=StringToDouble(p[13]);
  if(tickSize<=0 || remoteRisk<=0 || remoteLoss<=0 || remoteSlip<=0 || MathAbs(sl/tickSize-MathRound(sl/tickSize))>1e-7 || MathAbs(tp/tickSize-MathRound(tp/tickSize))>1e-7 || MathAbs(req.price-sl)<distance || MathAbs(tp-req.price)<distance || MathAbs(req.price-StringToDouble(p[10]))>MathMin(MaxSlippagePoints,remoteSlip) || !OrderCalcProfit(req.type,TradeSymbol,volume,req.price,sl,riskProfit) || riskProfit>=0 || MathAbs(riskProfit)>MathMin(MaxRiskBRL,remoteRisk) || loss24hBRL+MathAbs(riskProfit)>=MathMin(MaxLoss24hBRL,remoteLoss)){ResultEvent(id,"rejected",0,0,0);return;}
