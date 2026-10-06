@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import LabPerformance from './LabPerformance';
 const num = (v: number | null | undefined, d = 2) =>
   v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: d });
 const pct = (v: number | null | undefined) => (v == null ? '—' : `${Math.round(v * 100)}%`);
@@ -147,12 +148,24 @@ export default function LabPanel() {
     const t = setInterval(load, 30000);
     return () => clearInterval(t);
   }, [days]);
-  if (!data) return <div className="trade-lab">{error ? <p className="trade-operation-error">{error}</p> : <p>Carregando LAB…</p>}</div>;
+  if (!data)
+    return (
+      <div className="trade-lab">
+        <LabPerformance />
+        {error ? <p className="trade-operation-error">{error}</p> : <p>Carregando auditoria…</p>}
+      </div>
+    );
   const t = data.today,
     min = data.models.lab.minSample,
     groups = data.analytics.groups.filter((g: any) => dataset === 'ALL' || g.dataset === dataset);
   return (
     <div className="trade-lab">
+      <LabPerformance />
+      {/* AUDITORIA: the raw per-setup history and the lab-v1 statistics stay available below the summary. */}
+      <details className="trade-lab-audit">
+      <summary>
+        <span className="trade-eyebrow">AUDITORIA</span> histórico bruto, setups recentes com notas e estatística por setup (lab-v1)
+      </summary>
       <header className="trade-lab-head">
         <div>
           <span className="trade-eyebrow">LAB · BASE DE EVIDÊNCIA</span>
@@ -362,6 +375,7 @@ export default function LabPanel() {
           {data.models.actionability.version}: não persegue preço acima de {data.models.actionability.maxChaseR}R nem com R/R no mercado &lt; {data.models.actionability.minRRAtMarket}.
         </p>
         <p>Registry: {data.registry.length} versões de estratégia com hash de configuração.</p>
+      </details>
       </details>
     </div>
   );

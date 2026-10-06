@@ -200,21 +200,36 @@ export async function runScanner(
    * confirmation only); a bar touching stop and target is settled by ticks when they exist, else AMBIGUOUS.
    */
   const track = async () => {
-    const open: any[] = await rpc(env, 'trade_setup_open', { p_owner: tradeOwner, p_scope: scope, p_limit: 50 });
-    let updated = 0;
-    for (const o of open || []) {
-      const plan = { direction: o.direction === 'BUY' ? ('long' as const) : ('short' as const), entry: Number(o.entry), stop: Number(o.stop), target: Number(o.target), asOf: Number(o.marketAsOf) };
-      let outcome = trackOutcome(plan, candles);
-      if (outcome.status === 'AMBIGUOUS' && source === 'mt5' && outcome.exitTimestamp !== null) {
-        const ticks = await rpc(env, 'trade_bridge_ticks_window', { p_bridge: c.bridgeId, p_symbol: symbol, p_from_ms: outcome.exitTimestamp * 1000, p_to_ms: outcome.exitTimestamp * 1000 + 60000 }).catch(() => []);
-        const order = resolveWithTicks(ticks || [], plan);
-        if (order) outcome = trackOutcome(plan, candles, () => order);
+    const session = source === 'mt5' ? { nowSeconds: Date.now() / 1000 } : undefined;
+    const settle = async (rows: any[]) => {
+      const items: { id: string; outcome: ReturnType<typeof trackOutcome> }[] = [];
+      for (const o of rows || []) {
+        // One bad row never stops the others (each is evaluated independently).
+        try {
+          const plan = { direction: o.direction === 'BUY' ? ('long' as const) : ('short' as const), entry: Number(o.entry), stop: Number(o.stop), target: Number(o.target), asOf: Number(o.marketAsOf) };
+          let outcome = trackOutcome(plan, candles, undefined, undefined, session);
+          if (outcome.status === 'AMBIGUOUS' && source === 'mt5' && outcome.exitTimestamp !== null) {
+            const ticks = await rpc(env, 'trade_bridge_ticks_window', { p_bridge: c.bridgeId, p_symbol: symbol, p_from_ms: outcome.exitTimestamp * 1000, p_to_ms: outcome.exitTimestamp * 1000 + 60000 }).catch(() => []);
+            const order = resolveWithTicks(ticks || [], plan);
+            if (order) outcome = trackOutcome(plan, candles, () => order, undefined, session);
+          }
+          if (outcome.barsTracked === 0 && outcome.status === 'OPEN') continue;
+          if (JSON.stringify(outcome) === JSON.stringify(o.outcome)) continue;
+          items.push({ id: o.id, outcome });
+        } catch {
+          /* skipped this round; retried on the next scanner run */
+        }
       }
-      if (outcome.barsTracked === 0 && outcome.status === 'OPEN') continue;
-      if (JSON.stringify(outcome) === JSON.stringify(o.outcome)) continue;
-      await rpc(env, 'trade_setup_outcome', { p_owner: tradeOwner, p_id: o.id, p_outcome: outcome });
-      updated++;
-    }
+      return items;
+    };
+    // Setup observations (LAB) and, for proposals that never had an observation (created before the
+    // LAB existed), the proposal's own levels. Both written in one batch call each.
+    const open: any[] = await rpc(env, 'trade_setup_open', { p_owner: tradeOwner, p_scope: scope, p_limit: 200 });
+    const items = await settle(open);
+    let updated = items.length ? Number(await rpc(env, 'trade_setup_outcomes_batch', { p_owner: tradeOwner, p_items: items })) || 0 : 0;
+    const records: any[] = await rpc(env, 'trade_proposal_records_open', { p_owner: tradeOwner, p_scope: scope, p_limit: 200 }).catch(() => []);
+    const recordItems = await settle(records);
+    if (recordItems.length) updated += Number(await rpc(env, 'trade_proposal_record_outcomes_batch', { p_owner: tradeOwner, p_items: recordItems })) || 0;
     return updated;
   };
   if (old.asOf === snapshot.asOf) {

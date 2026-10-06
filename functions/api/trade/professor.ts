@@ -5,7 +5,8 @@ import { generateMockCandles } from '../../../trade/core/providers';
 import { runReplay } from '../../../trade/core/engine';
 import { rpc, type BridgeEnv } from '../../../trade/bridge/config';
 import { labAnalytics, labParameters } from '../../../trade/lab/analytics';
-import { toLabObservation } from './lab';
+import { toLabObservation, performanceView } from './lab';
+import { performanceNarrative } from '../../../trade/lab/performance';
 /** Performance questions are answered only from LAB statistics, never from the AI. */
 export const performanceQuestion = /desempenh|performan|funcion|lucr|ganh|dinheiro|acert|win ?rate|expectativ|resultad|confi[aá]v|vale a pena|é boa|e boa|melhor|pior|vencedor/;
 export function performanceAnswer(groups: ReturnType<typeof labAnalytics>['groups'], strategy: string | undefined) {
@@ -78,10 +79,11 @@ export async function onRequestPost({
     q = question.toLowerCase();
   if (performanceQuestion.test(q)) {
     try {
-      const data = await rpc(env as unknown as BridgeEnv, 'trade_lab_read', { p_owner: 'focoos-admin', p_since: Math.floor(Date.now() / 1000) - 365 * 86400 });
-      const groups = labAnalytics(((data?.observations || []) as any[]).map(toLabObservation)).groups;
-      const comparative = /melhor|pior|vencedor|qual estrat|qual setup/.test(q);
-      return Response.json({ answer: performanceAnswer(groups, comparative ? undefined : body.strategy || candidate?.definition.id), provider: 'lab-statistics', asOf: state.snapshot.asOf });
+      const comparative = /melhor|pior|vencedor|qual estrat|qual setup/.test(q),
+        strategy = comparative ? undefined : body.strategy || candidate?.definition.id;
+      // Executable-only result (DESEMPENHO, last 20 sessions): N always stated, no causality.
+      const perf = await performanceView(env as unknown as BridgeEnv, new URLSearchParams({ view: 'performance', period: '20', dataset: 'LIVE_DETECTED' }));
+      return Response.json({ answer: performanceNarrative(perf, strategy), provider: 'lab-statistics', asOf: state.snapshot.asOf });
     } catch {
       return Response.json({ answer: 'O LAB está indisponível agora; sem os números dele o Professor não comenta desempenho.', provider: 'lab-statistics', asOf: state.snapshot.asOf });
     }

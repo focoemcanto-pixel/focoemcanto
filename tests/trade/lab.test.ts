@@ -25,7 +25,7 @@ async function world(extraEnv: Record<string, string> = {}, risk: Parameters<typ
     const args = Object.values(JSON.parse(String(init?.body)));
     try {
       const r = await db.query<any>(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`, args);
-      return Response.json(r.rows[0]?.result ?? null);
+      return r.fields[0]?.dataTypeID === 2278 || (r.rows[0]?.result ?? null) === null ? new Response(null, { status: 204 }) : Response.json(r.rows[0].result); // PostgREST: void/null → 204
     } catch (e: any) {
       return Response.json({ code: 'P0001', message: String(e.message) }, { status: 400 });
     }

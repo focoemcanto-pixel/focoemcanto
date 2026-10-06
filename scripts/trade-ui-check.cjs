@@ -44,6 +44,8 @@ let simulateMissingBridge=false;
     '20261007090000_tick_retention.sql',
     '20261007091000_lab_participant_attribution.sql',
     '20261007100000_paper_risk_settings.sql',
+    '20261007110000_readiness_and_lab_risk.sql',
+    '20261008090000_lab_performance.sql',
   ])
     await db.exec(await fs.readFile('supabase/migrations/' + file, 'utf8'));
   // Fixture ticks are stamped in real UTC; the production broker-wall clock is covered in real-session.test.ts.
@@ -396,6 +398,22 @@ let simulateMissingBridge=false;
   await page.getByText('Nota salva.', { exact: true }).waitFor();
   // LAB: evidence base renders from the deterministic analytics endpoint.
   await page.getByRole('button', { name: 'LAB', exact: true }).click();
+  // DESEMPENHO comes first: the direct answer, computed server-side from persisted data only.
+  await page.getByText('LAB · DESEMPENHO DAS ESTRATÉGIAS', { exact: true }).waitFor();
+  await page.locator('.trade-perf-answer').waitFor();
+  const verdict = (await page.locator('.trade-perf-answer > em').textContent()).trim();
+  assert.ok(['AMOSTRA INSUFICIENTE', 'SEM DADOS'].includes(verdict), `small N is never a conclusion: ${verdict}`);
+  await page.getByRole('button', { name: '20 pregões', exact: true }).click();
+  await page.getByText('SE VOCÊ TIVESSE SEGUIDO TODAS AS ENTRADAS VÁLIDAS · 20 PREGÕES', { exact: true }).waitFor();
+  await page.getByLabel('Dataset', { exact: true }).selectOption('REPLAY');
+  await page.locator('.trade-perf-answer').waitFor();
+  await page.screenshot({ path: '.trade-qa/lab-performance.png', fullPage: true });
+  await page.getByLabel('Dataset', { exact: true }).selectOption('PAPER_FORWARD');
+  await page.getByText('PAPER FORWARD · OPERAÇÕES PAPER QUE VOCÊ ACEITOU', { exact: true }).waitFor();
+  await page.getByLabel('Dataset', { exact: true }).selectOption('LIVE_DETECTED');
+  await page.locator('.trade-perf-answer').waitFor();
+  // The raw per-setup history stays available as the AUDITORIA level.
+  await page.locator('.trade-lab-audit > summary').click();
   await page.getByRole('heading', { name: 'Setups, resultados e estatística por estratégia', exact: true }).waitFor();
   await page.getByText('HOJE · XP/MT5 LIVE', { exact: true }).waitFor();
   await page.screenshot({ path: '.trade-qa/lab.png', fullPage: true });
