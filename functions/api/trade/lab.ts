@@ -8,6 +8,8 @@ import { labAnalytics, funnel, labParameters, riskSummary, type LabObservation }
 import { actionabilityParameters } from '../../../trade/lab/actionability';
 import { outcomeParameters } from '../../../trade/lab/outcome';
 import { performance, performanceParameters, toPerfRow, brtDate, type WatchCount } from '../../../trade/lab/performance';
+import { executableAnalysis, executableParameters } from '../../../trade/lab/executable';
+import { config } from '../../../trade/bridge/config';
 const owner = 'focoos-admin'; // Existing admin-session middleware, never client supplied.
 /** Maps a stored observation to the analytics input (objective fields only; no secrets exist here). */
 export function toLabObservation(o: any): LabObservation {
@@ -109,11 +111,30 @@ export async function performanceView(env: BridgeEnv, params: URLSearchParams, n
     maxTradesPerDay: Number(v.maxTradesPerDay),
     maxContracts: Number(v.maxContracts),
   }));
+  // Real instrument metadata from the bridge (tick size/value, volume); signals use their own recorded value.
+  const bridge = await rpc(env, 'trade_bridge_status', { p_bridge: config(env).bridgeId }).catch(() => null),
+    st = bridge?.state || {},
+    instrument = {
+      tickSize: Number(st.tickSize) || 5,
+      tickValue: Number(st.tickValue) || 1,
+      volumeMin: Number(st.volumeMin) || 1,
+      volumeStep: Number(st.volumeStep) || 1,
+      volumeMax: Number(st.volumeMax) || 1,
+    },
+    latest = riskVersions.at(-1),
+    current = latest
+      ? { maxRiskBRL: latest.oneRBRL, maxContracts: latest.maxContracts, maxPositions: Number(st.localLimits?.maxPositions) || 1, maxNotionalBRL: null }
+      : null;
   return {
     generatedAt: new Date(now).toISOString(),
     period: { key: period, label, from, to, sessions },
-    models: { performance: performanceParameters, outcome: outcomeParameters, actionability: actionabilityParameters },
+    models: { performance: performanceParameters, outcome: outcomeParameters, actionability: actionabilityParameters, executable: executableParameters },
     ...performance({ rows, watches, riskVersions }, dataset),
+    executableRisk: {
+      instrumentSource: bridge?.state ? 'MT5 (bridge)' : 'padrão WIN (bridge indisponível)',
+      currentSource: latest ? `gestão de risco v${latest.version} (referência; não alterada)` : 'sem gestão de risco configurada',
+      ...executableAnalysis(rows.filter((r) => (r.source === 'LIVE' ? 'LIVE_DETECTED' : r.source) === dataset), instrument, current),
+    },
   };
 }
 /** LAB: data → deterministic statistics. Read-only; can never enable REAL. */

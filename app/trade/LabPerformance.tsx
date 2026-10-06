@@ -230,6 +230,7 @@ export default function LabPerformance() {
       ) : (
         <>
           <Answer data={data} min={min} />
+          {data.executableRisk && <ExecutableRisk x={data.executableRisk} />}
           <Summary data={data} />
           <Funnel f={data.funnel} />
           <section className="trade-perf-block" aria-label="Estratégias">
@@ -793,5 +794,162 @@ function Diagnostics({ data, min }: { data: any; min: number }) {
         </p>
       </section>
     </div>
+  );
+}
+
+/**
+ * R (normalized) vs R$ (what the account would really have made). Contracts are integers from each
+ * signal's own structural stop; the sensitivity table reports limits, it never picks one.
+ */
+function ExecutableRisk({ x }: { x: any }) {
+  const sig = x.signals,
+    opp = x.opportunities,
+    cur = x.current;
+  return (
+    <section className="trade-perf-block trade-perf-exec" aria-label="Risco executável">
+      <span className="trade-eyebrow">RISCO EXECUTÁVEL · R NORMALIZADO × R$ REAL</span>
+      {x.alerts.length > 0 && (
+        <div className="trade-perf-alert" role="alert">
+          {x.alerts.map((a: any) => (
+            <p key={a.scope}>⚠ {a.message}</p>
+          ))}
+        </div>
+      )}
+      <dl className="trade-perf-inline">
+        <dt>Sinais (estratégias)</dt>
+        <dd>
+          {sig.count} · {sig.targets} alvo / {sig.stops} stop · {r(sig.resultR)} · {brl(sig.resultBRL)}
+        </dd>
+        <dt>Oportunidades econômicas</dt>
+        <dd>
+          {opp.count} ({opp.convergent} com sinais convergentes) · {opp.targets} alvo / {opp.stops} stop · {r(opp.resultR)} · {brl(opp.resultBRL)}
+        </dd>
+        <dt>1 contrato por oportunidade, 1 posição por vez</dt>
+        <dd>
+          {x.oneContractOnePosition.executed} executadas · {r(x.oneContractOnePosition.resultR)} · {brl(x.oneContractOnePosition.resultBRL)}
+        </dd>
+        <dt>Configuração atual</dt>
+        <dd>
+          {cur
+            ? `1R ${brl(cur.limits.maxRiskBRL)} · ${cur.eligible} elegível(is) de ${opp.count} · ${cur.executed} executada(s) · ${brl(cur.resultBRL)}`
+            : 'sem gestão de risco configurada'}
+        </dd>
+        <dt>Abertas / sem desfecho</dt>
+        <dd>
+          {opp.open} aguardando · custos: {x.costs}
+        </dd>
+      </dl>
+      <p className="trade-perf-muted">
+        {x.instrumentSource}: R$ {num(x.instrument.pointValueBRL)} por ponto por contrato. Risco por contrato = distância até o stop estrutural × esse valor; o stop
+        nunca é aproximado. Contratos = floor(limite ÷ risco por contrato), inteiros. {x.currentSource}.
+      </p>
+      <div className="trade-perf-scroll">
+        <table className="trade-lab-table">
+          <caption>Sensibilidade ao limite de risco por operação (MaxContracts e MaxPositions atuais; cronológico) — análise, não recomendação</caption>
+          <thead>
+            <tr>
+              <th scope="col">Limite</th>
+              <th scope="col">Elegíveis</th>
+              <th scope="col">Bloq. risco</th>
+              <th scope="col">Puladas (posição aberta)</th>
+              <th scope="col">Executadas</th>
+              <th scope="col">Alvo/Stop</th>
+              <th scope="col">R</th>
+              <th scope="col">R$</th>
+              <th scope="col">Drawdown R$</th>
+              <th scope="col">R$ sem teto de contratos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {x.sensitivity.map((s: any, k: number) => (
+              <tr key={s.limits.maxRiskBRL} data-current={cur && cur.limits.maxRiskBRL === s.limits.maxRiskBRL}>
+                <th scope="row">{brl(s.limits.maxRiskBRL)}</th>
+                <td>{s.eligible}</td>
+                <td>{s.blockedByRisk}</td>
+                <td>{s.skipped.positions}</td>
+                <td>
+                  {s.executed}
+                  {s.unresolved ? ` (${s.unresolved} aberta)` : ''}
+                </td>
+                <td>
+                  {s.targets}/{s.stops}
+                </td>
+                <td>{r(s.resultR)}</td>
+                <td>{brl(s.resultBRL)}</td>
+                <td>{brl(s.maxDrawdownBRL)}</td>
+                <td>
+                  {brl(x.sensitivityUncapped[k]?.resultBRL)} · {x.sensitivityUncapped[k]?.contracts} contr.
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <details>
+        <summary>Por estratégia (1 contrato por oportunidade) e por oportunidade</summary>
+        <div className="trade-perf-scroll">
+          <table className="trade-lab-table">
+            <thead>
+              <tr>
+                <th scope="col">Estratégia</th>
+                <th scope="col">Oport.</th>
+                <th scope="col">Convergentes</th>
+                <th scope="col">Alvo/Stop</th>
+                <th scope="col">Abertas</th>
+                <th scope="col">R</th>
+                <th scope="col">R$</th>
+                <th scope="col">Risco médio/contrato</th>
+              </tr>
+            </thead>
+            <tbody>
+              {x.strategies.map((s: any) => (
+                <tr key={s.strategy} data-alert={s.alerts.length > 0}>
+                  <th scope="row">{s.strategy}</th>
+                  <td>{s.opportunities}</td>
+                  <td>{s.convergent}</td>
+                  <td>
+                    {s.targets}/{s.stops}
+                  </td>
+                  <td>{s.open}</td>
+                  <td>{r(s.resultR)}</td>
+                  <td>{brl(s.resultBRL)}</td>
+                  <td>{brl(s.avgRiskPerContractBRL)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <table className="trade-lab-table">
+            <thead>
+              <tr>
+                <th scope="col">Horário</th>
+                <th scope="col">Dir.</th>
+                <th scope="col">Estratégias</th>
+                <th scope="col">Risco/contrato</th>
+                <th scope="col">Limite mínimo</th>
+                <th scope="col">Outcome</th>
+                <th scope="col">R</th>
+                <th scope="col">R$ (1 contr.)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {x.rows.map((o: any) => (
+                <tr key={o.key}>
+                  <td>
+                    {dm(o.date)} {hhmm(o.at)}
+                  </td>
+                  <td>{o.direction === 'BUY' ? 'COMPRA' : 'VENDA'}</td>
+                  <td>{o.strategies.join(' + ')}</td>
+                  <td>{brl(o.riskPerContractBRL)}</td>
+                  <td>{brl(o.minLimitBRL)}</td>
+                  <td>{outcomeText[o.outcome] || o.outcome}</td>
+                  <td>{r(o.resultR)}</td>
+                  <td>{brl(o.resultBRL1)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </section>
   );
 }

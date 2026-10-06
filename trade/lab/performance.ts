@@ -75,6 +75,8 @@ export type PerfRow = {
   target: number;
   rr: number | null;
   riskPoints: number | null;
+  /** R$ per point per contract recorded in the snapshot/proposal (tickValue / tickSize at the time). */
+  pointValue?: number | null;
   features: { trend5m: string | null; regimes: string[] };
   participants: { strategyId: string; version: string }[];
   cluster: {
@@ -159,6 +161,7 @@ export function toPerfRow(o: any): PerfRow {
     target: Number(o.target),
     rr: n(o.rr),
     riskPoints: n(o.riskPoints),
+    pointValue: n(o.pointValue),
     features: {
       trend5m: o.features?.trend5m ?? null,
       regimes: Array.isArray(o.features?.regimes) ? o.features.regimes : [],
