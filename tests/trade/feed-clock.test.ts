@@ -144,7 +144,7 @@ test('J: the scanner consumes normalized candle times from the live broker-wall 
       const name = String(u).split('/').pop()!,
         args = Object.values(JSON.parse(String(init.body)));
       const r = await db.query<any>(`select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`, args);
-      return Response.json(r.rows[0]?.result ?? null);
+      return r.fields[0]?.dataTypeID === 2278 || (r.rows[0]?.result ?? null) === null ? new Response(null, { status: 204 }) : Response.json(r.rows[0].result); // PostgREST: void/null → 204
     }) as any;
     const result: any = await runScanner(env as any, 'mt5', 0);
     assert.equal(result.feedLive, true); // not "AGUARDANDO FEED"

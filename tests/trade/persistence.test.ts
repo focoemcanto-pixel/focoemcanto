@@ -111,7 +111,7 @@ test('service-role RPC PAPER approval/journal works with execution false; schema
           `select public.${name}(${args.map((_, i) => '$' + (i + 1)).join(',')}) result`,
           args,
         );
-        return Response.json(r.rows[0]?.result ?? null);
+        return r.fields[0]?.dataTypeID === 2278 || (r.rows[0]?.result ?? null) === null ? new Response(null, { status: 204 }) : Response.json(r.rows[0].result); // PostgREST: void/null → 204
       } catch {
         return Response.json({ code: 'PGRST202' }, { status: 404 });
       }

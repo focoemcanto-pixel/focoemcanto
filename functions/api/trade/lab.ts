@@ -7,6 +7,7 @@ import {
 import { labAnalytics, funnel, labParameters, riskSummary, type LabObservation } from '../../../trade/lab/analytics';
 import { actionabilityParameters } from '../../../trade/lab/actionability';
 import { outcomeParameters } from '../../../trade/lab/outcome';
+import { performance, performanceParameters, toPerfRow, brtDate, type WatchCount } from '../../../trade/lab/performance';
 const owner = 'focoos-admin'; // Existing admin-session middleware, never client supplied.
 /** Maps a stored observation to the analytics input (objective fields only; no secrets exist here). */
 export function toLabObservation(o: any): LabObservation {
@@ -53,11 +54,75 @@ const startOfTodayBRT = (now = Date.now()) => {
   const d = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(new Date(now));
   return Math.floor(Date.parse(`${d}T00:00:00-03:00`) / 1000);
 };
+const day = 86400;
+const brtMidnight = (date: string) => Math.floor(Date.parse(`${date}T00:00:00-03:00`) / 1000);
+/**
+ * DESEMPENHO period → [from, to) on the market clock. "N pregões" = the N most recent BRT dates that
+ * have scanner data (sessions, not calendar days). Custom = inclusive BRT dates.
+ */
+export async function performanceView(env: BridgeEnv, params: URLSearchParams, now = Date.now()) {
+  const period = params.get('period') || 'today',
+    dataset = (['LIVE_DETECTED', 'REPLAY', 'BACKTEST'].includes(params.get('dataset') || '') ? params.get('dataset') : 'LIVE_DETECTED') as 'LIVE_DETECTED' | 'REPLAY' | 'BACKTEST',
+    nowS = Math.floor(now / 1000),
+    today = brtDate(nowS),
+    valid = (d: string | null) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : null);
+  let from: number,
+    to = brtMidnight(today) + day,
+    sessions: number | null = null,
+    label: string;
+  if (period === 'custom') {
+    const a = valid(params.get('from')) || today,
+      b = valid(params.get('to')) || a;
+    from = brtMidnight(a < b ? a : b);
+    to = brtMidnight(a < b ? b : a) + day;
+    if (to - from > 366 * day) throw new Error('Período personalizado acima de 366 dias');
+    label = `${a} a ${b}`;
+  } else if (period === '5' || period === '20') {
+    sessions = Number(period);
+    from = brtMidnight(today) - (sessions === 5 ? 15 : 45) * day;
+    label = `${sessions} pregões`;
+  } else if (period === '30d') {
+    from = brtMidnight(today) - 29 * day;
+    label = '30 dias';
+  } else {
+    from = brtMidnight(today);
+    label = 'Hoje';
+  }
+  const data = await rpc(env, 'trade_lab_performance', { p_owner: owner, p_from: from, p_to: to });
+  let rows = [...(data?.observations || []), ...(data?.records || [])].map(toPerfRow),
+    watches = ((data?.watches || []) as WatchCount[]).map((w) => ({ ...w, n: Number(w.n) }));
+  if (sessions) {
+    const source = dataset === 'LIVE_DETECTED' ? 'mt5' : dataset.toLowerCase(),
+      dates = [...new Set([...watches.filter((w) => w.source === source).map((w) => w.date), ...rows.filter((r) => (r.source === 'LIVE' ? 'LIVE_DETECTED' : r.source) === dataset).map((r) => brtDate(r.confirmedAt))])]
+        .sort()
+        .reverse()
+        .slice(0, sessions);
+    rows = rows.filter((r) => dates.includes(brtDate(r.confirmedAt)));
+    watches = watches.filter((w) => dates.includes(w.date));
+    if (dates.length) from = brtMidnight(dates.at(-1)!);
+  }
+  const riskVersions = ((data?.riskVersions || []) as any[]).map((v) => ({
+    version: Number(v.version),
+    createdAt: Number(v.createdAt),
+    oneRBRL: Number(v.oneRBRL),
+    dailyLossBRL: Number(v.dailyLossBRL),
+    maxTradesPerDay: Number(v.maxTradesPerDay),
+    maxContracts: Number(v.maxContracts),
+  }));
+  return {
+    generatedAt: new Date(now).toISOString(),
+    period: { key: period, label, from, to, sessions },
+    models: { performance: performanceParameters, outcome: outcomeParameters, actionability: actionabilityParameters },
+    ...performance({ rows, watches, riskVersions }, dataset),
+  };
+}
 /** LAB: data → deterministic statistics. Read-only; can never enable REAL. */
 export async function onRequestGet({ request, env }: { request: Request; env: BridgeEnv }) {
   try {
-    const u = new URL(request.url),
-      days = Math.max(1, Math.min(365, Number(u.searchParams.get('days')) || 90)),
+    const u = new URL(request.url);
+    if (u.searchParams.get('view') === 'performance')
+      return Response.json(await performanceView(env, u.searchParams), { headers: { 'Cache-Control': 'no-store' } });
+    const days = Math.max(1, Math.min(365, Number(u.searchParams.get('days')) || 90)),
       since = Math.floor(Date.now() / 1000) - days * 86400,
       today = startOfTodayBRT();
     const data = await rpc(env, 'trade_lab_read', { p_owner: owner, p_since: since });

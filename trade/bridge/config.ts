@@ -161,8 +161,11 @@ export async function rpc(
         : undefined,
     );
   }
+  // Functions returning void answer 204 / an empty body (PostgREST). That is success, not a failure:
+  // treating it as an error aborted every caller after the first void call (LAB outcome tracking).
   try {
-    return await response.json();
+    const text = await response.text();
+    return text.trim() ? JSON.parse(text) : null;
   } catch {
     throw new PersistenceError(
       'PERSISTENCE_UNAVAILABLE',

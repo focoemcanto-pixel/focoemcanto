@@ -4,10 +4,25 @@
  * When stop and target are both inside one bar and no finer data proves the order: AMBIGUOUS.
  */
 export const outcomeParameters = Object.freeze({
-  version: 'outcome-v1',
+  version: 'outcome-v2',
   /** Bars followed after confirmation before declaring EXPIRED (M1 bars). */
   horizonBars: 240,
+  /**
+   * Day trade: tracking never crosses the B3 session (v2; v1 could continue on the next day's bars).
+   * Bars at/after this BRT time, or from a later date, end the session: a setup still open is EXPIRED
+   * (SESSION_END) and marked at the last close of its own session. Brazil has no DST (fixed −03:00).
+   */
+  sessionCloseBRT: '18:30',
+  /** With no newer bar, the session is also over this long after sessionCloseBRT (server clock). */
+  sessionCloseGraceSeconds: 900,
 });
+const brtOffset = 3 * 3600;
+/** UTC epoch seconds of the session close (BRT) of the trading date containing `epochSeconds`. */
+export function sessionCloseOf(epochSeconds: number, p = outcomeParameters) {
+  const [h, m] = p.sessionCloseBRT.split(':').map(Number),
+    day = Math.floor((epochSeconds - brtOffset) / 86400);
+  return day * 86400 + brtOffset + h * 3600 + m * 60;
+}
 export type OutcomeStatus = 'OPEN' | 'TARGET_FIRST' | 'STOP_FIRST' | 'AMBIGUOUS' | 'EXPIRED';
 export type Outcome = {
   status: OutcomeStatus;
@@ -26,6 +41,8 @@ export type Outcome = {
   minutesToTarget: number | null;
   minutesToStop: number | null;
   resolvedBy: 'BARS' | 'TICKS' | null;
+  /** Why an EXPIRED outcome ended without touching stop or target. */
+  expiredBy?: 'HORIZON' | 'SESSION_END' | null;
 };
 type Bar = { timestamp: number; open: number; high: number; low: number; close: number };
 /** Optional finer resolution for a bar that touched both levels: returns which was hit first. */
@@ -36,10 +53,14 @@ export function trackOutcome(
   bars: Bar[],
   resolve?: BarResolver,
   p = outcomeParameters,
+  /** B3 session rule (LIVE market data only; synthetic replay clocks have no trading session). */
+  session?: { nowSeconds: number },
 ): Outcome {
   const sign = setup.direction === 'long' ? 1 : -1,
     risk = sign * (setup.entry - setup.stop),
-    after = bars.filter((b) => b.timestamp >= setup.asOf).sort((a, b) => a.timestamp - b.timestamp);
+    close = session ? sessionCloseOf(setup.asOf - 60, p) : Infinity,
+    after = bars.filter((b) => b.timestamp >= setup.asOf && b.timestamp < close).sort((a, b) => a.timestamp - b.timestamp),
+    sessionOver = !!session && (bars.some((b) => b.timestamp >= close) || session.nowSeconds >= close + p.sessionCloseGraceSeconds);
   let mfe = 0,
     mae = 0,
     tracked = 0;
@@ -102,7 +123,13 @@ export function trackOutcome(
   }
   if (tracked >= p.horizonBars) {
     const last = after[tracked - 1];
-    return base('EXPIRED', { exitPrice: last.close, exitTimestamp: last.timestamp, resultPoints: sign * (last.close - setup.entry), resultR: (sign * (last.close - setup.entry)) / risk });
+    return base('EXPIRED', { exitPrice: last.close, exitTimestamp: last.timestamp, resultPoints: sign * (last.close - setup.entry), resultR: (sign * (last.close - setup.entry)) / risk, expiredBy: 'HORIZON' });
+  }
+  if (sessionOver) {
+    const last = after[tracked - 1];
+    return last
+      ? base('EXPIRED', { exitPrice: last.close, exitTimestamp: last.timestamp, resultPoints: sign * (last.close - setup.entry), resultR: (sign * (last.close - setup.entry)) / risk, expiredBy: 'SESSION_END' })
+      : base('EXPIRED', { expiredBy: 'SESSION_END' });
   }
   return base('OPEN');
 }
