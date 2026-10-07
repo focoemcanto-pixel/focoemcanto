@@ -2843,3 +2843,212 @@
 .trade-perf-alert p { margin: 2px 0; }
 .trade-perf-exec tr[data-current='true'] th, .trade-perf-exec tr[data-current='true'] td { background: #15212b; }
 .trade-perf-exec tr[data-alert='true'] th { color: #f09a83; }
+
+/* ── OPORTUNIDADE ATIVA ─────────────────────────────────────────────────────────────────────── */
+/* Global, high-visibility card for the head of the opportunity queue. PAPER (blue) and REAL (amber/red)
+   are deliberately different so the environments can't be confused. Time always comes from expiresAt. */
+.trade-opportunity {
+  position: fixed;
+  z-index: 60;
+  top: 88px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 120px);
+  overflow: auto;
+  padding: 22px 24px 18px;
+  background: #0f1521f2;
+  color: var(--ft-text);
+  border: 1px solid #3a6ea5;
+  border-radius: 16px;
+  box-shadow: 0 28px 90px #000c, 0 0 0 4px #3a6ea522;
+  backdrop-filter: blur(10px);
+  animation: trade-opportunity-in 0.25s ease-out;
+}
+.trade-opportunity[data-mode='REAL'] {
+  border-color: #c98f3d;
+  box-shadow: 0 28px 90px #000c, 0 0 0 4px #c98f3d2e;
+}
+.trade-opportunity[data-urgent] {
+  border-color: #d9534f;
+}
+@keyframes trade-opportunity-in {
+  from { opacity: 0; transform: translate(-50%, -10px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.trade-opportunity header {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+.trade-opportunity-env {
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-weight: 700;
+  background: #3a6ea533;
+  color: #9cc6f2;
+}
+.trade-opportunity-env[data-mode='REAL'] {
+  background: #c98f3d33;
+  color: #f0c27a;
+}
+.trade-opportunity-timer strong {
+  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  margin-left: 6px;
+}
+.trade-opportunity[data-urgent] .trade-opportunity-timer strong {
+  color: #ff8a80;
+}
+.trade-opportunity h2 {
+  margin: 14px 0 2px;
+  font-size: 26px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.trade-opportunity h2[data-direction='BUY'] { color: #7fd4a0; }
+.trade-opportunity h2[data-direction='SELL'] { color: #f29a8f; }
+.trade-opportunity h2 small {
+  font-size: 13px;
+  color: var(--ft-muted);
+  font-weight: 500;
+}
+.trade-opportunity-method {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--ft-muted);
+}
+.trade-opportunity dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 13px;
+}
+.trade-opportunity dt { color: var(--ft-muted); }
+.trade-opportunity dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+.trade-opportunity-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+.trade-opportunity-actions p { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--ft-muted); }
+.trade-opportunity-actions button {
+  padding: 10px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--ft-line);
+  background: transparent;
+  color: var(--ft-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.trade-opportunity-actions .trade-primary { margin-top: 0; }
+.trade-opportunity-actions [data-entry='paper'] { background: #3a6ea5 !important; color: #fff !important; }
+.trade-opportunity-actions [data-entry='real'] { background: #c98f3d !important; color: #141820 !important; }
+.trade-opportunity-actions button:disabled { opacity: 0.45; cursor: not-allowed; }
+.trade-opportunity-note { margin: 10px 0 0; font-size: 11px; color: var(--ft-muted); }
+.trade-opportunity-link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ft-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: 11px;
+}
+.trade-opportunity-queue {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+  font-size: 11px;
+  color: var(--ft-muted);
+}
+.trade-opportunity-queue span { flex-basis: 100%; }
+.trade-opportunity-queue button {
+  border: 1px solid var(--ft-line);
+  background: #ffffff08;
+  color: var(--ft-text);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.trade-opportunity-chip {
+  position: fixed;
+  z-index: 60;
+  top: 76px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 32px);
+  padding: 8px 10px 8px 14px;
+  border-radius: 999px;
+  background: #13213a;
+  border: 1px solid #3a6ea5;
+  color: var(--ft-text);
+  font-size: 12px;
+  box-shadow: 0 12px 40px #000a;
+}
+.trade-opportunity-chip[data-mode='REAL'] { background: #2a1f10; border-color: #c98f3d; }
+.trade-opportunity-chip .trade-opportunity-timer { font-variant-numeric: tabular-nums; font-weight: 700; }
+.trade-opportunity-chip button {
+  border: 0;
+  border-radius: 999px;
+  padding: 6px 12px;
+  background: var(--ft-accent);
+  color: #141820;
+  font-weight: 700;
+  font-size: 11px;
+  cursor: pointer;
+}
+.trade-opportunity-notices {
+  position: fixed;
+  z-index: 55;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(340px, calc(100vw - 32px));
+}
+.trade-opportunity-notice,
+.trade-opportunity-flash {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #121926f2;
+  border: 1px solid var(--ft-line);
+  color: var(--ft-text);
+  font-size: 12px;
+  box-shadow: 0 10px 30px #0008;
+}
+.trade-opportunity-notice { display: flex; flex-direction: column; gap: 4px; }
+.trade-opportunity-notice span:not(.trade-eyebrow) { color: var(--ft-muted); }
+.trade-opportunity-notice div { display: flex; justify-content: space-between; margin-top: 4px; }
+.trade-opportunity-notice button {
+  background: none;
+  border: 1px solid var(--ft-line);
+  color: var(--ft-text);
+  border-radius: 5px;
+  padding: 4px 10px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.trade-opportunity-flash { border-color: #8a6d3b; font-weight: 600; }
+.trade-real-warning { color: #f0c27a !important; font-weight: 600; }
+@media (max-width: 640px) {
+  .trade-opportunity { top: 64px; padding: 18px 16px 14px; }
+  .trade-opportunity h2 { font-size: 22px; }
+  .trade-opportunity-chip { top: 60px; border-radius: 14px; }
+}
