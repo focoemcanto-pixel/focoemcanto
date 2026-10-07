@@ -40,6 +40,22 @@ import { validateCommand } from '../../../trade/bridge/protocol';
 import { assessActionability } from '../../../trade/lab/actionability';
 import { paperRiskStatus, paperRiskPolicy, riskSnapshot } from '../../../trade/bridge/risk-settings';
 const owner = 'focoos-admin'; // Existing admin-session middleware, never client supplied.
+/** Opportunity-card lifecycle events the UI may record (journal only; none of them executes anything). */
+export const opportunityEvents = [
+  'OPPORTUNITY_PRESENTED',
+  'OPPORTUNITY_MINIMIZED',
+  'OPPORTUNITY_RESTORED',
+  'OPPORTUNITY_EXPIRED',
+  'OPPORTUNITY_INVALIDATED',
+  'ENTER_CLICKED',
+  'FINAL_CONFIRMATION_PRESENTED',
+  'FINAL_CONFIRMATION_EXPIRED',
+  'FINAL_CONFIRMATION_CANCELLED',
+] as const;
+/** Journal an opportunity event. Best effort: auditing never blocks or alters the operation itself. */
+async function journalEvent(env: BridgeEnv, id: string, kind: string, detail: Record<string, unknown> = {}) {
+  await rpc(env, 'trade_opportunity_event', { p_owner: owner, p_id: id, p_kind: kind, p_payload: detail }).catch(() => {});
+}
 async function market(
   env: BridgeEnv,
   source: string,
@@ -190,6 +206,15 @@ export async function onRequestPost({
           },
         }).catch(() => {});
       return Response.json(saved);
+    }
+    if (body.action === 'event') {
+      // Lifecycle of the opportunity card. Server-side: kind allow-list, owner check, timestamp and remaining
+      // validity from the stored expiresAt. Never touches state, commands, sessions or the kill switch.
+      if (typeof body.id !== 'string' || !/^[0-9a-f-]{36}$/i.test(body.id)) throw new Error('Proposta inválida');
+      if (!(opportunityEvents as readonly string[]).includes(body.kind)) throw new Error('Evento inválido');
+      const reason = typeof body.reason === 'string' ? body.reason.slice(0, 40) : undefined;
+      await journalEvent(env, body.id, body.kind, reason ? { reason } : {});
+      return Response.json({ recorded: true });
     }
     if (!['confirm', 'discard', 'prepare-real'].includes(body.action))
       throw new Error('Ação inválida');
@@ -367,17 +392,18 @@ export async function onRequestPost({
         await refuse('RISK_MAX_CONTRACTS', 'Quantidade acima do máximo de contratos configurado.');
       return Response.json(await new PaperExecutionProvider(env).approve(chosen));
     }
-    return Response.json(
-      await rpc(env, 'trade_confirm', {
-        p_owner: owner,
-        p_id: p.id,
-        p_action: body.action,
-        p_command: null,
-        p_max: c.maxContracts,
-        p_account: c.accountHash,
-        p_max_age: c.maxAgeMs,
-      }),
-    );
+    const closed = await rpc(env, 'trade_confirm', {
+      p_owner: owner,
+      p_id: p.id,
+      p_action: body.action,
+      p_command: null,
+      p_max: c.maxContracts,
+      p_account: c.accountHash,
+      p_max_age: c.maxAgeMs,
+    });
+    // Explicit operator decision (not a LOSS): the journal already holds the DESCARTADA snapshot.
+    if (body.action === 'discard' && closed?.state === 'DESCARTADA') await journalEvent(env, p.id, 'DISCARDED_BY_OPERATOR');
+    return Response.json(closed);
   } catch (e) {
     if (
       body?.mode === 'REAL' ||
@@ -516,8 +542,10 @@ export async function onRequestGet({
     // Price validity of each pending live proposal, decided by the server on the LIVE quote only
     // (WAITING/ACTIONABLE/MISSED/INVALIDATED/EXPIRED/NO_QUOTE). The UI never offers ENTRAR otherwise.
     const liveQuote = data && feedStatus(data, env).status === 'LIVE' ? data.tick : null;
+    // Risk-blocked technical proposals too: blocked by the PAPER 1R may still fit the REAL limit (REAL
+    // re-sizes server-side on ENTRAR REAL); their live price validity must be just as current.
     for (const row of rows as any[])
-      if (row.state === 'AGUARDANDO CONFIRMAÇÃO' && row.payload?.source === 'mt5')
+      if ((row.state === 'AGUARDANDO CONFIRMAÇÃO' || row.state === 'BLOQUEADA POR RISCO') && row.payload?.source === 'mt5')
         row.actionability = assessActionability(
           { direction: row.payload.direction, entry: row.payload.entry, stop: row.payload.sl, target: row.payload.tp, expiresAt: row.payload.expiresAt },
           liveQuote ?? null,

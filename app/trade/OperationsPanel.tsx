@@ -6,6 +6,8 @@ import { remainingPositionRiskBRL } from '../../trade/core/risk-engine';
 import RealSessionPanel from './RealSessionPanel';
 import RiskSettingsPanel from './RiskSettingsPanel';
 import { entryWindow, serverSkew } from './decision-view';
+import OpportunityCard from './OpportunityCard';
+import { blockedNotices, departures, invalidationText, opportunityQueue, type Opportunity } from './opportunity';
 const num = (v: number | null | undefined) =>
   v == null ? '—' : v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 const money = (v: number | null | undefined) =>
@@ -134,6 +136,110 @@ export default function OperationsPanel({
       setBusy(false);
     }
   }
+  // ── OPORTUNIDADE ATIVA ────────────────────────────────────────────────────────────────────────
+  const [dismissedNotices, setDismissedNotices] = useState<Set<string>>(() => new Set()),
+    [flash, setFlash] = useState<{ text: string; at: number } | null>(null),
+    [cardError, setCardError] = useState(''),
+    previousQueue = useRef<Opportunity[]>([]),
+    journaled = useRef(new Set<string>());
+  // REAL preview limit: only a policy materialized from GESTÃO DE RISCO · REAL counts (server is the authority).
+  const realLimits = {
+    maxRiskBRL:
+      readiness?.limits?.riskSettingsVersion != null && readiness?.limits?.maxRiskBRL > 0
+        ? Math.min(readiness.limits.maxRiskBRL, readiness.limits.riskCapBRL > 0 ? readiness.limits.riskCapBRL : Infinity)
+        : null,
+    maxContracts: Number(readiness?.limits?.maxContracts) || 1,
+  };
+  const queueOpts = { mode, source, nowMs: now, skewMs: skew, real: realLimits },
+    queue = opportunityQueue(rows, queueOpts),
+    notices = blockedNotices(rows, { ...queueOpts, dismissed: dismissedNotices });
+  const post = async (body: Record<string, unknown>) => {
+    const r = await fetch('/api/trade/operations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source, cursor, ...body }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      if (d.gates) setReadiness((old: any) => ({ ...old, gates: d.gates, canExecute: false }));
+      throw new Error(d.error || 'Operação bloqueada');
+    }
+    return d;
+  };
+  // Journal (best effort, deduplicated per proposal for one-shot kinds; the server dedupes too).
+  const journal = (id: string, kind: string, reason?: string) => {
+    const key = `${id}:${kind}`;
+    if (/PRESENTED|EXPIRED|INVALIDATED/.test(kind) && journaled.current.has(key)) return;
+    journaled.current.add(key);
+    post({ action: 'event', id, kind, reason }).catch(() => {});
+  };
+  // Leaving the queue (time out or server invalidation) disables entry immediately and is recorded once.
+  useEffect(() => {
+    for (const d of departures(previousQueue.current, rows, queueOpts)) {
+      journal(d.id, d.kind, d.reason);
+      setFlash({ text: invalidationText[d.reason] || 'OPORTUNIDADE ENCERRADA.', at: Date.now() });
+    }
+    previousQueue.current = queue;
+  }, [queue.map((o) => o.id).join(','), rows]);
+  async function enterReal(o: Opportunity) {
+    setBusy(true);
+    setCardError('');
+    try {
+      // First click never sends: the server re-proposes under the REAL policy (all gates), then prepares the
+      // nonce-bound final confirmation. Only CONFIRMAR ORDEM REAL can create a command.
+      let row: any = o.row;
+      if (row.payload.mode !== 'REAL')
+        row = await post({ action: 'propose', mode: 'REAL', strategy: row.payload.setup.strategy });
+      if (row.payload?.inspectionOnly || row.state !== 'AGUARDANDO CONFIRMAÇÃO' || row.payload?.proposalState === 'RISK_BLOCKED')
+        throw new Error(
+          row.payload?.riskBlock?.message ||
+            (row.payload?.inspectionOnly ? 'REAL indisponível: há verificações pendentes no checklist REAL. Nada foi enviado.' : 'Proposta REAL não executável. Nada foi enviado.'),
+        );
+      const prepared = await post({ action: 'prepare-real', id: row.id, mode: 'REAL', strategy: row.payload.setup.strategy });
+      setFinalConfirmation(prepared);
+      journal(row.id, 'FINAL_CONFIRMATION_PRESENTED');
+      await load();
+    } catch (e) {
+      setCardError(e instanceof Error ? e.message : 'REAL bloqueado. Nada foi enviado.');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function confirmPaperCard(o: Opportunity) {
+    setBusy(true);
+    setCardError('');
+    try {
+      await post({ action: 'confirm', id: o.id, mode: 'PAPER', strategy: o.row.payload.setup.strategy, quantity: o.quantity });
+      await load();
+    } catch (e) {
+      setCardError(e instanceof Error ? e.message : 'Entrada PAPER recusada');
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function discardCard(o: Opportunity) {
+    setBusy(true);
+    setCardError('');
+    try {
+      // The proposal's own mode: discarding the Copilot's proposal from the REAL view never creates a REAL record.
+      await post({ action: 'discard', id: o.id, mode: o.row.payload.mode, strategy: o.row.payload.setup.strategy });
+      setFlash({ text: 'OPORTUNIDADE DESCARTADA · decisão registrada; não conta como LOSS.', at: Date.now() });
+      await load();
+    } catch (e) {
+      setCardError(e instanceof Error ? e.message : 'Falha ao descartar');
+    } finally {
+      setBusy(false);
+    }
+  }
+  // Final confirmation TTL comes from the server (nonce expiresAt); once past it the dialog closes and nothing is sent.
+  const confirmSeconds = finalConfirmation ? Math.max(0, Math.ceil((Date.parse(finalConfirmation.expiresAt) - (now + skew)) / 1000)) : 0;
+  useEffect(() => {
+    if (finalConfirmation && confirmSeconds <= 0) {
+      journal(finalConfirmation.proposal.id, 'FINAL_CONFIRMATION_EXPIRED');
+      setFlash({ text: 'CONFIRMAÇÃO EXPIRADA · nenhuma ordem enviada.', at: Date.now() });
+      setFinalConfirmation(null);
+    }
+  }, [finalConfirmation, confirmSeconds]);
   const activeComplete =
     mode === 'PAPER' ? (paperComplete ?? complete) : (realComplete ?? complete);
   const activeSetupId = mode === 'PAPER' ? (paperSetupId ?? setupId) : setupId;
@@ -185,6 +291,26 @@ export default function OperationsPanel({
       data-priority={priority}
       aria-label="Aprovação humana"
     >
+      <OpportunityCard
+        queue={finalConfirmation ? [] : queue}
+        notices={notices}
+        mode={mode}
+        realReady={ready}
+        realBlockedCount={readiness?.gates ? readiness.gates.filter((g: any) => !g.ok).length : null}
+        busy={busy}
+        error={cardError}
+        strategyNames={strategyNames}
+        flash={flash}
+        onEnter={enterReal}
+        onConfirmPaper={confirmPaperCard}
+        onDiscard={discardCard}
+        onEvent={journal}
+        onDetails={(id) => {
+          setSelectedId(id);
+          document.querySelector('.trade-operation')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }}
+        onDismissNotice={(id) => setDismissedNotices((s) => new Set(s).add(id))}
+      />
       <header className="trade-operation-header">
         <div>
           <span className="trade-eyebrow">
@@ -719,18 +845,25 @@ export default function OperationsPanel({
               <dt>Potencial estimado</dt><dd>{money(finalConfirmation.proposal.potentialBRL)}</dd>
               <dt>Risco/retorno</dt><dd>1 : {num(finalConfirmation.proposal.rr)}</dd>
               <dt>Validade da confirmação</dt>
-              <dd>
+              <dd role="timer" data-seconds={confirmSeconds}>
                 {new Date(finalConfirmation.expiresAt).toLocaleTimeString(
                   'pt-BR',
-                )}
+                )}{' '}
+                · {confirmSeconds}s
               </dd>
             </dl>
+            {!finalConfirmation.inspectionOnly && (
+              <p className="trade-real-warning">
+                Esta confirmação envia uma ORDEM REAL à XP / MetaTrader 5. O servidor revalida todos os gates; se
+                qualquer um falhar, nada é enviado.
+              </p>
+            )}
             <button
               className="trade-primary"
               disabled={
                 busy ||
                 (!ready && !finalConfirmation.inspectionOnly) ||
-                Date.now() > Date.parse(finalConfirmation.expiresAt)
+                confirmSeconds <= 0
               }
               onClick={() =>
                 action('confirm', finalConfirmation.proposal.id, {
@@ -741,7 +874,12 @@ export default function OperationsPanel({
             >
               CONFIRMAR ORDEM REAL
             </button>
-            <button onClick={() => setFinalConfirmation(null)}>
+            <button
+              onClick={() => {
+                journal(finalConfirmation.proposal.id, 'FINAL_CONFIRMATION_CANCELLED');
+                setFinalConfirmation(null);
+              }}
+            >
               CANCELAR
             </button>
           </>

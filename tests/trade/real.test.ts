@@ -220,6 +220,9 @@ const blocks: Record<string, (f: ReturnType<typeof fixture>) => void> = {
     Object.assign(f.p, { proposalState: 'RISK_BLOCKED', quantity: 0, riskBRL: 0 }),
   'proposal not sized by the risk engine': (f) =>
     delete (f.p as any).proposalState,
+  'policy disabled': (f) => (f.ctx.policy.enabled = false),
+  'policy not from GESTÃO DE RISCO · REAL': (f) => delete (f.ctx.policy as any).risk_settings_version,
+  'price beyond allowed slippage': (f) => Object.assign(f.ctx.bridge.tick, { bid: f.p.entry + 95, ask: f.p.entry + 100 }),
 };
 for (const [name, change] of Object.entries(blocks))
   test('REAL fail-closed: ' + name, () => {
