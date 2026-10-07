@@ -190,7 +190,7 @@
 }
 .trade-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-columns: minmax(0, 1fr) 380px;
   max-width: 1800px !important;
   margin: auto;
 }
@@ -1033,7 +1033,7 @@
 }
 @media (min-width: 1600px) {
   .trade-workspace {
-    grid-template-columns: minmax(0, 1fr) 400px;
+    grid-template-columns: minmax(0, 1fr) 420px;
   }
   .trade-chart {
     height: 540px;
@@ -1048,7 +1048,7 @@
     display: none;
   }
   .trade-workspace {
-    grid-template-columns: minmax(0, 1fr) 330px;
+    grid-template-columns: minmax(0, 1fr) 340px;
   }
   .trade-instrument {
     gap: 20px;
@@ -1580,7 +1580,9 @@
   text-align: right;
   color: #e5e9ef;
   font-weight: 500;
-  overflow-wrap: anywhere;
+  /* break-word (not anywhere): a value only breaks inside a word when that word alone can't fit, and it
+     never lowers the column's min-content, so a grid track can't collapse to one character. */
+  overflow-wrap: break-word;
 }
 .trade-operation-reason {
   margin: 15px 0;
@@ -2437,6 +2439,7 @@
 
 /* REAL session: INDISPONÍVEL / BLOQUEADO / ARMADO, always explicit. */
 .trade-real-session {
+  container-type: inline-size;
   margin: 14px 0;
   padding: 14px;
   border: 1px solid #35352f;
@@ -2467,7 +2470,7 @@
   line-height: 1.5;
   color: #a3a795;
 }
-.trade-real-overview {
+dl.trade-real-overview {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   gap: 4px 12px;
@@ -2480,7 +2483,15 @@
 .trade-real-overview dd {
   margin: 0;
   color: #d4d6c9;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+}
+@container (max-width: 17rem) {
+  dl.trade-real-overview {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .trade-real-overview dd {
+    margin-bottom: 6px;
+  }
 }
 .trade-danger {
   background: #b9452f !important;
@@ -2594,6 +2605,7 @@
   letter-spacing: 0.04em;
 }
 .trade-risk {
+  container-type: inline-size;
   margin: 14px 0;
   border: 1px solid #35352f;
   border-radius: 8px;
@@ -2619,20 +2631,57 @@
   font-size: 12px;
   color: #e9b48a;
 }
-.trade-risk-current {
+/* Key → value lists of the risk panels. The value column is sized by its content (max-content) and values
+   never wrap, so "R$ 10,00", "10% do capital" or "120 min" can't be split; the label takes the rest and wraps
+   between words. When the panel is too narrow for both, the list stacks (label above value) instead of
+   squeezing the value. Long explanatory values opt out with .trade-kv-prose. */
+dl.trade-risk-current,
+.trade-risk-summary dl {
   display: grid;
-  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
-  gap: 6px 12px;
+  grid-template-columns: minmax(6.5rem, 1fr) max-content;
+  gap: 4px 12px;
   margin: 12px 0;
   font-size: 13px;
+  border: 0;
 }
-.trade-risk-current dt {
+.trade-risk-current dt,
+.trade-risk-summary dt {
   color: #a9a291;
+  padding: 2px 0;
+  border: 0;
+  font-size: inherit;
+  overflow-wrap: break-word;
 }
-.trade-risk-current dd {
+.trade-risk-current dd,
+.trade-risk-summary dd {
   margin: 0;
+  padding: 2px 0;
+  border: 0;
+  font-size: inherit;
+  text-align: right;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
+}
+.trade-risk-current dd.trade-kv-prose {
+  grid-column: 1 / -1;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: break-word;
+  margin-bottom: 4px;
+}
+@container (max-width: 15rem) {
+  dl.trade-risk-current,
+  .trade-risk-summary dl {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+  .trade-risk-current dd,
+  .trade-risk-summary dd {
+    text-align: left;
+    margin-bottom: 8px;
+  }
 }
 .trade-risk-form {
   display: grid;
@@ -2665,11 +2714,6 @@
 }
 .trade-risk-form small {
   color: #a9a291;
-}
-@media (max-width: 520px) {
-  .trade-risk-current {
-    grid-template-columns: 1fr;
-  }
 }
 .trade-paper-confirm {
   display: grid;
@@ -2720,33 +2764,17 @@
   accent-color: #d5b57a;
 }
 .trade-risk-summary {
+  container-type: inline-size;
   grid-column: 1 / -1;
   padding: 10px 12px;
   border: 1px solid #45453d;
   border-radius: 6px;
 }
-.trade-risk-summary dl {
-  display: grid;
-  grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
-  gap: 4px 12px;
-  margin: 8px 0;
-  font-size: 13px;
-}
-.trade-risk-summary dt {
-  color: #a9a291;
-}
 .trade-risk-summary dd {
-  margin: 0;
   color: #f1e6d2;
-  font-variant-numeric: tabular-nums;
 }
 .trade-risk-form input::placeholder {
   color: #77705f;
-}
-@media (max-width: 520px) {
-  .trade-risk-summary dl {
-    grid-template-columns: 1fr;
-  }
 }
 .trade-real-inspection {
   margin: 12px 0;
