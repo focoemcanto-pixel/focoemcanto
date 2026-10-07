@@ -132,7 +132,7 @@ export default function RiskSettingsPanel({ onChanged }: { onChanged?: () => voi
           <dt>Máximo de contratos</dt>
           <dd>{s.maxContracts}</dd>
           <dt>Hoje · PAPER LIVE</dt>
-          <dd>
+          <dd className="trade-kv-prose">
             {status!.tradesToday} operação(ões) · perdas consumidas {money(status!.lossTodayBRL)}
             {status!.lossTodayR != null ? ` (${num(status!.lossTodayR)}R)` : ''} · risco em aberto {money(status!.openRiskBRL)} · disponível{' '}
             {money(status!.dailyLossRemainingBRL)} · P&L líquido {money(status!.netPnlTodayBRL)}

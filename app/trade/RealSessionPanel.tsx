@@ -448,7 +448,7 @@ function RealConfig({
               <dt>Capital operacional (planejamento)</dt>
               <dd>{s ? brl(Number(s.capitalBRL)) : '—'}</dd>
               <dt>Saldo / margem da corretora (XP)</dt>
-              <dd>
+              <dd className="trade-kv-prose">
                 {brl(data.brokerBalanceBRL)} / margem livre {brl(data.brokerFreeMarginBRL)} · capacidade de execução; sem margem a XP recusa
                 a ordem mesmo dentro do 1R.
               </dd>
@@ -531,8 +531,8 @@ function RealConfig({
                   </dd>
                   <dt>Perda máxima diária</dt>
                   <dd>
-                    {form.dailyLossUnit === 'R' && Number.isFinite(daily) ? `${plain(daily)}R · ` : ''}
                     {brl(dailyBRL)}
+                    {form.dailyLossUnit === 'R' && Number.isFinite(daily) ? ` · ${plain(daily)}R` : ''}
                   </dd>
                   <dt>Contratos / posições</dt>
                   <dd>
@@ -542,10 +542,12 @@ function RealConfig({
                   <dd>
                     {plain(numbers.maxOrdersPerSession)} / {plain(numbers.maxOrdersPerDay)}
                   </dd>
-                  <dt>Sessão · desvio · exposição</dt>
-                  <dd>
-                    {plain(numbers.maxSessionMinutes)} min · {plain(numbers.maxSlippagePoints)} pts · {brl(numbers.maxNotionalBRL)}
-                  </dd>
+                  <dt>Sessão</dt>
+                  <dd>{plain(numbers.maxSessionMinutes)} min</dd>
+                  <dt>Desvio máximo</dt>
+                  <dd>{plain(numbers.maxSlippagePoints)} pts</dd>
+                  <dt>Exposição máxima</dt>
+                  <dd>{brl(numbers.maxNotionalBRL)}</dd>
                 </dl>
                 <small>Calculado na tela; o servidor recalcula o 1R, grava uma nova versão auditada e gera a política REAL.</small>
               </div>
