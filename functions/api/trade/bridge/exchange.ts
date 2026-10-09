@@ -21,6 +21,8 @@ const rejectionLoggedAt = new Map<string, number>();
 let operationsProbe:
   | { origin: string; checkedAt: number; available: boolean; code?: string }
   | undefined;
+/** Owner that never has proposals: the probe checks that the operations RPC answers, never its data. */
+export const operationsProbeOwner = '__exchange_probe__';
 async function probeOperations(env: BridgeEnv) {
   const origin = env.TRADE_SUPABASE_URL || '';
   if (
@@ -29,8 +31,11 @@ async function probeOperations(env: BridgeEnv) {
   )
     return operationsProbe;
   try {
+    // Availability only: an owner with no proposals answers from the owner index in milliseconds. Reading the
+    // real operations list here put the heaviest read of the panel (seconds under load) inside the EA's 5 s
+    // HTTP window, so the exchange timed out before the batch was even persisted (MT5 1003/5203).
     const rows = await rpc(env, 'trade_operations_read', {
-      p_owner: 'focoos-admin',
+      p_owner: operationsProbeOwner,
     });
     operationsProbe = {
       origin,
