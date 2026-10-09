@@ -52,6 +52,16 @@ export const opportunityEvents = [
   'FINAL_CONFIRMATION_EXPIRED',
   'FINAL_CONFIRMATION_CANCELLED',
 ] as const;
+/**
+ * Same JSON regardless of key order. The observation RPCs already ignore identical values in SQL, but each call
+ * still took a row lock (UPDATE ... / SELECT ... FOR UPDATE) on every 2 s poll of every open tab; skipping the
+ * call when nothing changed removes those writes and lock waits without changing what is stored.
+ */
+export function sameJson(a: unknown, b: unknown): boolean {
+  const norm = (v: any): any =>
+    Array.isArray(v) ? v.map(norm) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, norm(v[k])])) : v;
+  return JSON.stringify(norm(a ?? null)) === JSON.stringify(norm(b ?? null));
+}
 /** Journal an opportunity event. Best effort: auditing never blocks or alters the operation itself. */
 async function journalEvent(env: BridgeEnv, id: string, kind: string, detail: Record<string, unknown> = {}) {
   await rpc(env, 'trade_opportunity_event', { p_owner: owner, p_id: id, p_kind: kind, p_payload: detail }).catch(() => {});
@@ -469,7 +479,7 @@ export async function onRequestGet({
           candles,
           row.hypothetical_execution,
         );
-        if (hypothetical) {
+        if (hypothetical && !sameJson(hypothetical, row.hypothetical_execution)) {
           await rpc(env, 'trade_hypothetical_observe', {
             p_owner: owner,
             p_id: row.id,
@@ -490,7 +500,7 @@ export async function onRequestGet({
           candles,
           row.hypothetical_execution,
         );
-        if (hypothetical) {
+        if (hypothetical && !sameJson(hypothetical, row.hypothetical_execution)) {
           await rpc(env, 'trade_hypothetical_observe', {
             p_owner: owner,
             p_id: row.id,
@@ -517,15 +527,16 @@ export async function onRequestGet({
           row.execution;
       }
       if (execution) {
-        await rpc(env, 'trade_operation_observe', {
-          p_owner: owner,
-          p_id: p.id,
-          p_execution: execution,
-          p_cursor:
-            source === 'mt5'
-              ? snapshotOf(candles, 'live').asOf
-              : candles.length,
-        });
+        if (!sameJson(execution, row.execution))
+          await rpc(env, 'trade_operation_observe', {
+            p_owner: owner,
+            p_id: p.id,
+            p_execution: execution,
+            p_cursor:
+              source === 'mt5'
+                ? snapshotOf(candles, 'live').asOf
+                : candles.length,
+          });
         row.execution = execution;
         if (
           p.source === 'mt5' &&
