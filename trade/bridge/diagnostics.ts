@@ -51,6 +51,11 @@ export function exchangeDiagnostic(
             ? 'BRIDGE_CONFIG_INVALID'
             : 'BRIDGE_TRANSPORT_ERROR',
     field: typed ? error.field : null,
+    // Persistence failures keep the RPC, the upstream HTTP status and the sanitized Postgres/PostgREST code
+    // (e.g. 503/PGRST002 restart, 500/57014 statement timeout, 520/521 origin down) for incident tracing.
+    operation: persistence ? error.operation ?? null : null,
+    upstreamStatus: persistence && Number.isInteger(error.httpStatus) ? error.httpStatus : null,
+    pgCode: persistence ? error.databaseCode ?? null : null,
     bridgeId: identifier(value?.bridgeId),
     symbol: identifier(value?.symbol),
     protocolVersion: Number.isInteger(value?.state?.protocolVersion)
