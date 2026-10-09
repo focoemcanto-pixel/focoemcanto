@@ -13,6 +13,7 @@ import {
 import { validateBatch, commandWire } from '../../../../trade/bridge/protocol';
 import { runScanner } from '../../../../trade/scanner/service';
 import { onRequestGet as observePaper } from '../operations';
+import { policyWire } from '../../../../trade/bridge/operational-policy';
 let lastBackgroundAt = 0;
 let acceptedLoggedAt = 0;
 const rejectionLoggedAt = new Map<string, number>();
@@ -78,6 +79,16 @@ export async function onRequestPost({
     const c = config(env);
     stage = 'validateBatch';
     const batch = validateBatch(value, env);
+    // Current transport metadata is outside the durable market batch; retries keep batch identity/content.
+    const telemetry = request.headers.get('X-Foco-Transport');
+    if (telemetry && telemetry.length < 512) {
+      try {
+        const t = JSON.parse(telemetry), clean: Record<string, number> = {};
+        for (const key of ['failures', 'consecutiveFailures', 'lastStatus', 'lastNetworkError', 'lastFailureAt', 'lastRecoveryAt', 'latencyMs', 'terminalBuild'])
+          if (Number.isSafeInteger(t[key]) && t[key] >= -1 && t[key] <= Number.MAX_SAFE_INTEGER) clean[key] = t[key];
+        batch.state.transport = { ...batch.state.transport, ...clean };
+      } catch { /* Malformed diagnostics never modify execution evidence. */ }
+    }
     stage = 'probeOperations';
     const operationsStatus = await probeOperations(env);
     batch.state = {
@@ -134,7 +145,18 @@ export async function onRequestPost({
     }
     stage = 'commandWire';
     // Defense in depth: a disarmed backend never puts a command on the wire.
-    const wire = commandWire(c.execution ? result.command : null);
+    let wire = commandWire(c.execution ? result.command : null);
+    if (batch.state.policyProtocol === 1) {
+      try {
+        const ctx = await rpc(env, 'trade_real_context', { p_bridge: c.bridgeId });
+        const signedPolicy = await policyWire(ctx, env);
+        // Policy precedes the command; unsupported EAs receive the unchanged legacy response.
+        wire = 'OK\n' + signedPolicy + wire.slice(3);
+      } catch {
+        // Never deliver a command without its current policy. ACK still drains the durable batch.
+        wire = 'OK\nPOLICY_UNAVAILABLE\n';
+      }
+    }
     if (waitUntil && Date.now() - acceptedLoggedAt >= 30000) {
       acceptedLoggedAt = Date.now();
       const receipt = {

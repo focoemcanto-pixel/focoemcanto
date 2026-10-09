@@ -1,5 +1,5 @@
 #property strict
-#property version "2.07"
+#property version "2.08"
 #property description "Foco Trade XP/MT5 bridge. Execution disabled by default."
 input string ApiOrigin="https://focoemcanto.com";
 input string BridgeToken="";
@@ -7,7 +7,8 @@ input string BridgeId="xp-mt5-primary";
 input string TradeSymbol="WINV26";
 input bool EnableExecution=false;
 input int MaxContracts=1;
-// Zero/empty limits deliberately lock execution until explicit homologation.
+// Initial provisioning: immutable HARD CAPS, not operational policy. Zero locks execution.
+// Normal app policy changes use min(policy, hard cap); remote input never raises a cap.
 input double MaxRiskBRL=0;
 input double MaxLoss24hBRL=0;
 input double MaxSlippagePoints=0;
@@ -37,6 +38,38 @@ int lastExchangeHttpStatus=0;long lastExchangeAckAt=0;
 // Transport failures with no HTTP response (MT5 WebRequest status outside 100..599, e.g. 1003): counted and
 // reported in the next batch. The same durable batch is always retried; nothing is converted into success.
 int transportFailures=0,lastTransportStatus=0;long lastTransportFailureAt=0;string lastGateText="";
+int consecutiveFailures=0,lastNetworkError=0,lastLatencyMs=0;long lastRecoveryAt=0;
+long policyVersion=0,policyValidUntil=0,realArmedAt=0,realExpiresAt=0;
+string policyHash="",realSessionId="0";bool remoteArmed=false;
+double policyRisk=0,policyLoss=0,policySlip=0,policyNotional=0;
+int policyContracts=0,policyPositions=0,policyPositionContracts=0,policyOrdersSession=0,policyOrdersDay=0,policySessionMinutes=0;
+// A POLICY2 snapshot is memory-only and expires. Restart/reconnect never restores an armed permit.
+bool ReceivePolicy(string line){
+ string p[];if(StringSplit(line,'|',p)!=23 || p[0]!="POLICY2")return false;
+ string canonical=p[0];for(int i=1;i<22;i++)canonical+="|"+p[i];
+ if(StringLen(p[22])!=64 || Hmac(canonical,BridgeToken)!=p[22])return false;
+ long now=(long)TimeGMT()*1000,version=StringToInteger(p[1]),issued=StringToInteger(p[20]),expires=StringToInteger(p[21]);
+ if(version<1 || version<policyVersion || StringLen(p[2])!=32 || (version==policyVersion && policyHash!="" && p[2]!=policyHash) || p[3]!=accountHash || p[4]!=session || p[5]!=TradeSymbol || issued>now+2000 || expires<=now || expires-issued>32000 || expires<=issued)return false;
+ for(int i=6;i<=15;i++)if(StringToDouble(p[i])<=0 || !MathIsValidNumber(StringToDouble(p[i])))return false;
+ for(int i=9;i<=11;i++)if(StringToDouble(p[i])!=MathFloor(StringToDouble(p[i])))return false;
+ for(int i=13;i<=15;i++)if(StringToDouble(p[i])!=MathFloor(StringToDouble(p[i])))return false;
+ bool active=p[19]=="1";
+ long started=StringToInteger(p[17]),ends=StringToInteger(p[18]);
+ if(p[19]!="0" && !active)return false;
+ if(active && (StringLen(p[16])!=36 || started>now+2000 || ends<=now || ends<=started || ends-started>StringToInteger(p[15])*60000))return false;
+ policyVersion=version;policyHash=p[2];policyValidUntil=expires;
+ policyRisk=StringToDouble(p[6]);policyLoss=StringToDouble(p[7]);policySlip=StringToDouble(p[8]);
+ policyContracts=(int)StringToInteger(p[9]);policyPositions=(int)StringToInteger(p[10]);policyPositionContracts=(int)StringToInteger(p[11]);policyNotional=StringToDouble(p[12]);
+ policyOrdersSession=(int)StringToInteger(p[13]);policyOrdersDay=(int)StringToInteger(p[14]);policySessionMinutes=(int)StringToInteger(p[15]);
+ realSessionId=p[16];realArmedAt=started;realExpiresAt=ends;remoteArmed=active;
+ return true;
+}
+bool PolicyAllows(string &p[]){
+ long now=(long)TimeGMT()*1000;
+ return ArraySize(p)==19 && p[14]=="P2" && StringToInteger(p[15])==policyVersion && p[16]==policyHash && p[17]==realSessionId && remoteArmed && consecutiveFailures==0 && now<policyValidUntil && now<realExpiresAt && realArmedAt<=now && realExpiresAt-realArmedAt<=policySessionMinutes*60000;
+}
+string TransportJson(){return "{\"failures\":"+(string)transportFailures+",\"consecutiveFailures\":"+(string)consecutiveFailures+",\"lastStatus\":"+(string)lastTransportStatus+",\"lastNetworkError\":"+(string)lastNetworkError+",\"lastFailureAt\":"+(string)lastTransportFailureAt+",\"lastRecoveryAt\":"+(string)lastRecoveryAt+",\"latencyMs\":"+(string)lastLatencyMs+",\"terminalBuild\":"+(string)TerminalInfoInteger(TERMINAL_BUILD)+"}";}
+
 string Q(string s) { StringReplace(s,"\\","\\\\"); StringReplace(s,"\"","\\\""); StringReplace(s,"\r","\\r"); StringReplace(s,"\n","\\n"); return "\""+s+"\""; }
 string N(double n) { return DoubleToString(n,8); }
 string B(bool b) { return b?"true":"false"; }
@@ -161,7 +194,7 @@ string GateText(){
  if(StringLen(r)>1)r=StringSubstr(r,1,StringLen(r)-2);
  return "LOCKED ("+r+")";
 }
-string StateJson(){HistoryHealth();ProtectionHealth();return "{\"marketClock\":{\"basis\":\"broker-wall\",\"serverNowSeconds\":"+(string)(long)TimeTradeServer()+",\"utcNowSeconds\":"+(string)(long)TimeGMT()+",\"utcOffsetSeconds\":"+(string)((long)TimeTradeServer()-(long)TimeGMT())+"},\"protocolVersion\":2,\"eaVersion\":\"2.07\",\"executionGate\":"+GateJson()+",\"transport\":{\"failures\":"+(string)transportFailures+",\"lastStatus\":"+(string)lastTransportStatus+",\"lastFailureAt\":"+(string)lastTransportFailureAt+"},\"tickGap\":{\"fromMsc\":"+(string)tickGapFromMsc+",\"toMsc\":"+(string)tickGapToMsc+",\"atMsc\":"+(string)tickGapAtMsc+"},\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"accountTradeMode\":"+(string)AccountInfoInteger(ACCOUNT_TRADE_MODE)+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
+string StateJson(){HistoryHealth();ProtectionHealth();return "{\"marketClock\":{\"basis\":\"broker-wall\",\"serverNowSeconds\":"+(string)(long)TimeTradeServer()+",\"utcNowSeconds\":"+(string)(long)TimeGMT()+",\"utcOffsetSeconds\":"+(string)((long)TimeTradeServer()-(long)TimeGMT())+"},\"protocolVersion\":2,\"eaVersion\":\"2.08\",\"policyProtocol\":1,\"policyReceipt\":{\"version\":"+(string)policyVersion+",\"hash\":"+Q(policyHash)+",\"validUntil\":"+(string)policyValidUntil+"},\"localLimitsSemantics\":\"HARD_CAPS\",\"executionGate\":"+GateJson()+",\"transport\":"+TransportJson()+",\"tickGap\":{\"fromMsc\":"+(string)tickGapFromMsc+",\"toMsc\":"+(string)tickGapToMsc+",\"atMsc\":"+(string)tickGapAtMsc+"},\"lastExchangeHttpStatus\":"+(string)lastExchangeHttpStatus+",\"lastExchangeAckAt\":"+(string)lastExchangeAckAt+",\"magic\":"+Q((string)MagicNumber)+",\"localAccountAuthorized\":"+B(ExpectedAccountFingerprint!="" && ExpectedAccountFingerprint==accountHash)+",\"localLimits\":{\"maxContracts\":"+(string)MaxContracts+",\"maxPositions\":"+(string)MaxPositions+",\"maxRiskBRL\":"+N(MaxRiskBRL)+",\"maxLossBRL\":"+N(MaxLoss24hBRL)+",\"maxSlippagePoints\":"+N(MaxSlippagePoints)+",\"maxDeviationPoints\":"+(string)MaxDeviationPoints+"},\"volumeMax\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MAX))+",\"point\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_POINT))+",\"stopsLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)+",\"freezeLevel\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_FREEZE_LEVEL)+",\"expirationTime\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_EXPIRATION_TIME)+",\"tradeMode\":"+(string)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_MODE)+",\"sessionOpen\":"+B(SessionOpen())+",\"historyReady\":"+B(historyReady)+",\"historyAsOfMsc\":"+(string)historyAsOfMsc+",\"loss24hBRL\":"+N(loss24hBRL)+",\"protectionFault\":"+B(protectionFault)+",\"connected\":"+B((bool)TerminalInfoInteger(TERMINAL_CONNECTED))+",\"executionAllowed\":"+B(ExecutionAllowed())+",\"currency\":"+Q(AccountInfoString(ACCOUNT_CURRENCY))+",\"tickValue\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE))+",\"tickSize\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE))+",\"volumeMin\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_MIN))+",\"volumeStep\":"+N(SymbolInfoDouble(TradeSymbol,SYMBOL_VOLUME_STEP))+",\"accountTradeMode\":"+(string)AccountInfoInteger(ACCOUNT_TRADE_MODE)+",\"marginMode\":"+(string)AccountInfoInteger(ACCOUNT_MARGIN_MODE)+",\"balance\":"+N(AccountInfoDouble(ACCOUNT_BALANCE))+",\"equity\":"+N(AccountInfoDouble(ACCOUNT_EQUITY))+",\"freeMargin\":"+N(AccountInfoDouble(ACCOUNT_MARGIN_FREE))+",\"positions\":"+PositionsJson()+",\"orders\":"+OrdersJson()+"}";}
 string CandlesJson(){MqlRates rates[];int count;datetime closed=iTime(TradeSymbol,PERIOD_M1,1);
  if(lastBar==0)count=CopyRates(TradeSymbol,PERIOD_M1,1,HistoryBars,rates);else count=CopyRates(TradeSymbol,PERIOD_M1,lastBar,closed,rates);
  if(count>0)lastBar=rates[count-1].time;string j="[";
@@ -208,7 +241,7 @@ void Reconcile(){
  // Limit transport event size; next heartbeat resumes through durable broker history.
  if(StringLen(events)>50000)break;
  }
- for(int i=0;i<ArraySize(commands);i++){string p[];if(StringSplit(commands[i],'|',p)!=10 && ArraySize(p)!=15)continue;ulong ticket=(ulong)StringToInteger(p[8]);bool confirmed=false;
+ for(int i=0;i<ArraySize(commands);i++){string p[];if(StringSplit(commands[i],'|',p)!=10 && ArraySize(p)!=15 && ArraySize(p)!=19)continue;ulong ticket=(ulong)StringToInteger(p[8]);bool confirmed=false;
  if(p[2]=="SLTP" && PositionSelectByTicket(ticket)) confirmed=MathAbs(PositionGetDouble(POSITION_SL)-StringToDouble(p[5]))<0.001 && MathAbs(PositionGetDouble(POSITION_TP)-StringToDouble(p[6]))<0.001;
  if(p[2]=="MODIFY" && OrderSelect(ticket))confirmed=MathAbs(OrderGetDouble(ORDER_PRICE_OPEN)-StringToDouble(p[7]))<0.001 && MathAbs(OrderGetDouble(ORDER_SL)-StringToDouble(p[5]))<0.001 && MathAbs(OrderGetDouble(ORDER_TP)-StringToDouble(p[6]))<0.001;
  if(p[2]=="CANCEL" && HistoryOrderSelect(ticket))confirmed=HistoryOrderGetInteger(ticket,ORDER_STATE)==ORDER_STATE_CANCELED;
@@ -216,21 +249,22 @@ void Reconcile(){
  }
 }
 void Execute(string line){
- string p[];if(StringSplit(line,'|',p)!=15 || p[0]!="CMD2" || StringLen(p[1])!=36 || StringLen(p[14])!=64)return;
- string canonical=p[0];for(int i=1;i<14;i++)canonical+="|"+p[i];if(Hmac(canonical,BridgeToken)!=p[14]){Print("Invalid command signature; no order sent");return;}
+ string p[];int fields=StringSplit(line,'|',p);if(fields!=19 || p[0]!="CMD2" || StringLen(p[1])!=36 || StringLen(p[fields-1])!=64)return;
+ string canonical=p[0];for(int i=1;i<fields-1;i++)canonical+="|"+p[i];if(Hmac(canonical,BridgeToken)!=p[fields-1]){Print("Invalid command signature; no order sent");return;}
  string id=p[1],action=p[2]; for(int i=0;i<ArraySize(commands);i++)if((StringFind(commands[i],"CMD2|"+id+"|")==0 || StringFind(commands[i],"CMD|"+id+"|")==0))return;
  // Durable intent BEFORE OrderSend. Never replay intent after restart.
  int n=ArraySize(commands);ArrayResize(commands,n+1);commands[n]=line;
  string ledger="";for(int i=0;i<ArraySize(commands);i++)ledger+=commands[i]+"\n";
  if(!Save(prefix+"ledger.txt",ledger)){Print("Cannot persist command intent; no order sent");ExpertRemove();return;}
- if(!ExecutionAllowed() || ExpectedAccountFingerprint=="" || ExpectedAccountFingerprint!=accountHash || MagicNumber!=706032601 || !SessionOpen() || p[3]!=TradeSymbol || StringToInteger(p[9])<(long)TimeGMT()*1000 || StringToInteger(p[9])>(long)TimeGMT()*1000+32000){ResultEvent(id,"rejected",0,0,0);return;}
+ if(!PolicyAllows(p) || !ExecutionAllowed() || ExpectedAccountFingerprint=="" || ExpectedAccountFingerprint!=accountHash || MagicNumber!=706032601 || !SessionOpen() || p[3]!=TradeSymbol || StringToInteger(p[9])<(long)TimeGMT()*1000 || StringToInteger(p[9])>(long)TimeGMT()*1000+32000){ResultEvent(id,"rejected",0,0,0);return;}
  double volume=StringToDouble(p[4]),sl=StringToDouble(p[5]),tp=StringToDouble(p[6]),price=StringToDouble(p[7]);ulong ticket=(ulong)StringToInteger(p[8]);
  // Tick time is labelled with the broker server clock (XP: BRT wall time), so freshness is measured
  // against TimeTradeServer(), never TimeGMT(). Command expiry above stays on real UTC (TimeGMT).
  MqlTick tick;long serverNowMs=(long)TimeTradeServer()*1000;if(!SymbolInfoTick(TradeSymbol,tick) || (serverNowMs-tick.time_msc>15000 || tick.time_msc>serverNowMs+2000)){ResultEvent(id,"rejected",0,0,0);return;}
- if(volume<0 || volume>MaxContracts || ((action=="BUY" || action=="SELL" || action=="CLOSE") && (volume<1 || MathFloor(volume)!=volume))){ResultEvent(id,"rejected",0,0,0);return;}
+ if(volume<0 || volume>MathMin(MaxContracts,policyContracts) || ((action=="BUY" || action=="SELL" || action=="CLOSE") && (volume<1 || MathFloor(volume)!=volume))){ResultEvent(id,"rejected",0,0,0);return;}
  MqlTradeRequest req={};MqlTradeResult res={};MqlTradeCheckResult check={};
- req.magic=MagicNumber;req.symbol=TradeSymbol;req.comment=Tag(id);req.volume=volume;req.sl=sl;req.tp=tp;req.deviation=MaxDeviationPoints;
+ double quotePoint=SymbolInfoDouble(TradeSymbol,SYMBOL_POINT);if(quotePoint<=0){ResultEvent(id,"rejected",0,0,0);return;}
+ req.magic=MagicNumber;req.symbol=TradeSymbol;req.comment=Tag(id);req.volume=volume;req.sl=sl;req.tp=tp;req.deviation=(ulong)MathMin(MaxDeviationPoints,MathFloor(MathMin(MaxSlippagePoints,policySlip)/quotePoint));
  long filling=SymbolInfoInteger(TradeSymbol,SYMBOL_FILLING_MODE);req.type_filling=(filling&SYMBOL_FILLING_FOK)!=0?ORDER_FILLING_FOK:ORDER_FILLING_IOC;
  if(action=="BUY" || action=="SELL"){
  HistoryHealth();ProtectionHealth();
@@ -240,11 +274,18 @@ void Execute(string line){
  double exposure=0;
  for(int i=0;i<PositionsTotal();i++){if(PositionGetTicket(i)>0 && PositionGetString(POSITION_SYMBOL)==TradeSymbol){exposure+=PositionGetDouble(POSITION_VOLUME);if((ulong)PositionGetInteger(POSITION_MAGIC)!=MagicNumber){ResultEvent(id,"rejected",0,0,0);return;}}}
  for(int i=0;i<OrdersTotal();i++){if(OrderGetTicket(i)>0 && OrderGetString(ORDER_SYMBOL)==TradeSymbol)exposure+=OrderGetDouble(ORDER_VOLUME_CURRENT);}
- if(exposure+volume>MaxContracts || sl<=0 || tp<=0){ResultEvent(id,"rejected",0,0,0);return;}
+ if(exposure+volume>MathMin(MaxContracts,MathMin(policyContracts,policyPositionContracts)) || sl<=0 || tp<=0){ResultEvent(id,"rejected",0,0,0);return;}
  req.action=TRADE_ACTION_DEAL;req.type=action=="BUY"?ORDER_TYPE_BUY:ORDER_TYPE_SELL;req.price=action=="BUY"?tick.ask:tick.bid;
  if((action=="BUY" && (sl>=req.price || tp<=req.price)) || (action=="SELL" && (sl<=req.price || tp>=req.price))){ResultEvent(id,"rejected",0,0,0);return;}
  double tickSize=SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_SIZE),distance=(double)SymbolInfoInteger(TradeSymbol,SYMBOL_TRADE_STOPS_LEVEL)*SymbolInfoDouble(TradeSymbol,SYMBOL_POINT),riskProfit;
  double remoteRisk=StringToDouble(p[11]),remoteLoss=StringToDouble(p[12]),remoteSlip=StringToDouble(p[13]);
+ if(tickSize<=0 || remoteRisk>policyRisk || remoteLoss>policyLoss || remoteSlip>policySlip || policyPositions<1 || req.price*SymbolInfoDouble(TradeSymbol,SYMBOL_TRADE_TICK_VALUE)/tickSize*volume>policyNotional){ResultEvent(id,"rejected",0,0,0);return;}
+ // Conservative durable intent counts (including failed attempts), never reset by restart/reconnect.
+ int countSession=0,countDay=0;MqlDateTime today;TimeToStruct(TimeTradeServer(),today);today.hour=0;today.min=0;today.sec=0;
+ long dayStart=((long)StructToTime(today)-((long)TimeTradeServer()-(long)TimeGMT()))*1000;
+ for(int j=0;j<ArraySize(commands);j++){string row[];if(StringSplit(commands[j],'|',row)!=19 || (row[2]!="BUY" && row[2]!="SELL"))continue;
+ if(row[17]==realSessionId)countSession++;if(StringToInteger(row[9])>=dayStart)countDay++;}
+ if(countSession>policyOrdersSession || countDay>policyOrdersDay){ResultEvent(id,"rejected",0,0,0);return;}
  if(tickSize<=0 || remoteRisk<=0 || remoteLoss<=0 || remoteSlip<=0 || MathAbs(sl/tickSize-MathRound(sl/tickSize))>1e-7 || MathAbs(tp/tickSize-MathRound(tp/tickSize))>1e-7 || MathAbs(req.price-sl)<distance || MathAbs(tp-req.price)<distance || MathAbs(req.price-StringToDouble(p[10]))>MathMin(MaxSlippagePoints,remoteSlip) || !OrderCalcProfit(req.type,TradeSymbol,volume,req.price,sl,riskProfit) || riskProfit>=0 || MathAbs(riskProfit)>MathMin(MaxRiskBRL,remoteRisk) || loss24hBRL+MathAbs(riskProfit)>=MathMin(MaxLoss24hBRL,remoteLoss)){ResultEvent(id,"rejected",0,0,0);return;}
  }else if(action=="CLOSE" || action=="SLTP"){
  if(!PositionSelectByTicket(ticket) || PositionGetString(POSITION_SYMBOL)!=TradeSymbol || (ulong)PositionGetInteger(POSITION_MAGIC)!=MagicNumber || volume>PositionGetDouble(POSITION_VOLUME)){ResultEvent(id,"rejected",0,0,0);return;}
@@ -304,7 +345,7 @@ int OnInit(){
  if(!Save(prefix+"ledger.txt",durable))return INIT_FAILED;FileDelete(prefix+"reply.txt",FILE_COMMON);
  }
  if(pending!="" && JsonField(JsonField(pending,"state"),"protocolVersion")!="2")Print("Legacy pending detected; safe transport upgrade scheduled");
- Print("Foco Trade v2.07; EnableExecution input: ",EnableExecution,"; execution gate: ",GateText());
+ Print("Foco Trade v2.08; EnableExecution input: ",EnableExecution,"; execution gate: ",GateText());
  // Local terminal log only (never sent anywhere else): the exact value for ExpectedAccountFingerprint in
  // these inputs and TRADE_ACCOUNT_HASH in the backend. SHA-256 of login@server; not the login itself.
  Print("Foco Trade account fingerprint (ExpectedAccountFingerprint / TRADE_ACCOUNT_HASH): ",accountHash,"; ExpectedAccountFingerprint ",ExpectedAccountFingerprint==""?"EMPTY":(ExpectedAccountFingerprint==accountHash?"MATCHES":"MISMATCH"));
@@ -330,14 +371,26 @@ void OnTimer(){
  batch++;events=remainingEvents;Save(prefix+"events.txt",events);
  }
  char body[],response[];StringToCharArray(pending,body,0,WHOLE_ARRAY,CP_UTF8);ArrayResize(body,ArraySize(body)-1);string headers;
- ResetLastError();
- int status=WebRequest("POST",ApiOrigin+"/api/trade/bridge/exchange","Authorization: Bearer "+BridgeToken+"\r\nContent-Type: application/json\r\n",HttpTimeoutMs,body,response,headers);
- int networkError=GetLastError();string reply=CharArrayToString(response,0,WHOLE_ARRAY,CP_UTF8);
- if(status<100 || status>599){transportFailures++;lastTransportStatus=status;lastTransportFailureAt=(long)TimeGMT()*1000;Print("Foco Trade TRANSPORT_FAILURE: no HTTP response (MT5 status ",status,"; network error ",networkError,"; bytes ",ArraySize(response),"). Durable batch ",JsonField(pending,"batch")," kept; retrying the same batch.");lastExchangeHttpStatus=status;return;}
- if(status!=200){lastExchangeHttpStatus=status;Print("Foco Trade response shape: ",ResponseShape(reply),"; bytes: ",ArraySize(response),"; content type JSON: ",StringFind(headers,"application/json")>=0);Print("Foco Trade exchange HTTP ",status,": ",BackendErrorCode(reply),status<0?"; network error "+(string)networkError:"","; session ",StringSubstr(JsonField(pending,"session"),0,12),"; batch ",JsonField(pending,"batch"),". Retrying same durable batch.");return;}
- if(StringFind(reply,"OK\n")!=0){Print("Invalid bridge response; retaining batch");return;}
+ ResetLastError();ulong requestStarted=GetTickCount64();
+ int status=WebRequest("POST",ApiOrigin+"/api/trade/bridge/exchange","Authorization: Bearer "+BridgeToken+"\r\nContent-Type: application/json\r\nX-Foco-Transport: "+TransportJson()+"\r\n",HttpTimeoutMs,body,response,headers);
+ int networkError=GetLastError();lastLatencyMs=(int)(GetTickCount64()-requestStarted);string reply=CharArrayToString(response,0,WHOLE_ARRAY,CP_UTF8);
+ if(status<100 || status>599){transportFailures++;consecutiveFailures++;lastNetworkError=networkError;remoteArmed=false;lastTransportStatus=status;lastTransportFailureAt=(long)TimeGMT()*1000;Print("Foco Trade TRANSPORT_FAILURE: no HTTP response (MT5 status ",status,"; network error ",networkError,"; bytes ",ArraySize(response),"). Durable batch ",JsonField(pending,"batch")," kept; retrying the same batch.");lastExchangeHttpStatus=status;return;}
+ if(status!=200){transportFailures++;consecutiveFailures++;lastNetworkError=networkError;remoteArmed=false;lastTransportStatus=status;lastTransportFailureAt=(long)TimeGMT()*1000;lastExchangeHttpStatus=status;Print("Foco Trade response shape: ",ResponseShape(reply),"; bytes: ",ArraySize(response),"; content type JSON: ",StringFind(headers,"application/json")>=0);Print("Foco Trade exchange HTTP ",status,": ",BackendErrorCode(reply),status<0?"; network error "+(string)networkError:"","; session ",StringSubstr(JsonField(pending,"session"),0,12),"; batch ",JsonField(pending,"batch"),". Retrying same durable batch.");return;}
+ if(StringFind(reply,"OK\n")!=0){consecutiveFailures++;remoteArmed=false;Print("Invalid bridge response; retaining batch");return;}
  if(!Save(prefix+"reply.txt",reply)){Print("Cannot persist response; no order sent");return;}
- string lines[];StringSplit(reply,'\n',lines);for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"CMD2|")==0)Execute(lines[i]);
+ string lines[];StringSplit(reply,'\n',lines);bool policyOk=false;
+ remoteArmed=false;
+ for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"POLICY2|")==0)policyOk=ReceivePolicy(lines[i]);
+ // First recovery ACK never executes a command. Server must receive healthy telemetry and reconcile.
+ bool recovered=consecutiveFailures>0;
+ if(recovered){lastRecoveryAt=(long)TimeGMT()*1000;consecutiveFailures=0;remoteArmed=false;}
+ for(int i=0;i<ArraySize(lines);i++)if(StringFind(lines[i],"CMD2|")==0){
+ if(policyOk && !recovered)Execute(lines[i]);else{
+ if(!Save(prefix+"reply_quarantine_"+Hash(reply)+".txt",reply)){ExpertRemove();return;}
+ string skipped[];StringSplit(lines[i],'|',skipped);
+ if(ArraySize(skipped)>1)QueueEvent("quarantine_"+skipped[1],"unknown",skipped[1],",\"reason\":\"POLICY_OR_TRANSPORT_RECOVERY\"");
+ Print("Command quarantined: policy unavailable or transport recovery; no order sent");}}
+
  string gate=GateText();
  if(lastExchangeHttpStatus!=200 || gate!=lastGateText)Print("Foco Trade exchange HTTP 200 OK; execution gate: ",gate);
  lastGateText=gate;

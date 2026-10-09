@@ -8,6 +8,7 @@ const money = (v: number | null | undefined) =>
     : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 const clock = (v?: string | null) =>
   v ? new Date(v).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '—';
+const limitLabels: Record<string, string> = { maxRiskBRL: '1R (R$)', maxLossBRL: 'Perda em 24h (R$)', maxSlippagePoints: 'Slippage (pontos)', maxContracts: 'Contratos por ordem', maxPositions: 'Posições', maxPositionContracts: 'Contratos na posição', maxNotionalBRL: 'Exposição (R$)', maxOrdersPerSession: 'Operações/sessão', maxOrdersPerDay: 'Operações/dia', maxSessionMinutes: 'Duração máxima (min)' };
 const reasons: Record<string, string> = {
   EXPIRED: 'sessão expirou',
   KILL_SWITCH: 'execução bloqueada (kill switch)',
@@ -20,6 +21,7 @@ const reasons: Record<string, string> = {
   EA_EXECUTION_DISABLED: 'EA sem permissão de execução',
   DAILY_LOSS_LIMIT: 'perda diária máxima atingida',
   RECONCILIATION_PENDING: 'reconciliação pendente',
+  POLICY_SYNC_OR_TRANSPORT: 'policy sem confirmação vigente do EA ou falha de transporte pendente',
   CHECK_FAILED: 'verificação indisponível',
   MANUAL: 'bloqueada por você',
   REARMED: 'substituída por nova sessão',
@@ -205,6 +207,27 @@ export default function RealSessionPanel({
         <dt>Estratégias autorizadas</dt>
         <dd>{o.authorizedStrategies?.length ? o.authorizedStrategies.join(', ') : 'nenhuma'}</dd>
       </dl>
+      {real?.operationalPolicy && (
+        <section className="trade-policy-comparison" aria-label="Policy operacional e hard caps">
+          <h3>Gestão operacional pelo app</h3>
+          <p>Policy v{real.operationalPolicy.version ?? 'ausente'} · hash {real.operationalPolicy.hash ?? 'ausente'} · {real.operationalPolicy.synchronization === 'SYNCED' ? 'sincronizada no EA' : real.operationalPolicy.synchronization === 'LEGACY' ? 'EA legado: atualização única para v2.08 necessária para sincronização assinada' : 'aguardando confirmação do EA'}</p>
+          <p>Entradas do EA são tetos locais de segurança. Alterar a gestão no app não altera esses tetos. O limite efetivo usa sempre o menor valor; cada mudança de gestão desarma a sessão.</p>
+          <div style={{ overflowX: 'auto' }}>
+            <table>
+              <thead><tr><th>Limite</th><th>Policy</th><th>Hard cap EA</th><th>Teto backend</th><th>Efetivo</th><th>Ação</th></tr></thead>
+              <tbody>{real.operationalPolicy.rows.map((row: any) => (
+                <tr key={row.key} data-capped={row.capped}>
+                  <th>{limitLabels[row.key] || row.key}</th><td>{row.policy ?? 'ausente'}</td><td>{row.hardCap ?? (['maxRiskBRL', 'maxLossBRL', 'maxSlippagePoints', 'maxContracts', 'maxPositions'].includes(row.key) ? 'ausente' : 'policy assinada')}</td><td>{row.backendCap ?? '—'}</td><td>{row.effective ?? 'bloqueado'}</td><td>{row.action || 'nenhuma'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+          <p>Transporte: {real.connection?.state ?? 'UNKNOWN'} · {real.connection?.reason} {real.connection?.lastNetworkError ? `Erro de rede ${real.connection.lastNetworkError}; status MT5 ${real.connection.lastStatus}.` : ''}</p>
+          <p>Desvio adicional do OrderSend (MaxDeviationPoints): {real.operationalPolicy.brokerDeviationHardCapPoints ?? 'não reportado pelo EA legado'} ponto(s) da cotação. Também limita o desvio da requisição ao broker; não amplia o slippage da policy.</p>
+          {real.operationalPolicy.requiresMT5 && <p>Ação no MT5: confira fingerprint e hard caps nas Entradas; EA v2.08 requer instalação/compilação uma única vez. Não aumente tetos para espelhar a policy.</p>}
+        </section>
+      )}
+      {missing.length > 0 && <div className="trade-real-checklist"><RealChecklist gates={missing} /></div>}
       <div className="trade-operation-actions">
         {state === 'ARMED' ? (
           <button

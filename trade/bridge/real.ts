@@ -2,6 +2,7 @@ import { config, rpc, realRiskCap, type BridgeEnv } from './config';
 import { feedStatus } from './mt5';
 import { isExecutable, type Proposal } from './approval';
 import { commandCanonical, type BrokerCommand } from './protocol';
+import { policyComparison, transportHealth } from './operational-policy';
 export type GateScope = 'static' | 'session' | 'operation';
 /**
  * What a failing gate needs. TECHNICAL: configuration/infrastructure that can be fixed without any risk
@@ -46,6 +47,7 @@ export function realReadiness(
     policy = ctx?.policy || {},
     feed = feedStatus(b, env, now),
     local = s.localLimits || {};
+  const operationalPolicy = policyComparison(ctx, env, now), connection = transportHealth(b, c.maxAgeMs, now);
   const gates: RealGate[] = [];
   const add = (key: string, label: string, ok: unknown, reason: string, checks?: GateCheck[]) => {
     const scope = scopeOf(key),
@@ -160,6 +162,12 @@ export function realReadiness(
     s.connected === true && recent(b?.receivedAt),
     'Conexão/heartbeat antigo ou indisponível.',
   );
+  if (s.policyProtocol === 1) {
+    add('policy-sync', 'Policy operacional sincronizada no EA', operationalPolicy.synchronization === 'SYNCED',
+      `Policy v${operationalPolicy.version ?? 'ausente'} / ${operationalPolicy.hash ?? 'hash ausente'}: ${operationalPolicy.synchronization}. Aguarde o próximo heartbeat; após reiniciar o EA a policy deve ser recebida e validada novamente.`);
+    add('transport', 'Transporte sem falha pendente', !(s.transport?.consecutiveFailures > 0),
+      `${connection.reason} Status MT5 ${s.transport?.lastStatus ?? 'ausente'}; erro de rede ${s.transport?.lastNetworkError ?? 'ausente'}.`);
+  }
   add(
     'feed',
     'Feed e preço recentes',
@@ -259,7 +267,7 @@ export function realReadiness(
   );
   add(
     'local',
-    'Conta e limites locais do EA',
+    'Identidade e hard caps locais do EA',
     s.localAccountAuthorized === true &&
       pos(local.maxRiskBRL) &&
       pos(local.maxLossBRL) &&
@@ -272,9 +280,9 @@ export function realReadiness(
     [
       check('ExpectedAccountFingerprint do EA confere', s.localAccountAuthorized, 'TECHNICAL', 'MT5 → propriedades do EA → Entradas: ExpectedAccountFingerprint = fingerprint impresso pelo próprio EA (aba Experts).'),
       check('MaxContracts e MaxPositions do EA', Number.isInteger(local.maxContracts) && local.maxContracts >= 1 && Number.isInteger(local.maxPositions) && local.maxPositions >= 1, 'TECHNICAL', 'Entradas do EA: MaxContracts e MaxPositions ≥ 1.'),
-      check('MaxRiskBRL do EA (risco por operação)', pos(local.maxRiskBRL), 'DECISION', 'Você decide: MaxRiskBRL nas entradas do EA (igual ou menor que o limite da política).'),
-      check('MaxLoss24hBRL do EA (perda diária)', pos(local.maxLossBRL), 'DECISION', 'Você decide: MaxLoss24hBRL nas entradas do EA.'),
-      check('MaxSlippagePoints do EA', pos(local.maxSlippagePoints), 'DECISION', 'Você decide: MaxSlippagePoints nas entradas do EA.'),
+      check('Hard cap MaxRiskBRL', pos(local.maxRiskBRL), 'DECISION', `MT5 → Entradas: teto MaxRiskBRL atual ${local.maxRiskBRL ?? 'ausente'}; deve ser positivo. Provisionamento inicial; a policy operacional é configurada no app, limitada por este teto.`),
+      check('Hard cap MaxLoss24hBRL', pos(local.maxLossBRL), 'DECISION', `MT5 → Entradas: teto MaxLoss24hBRL atual ${local.maxLossBRL ?? 'ausente'}; deve ser positivo. Limite efetivo = menor entre policy e teto.`),
+      check('Hard cap MaxSlippagePoints', pos(local.maxSlippagePoints), 'DECISION', `MT5 → Entradas: teto MaxSlippagePoints atual ${local.maxSlippagePoints ?? 'ausente'}; deve ser positivo. Não precisa espelhar a policy.`),
     ],
   );
   const cap = realRiskCap(env),
@@ -332,7 +340,7 @@ export function realReadiness(
       pos(local.maxLossBRL) &&
       s.loss24hBRL + budget <
         Math.min(policy.max_daily_loss_brl, local.maxLossBRL),
-    'Perdas conservadoras em 24h + reserva excedem limite ou histórico indisponível.',
+    `Perda 24h ${Number.isFinite(s.loss24hBRL) ? s.loss24hBRL : 'indisponível'} + reserva ${budget}; policy ${policy.max_daily_loss_brl ?? 'ausente'}; hard cap EA ${local.maxLossBRL ?? 'ausente'}. O total deve ficar abaixo do menor limite. Histórico ausente bloqueia; não redefina perdas para liberar o gate.`,
   );
   add(
     'positions',
@@ -484,6 +492,8 @@ export function realReadiness(
     },
     canExecute,
     pipeline: 'IMPLEMENTADO',
+    operationalPolicy,
+    connection,
     gates,
     symbol: c.symbol,
     lastTick: feed.status === 'LIVE' ? feed.lastTick : null,

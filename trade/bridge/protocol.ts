@@ -32,6 +32,9 @@ export type BrokerCommand = {
   maxRiskBRL?: number;
   maxLossBRL?: number;
   maxSlippagePoints?: number;
+  policyVersion?: number;
+  policyHash?: string;
+  realSessionId?: string;
 };
 export interface BrokerExecutionProvider {
   submit(command: BrokerCommand): Promise<unknown>;
@@ -178,7 +181,7 @@ export function validateCommand(value: any, env: BridgeEnv): BrokerCommand {
   return value;
 }
 export function commandCanonical(c: BrokerCommand) {
-  return [
+  const fields = [
     'CMD2',
     c.id,
     c.action,
@@ -193,7 +196,12 @@ export function commandCanonical(c: BrokerCommand) {
     (c.maxRiskBRL || 0).toFixed(8),
     (c.maxLossBRL || 0).toFixed(8),
     (c.maxSlippagePoints || 0).toFixed(8),
-  ].join('|');
+  ];
+  if (c.policyHash !== undefined) {
+    if (!/^[a-f0-9]{32}$/.test(c.policyHash) || !Number.isInteger(c.policyVersion) || c.policyVersion! < 1 || !/^[0-9a-f-]{36}$/.test(c.realSessionId || '')) throw new Error('Identidade da policy/sessão inválida');
+    fields.push('P2', String(c.policyVersion), c.policyHash, c.realSessionId!);
+  }
+  return fields.join('|');
 }
 export function commandWire(command: BrokerCommand | null) {
   if (command?.signatureVersion === 2) {
