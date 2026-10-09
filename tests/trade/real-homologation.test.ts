@@ -316,9 +316,9 @@ test('exchange diagnostics expose only booleans about TRADE_ACCOUNT_HASH, never 
   }
 });
 
-test('EA v2.07: the log shows the real gate (not the input), the fingerprint only in the local log, transport failures keep the durable batch, no OrderSend outside Execute', () => {
+test('EA v2.08: the log shows the real gate (not the input), the fingerprint only in the local log, transport failures keep the durable batch, no OrderSend outside Execute', () => {
   const ea = readFileSync('mt5/FocoTradeBridge.mq5', 'utf8');
-  assert.match(ea, /#property version "2\.07"/);
+  assert.match(ea, /#property version "2\.08"/);
   assert.doesNotMatch(ea, /EnableExecution\?"ARMED":"LOCKED"/, 'ARMED must come from ExecutionAllowed(), not the input');
   assert.match(ea, /if\(ExecutionAllowed\(\)\)return "ARMED";/);
   assert.match(ea, /\\"executionGate\\":"\+GateJson\(\)/);

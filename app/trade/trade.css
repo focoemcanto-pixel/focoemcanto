@@ -3080,3 +3080,8 @@ dl.trade-risk-current,
   .trade-opportunity h2 { font-size: 22px; }
   .trade-opportunity-chip { top: 60px; border-radius: 14px; }
 }
+.trade-policy-comparison { margin: 18px 0; padding: 16px; border: 1px solid var(--trade-border, #34414d); border-radius: 12px; }
+.trade-policy-comparison p { overflow-wrap: anywhere; }
+.trade-policy-comparison table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.trade-policy-comparison th, .trade-policy-comparison td { text-align: left; padding: 9px 12px; border-bottom: 1px solid #34414d; min-width: 80px; }
+.trade-policy-comparison tr[data-capped="true"] td:last-child { color: #ffd27a; }

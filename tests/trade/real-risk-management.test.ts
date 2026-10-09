@@ -201,7 +201,7 @@ test('effective limit = min(policy, EA, ceiling): the EA and the ceiling only ti
   assert.ok(ea.includes('MathAbs(riskProfit)>MathMin(MaxRiskBRL,remoteRisk)'));
   assert.ok(ea.includes('loss24hBRL+MathAbs(riskProfit)>=MathMin(MaxLoss24hBRL,remoteLoss)'));
   assert.ok(ea.includes('MathMin(MaxSlippagePoints,remoteSlip)'));
-  assert.ok(ea.includes('volume>MaxContracts'));
+  assert.ok(ea.includes('volume>MathMin(MaxContracts,policyContracts)'));
 });
 
 test('sizing: riskPerContract = structural stop × point value; floor to whole contracts; 0 → RISK_BLOCKED; stop never moved', () => {

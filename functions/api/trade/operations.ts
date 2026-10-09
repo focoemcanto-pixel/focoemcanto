@@ -301,6 +301,11 @@ export async function onRequestPost({
             maxRiskBRL: realRiskCap(env) === null ? ctx.policy.max_risk_brl : Math.min(ctx.policy.max_risk_brl, realRiskCap(env)!),
             maxLossBRL: ctx.policy.max_daily_loss_brl,
             maxSlippagePoints: ctx.policy.max_slippage_points,
+            ...(ctx.bridge?.state?.policyProtocol === 1 ? {
+              policyVersion: ctx.policy.risk_settings_version,
+              policyHash: ctx.policyFingerprint,
+              realSessionId: ctx.session?.id,
+            } : {}),
           },
           env,
         );

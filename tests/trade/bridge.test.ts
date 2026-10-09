@@ -160,7 +160,7 @@ test('EA command guards group mixed &&/|| explicitly (no MQL5 warning 80)', () =
   const s = readFileSync('mt5/FocoTradeBridge.mq5', 'utf8');
   assert.ok(
     s.includes(
-      'volume<0 || volume>MaxContracts || ((action=="BUY" || action=="SELL" || action=="CLOSE") && (volume<1 || MathFloor(volume)!=volume))',
+      'volume<0 || volume>MathMin(MaxContracts,policyContracts) || ((action=="BUY" || action=="SELL" || action=="CLOSE") && (volume<1 || MathFloor(volume)!=volume))',
     ),
   );
   assert.ok(
