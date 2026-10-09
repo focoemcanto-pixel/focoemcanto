@@ -172,3 +172,41 @@ test('EA classifies a known JSON error envelope by its errorCode; unknown codes 
   // A transport failure without HTTP response keeps the same durable batch.
   assert.match(ea, /Durable batch ",JsonField\(pending,"batch"\)," kept; retrying the same batch\./);
 });
+
+test('proposal UPDATEs that do not change the lifecycle never rewrite the setup watch or the scanner snapshot; real transitions still do', async () => {
+  const d = await db();
+  try {
+    const owner = 'focoos-admin',
+      scope = 'mt5:xp-mt5-primary:WINV26';
+    await d.query(`insert into trade_scanner_state(owner_id,scope,as_of,payload) values($1,$2,1,'{"watches":[]}')`, [owner, scope]);
+    await d.query(`insert into trade_setup_watches(owner_id,scope,id,strategy_id,version,state,detected_at,valid_until,payload) values($1,$2,'w1','s','1.2.0','PROPOSED',1,2,'{"id":"w1"}')`, [owner, scope]);
+    const insert = (state: string) =>
+      d.query<any>(`insert into trade_operation_proposals(id,owner_id,bridge_id,payload,expires_at,state) values(gen_random_uuid(),$1,'xp-mt5-primary',$2,now()+interval '1 minute',$3) returning id`, [
+        owner,
+        { mode: 'PAPER', scope, setupWatchId: 'w1', setup: { id: 'x' } },
+        state,
+      ]);
+    const id = (await insert('AGUARDANDO CONFIRMAÇÃO')).rows[0].id;
+    const snap = async () => (await d.query<any>(`select s.xmin::text sx, w.xmin::text wx, w.state ws, jsonb_array_length(s.payload->'watches') n from trade_scanner_state s, trade_setup_watches w where w.id='w1'`)).rows[0];
+    const before = await snap();
+    assert.equal(before.n, 1, 'insert still rebuilds the snapshot');
+    // Hypothetical observation once per candle: same lifecycle → no write on the watch or the scanner row.
+    for (let i = 0; i < 3; i++) await d.query(`update trade_operation_proposals set hypothetical_execution=$2 where id=$1`, [id, { mfeR: i }]);
+    const same = await snap();
+    assert.equal(same.sx, before.sx, 'scanner snapshot not rewritten');
+    assert.equal(same.wx, before.wx, 'setup watch not rewritten');
+    // A real transition (operator discards) behaves exactly as before.
+    await d.query(`update trade_operation_proposals set state='DESCARTADA' where id=$1`, [id]);
+    const after = await snap();
+    assert.equal(after.ws, 'REJECTED_BY_USER');
+    assert.notEqual(after.sx, before.sx);
+    const w = (await d.query<any>(`select payload from trade_setup_watches where id='w1'`)).rows[0].payload;
+    assert.equal(w.transitions.at(-1).to, 'REJECTED_BY_USER');
+    assert.equal(Number((await d.query<any>(`select count(*) n from trade_human_decisions where proposal_id=$1`, [id])).rows[0].n), 1);
+    // Observations after the transition are again no-ops.
+    await d.query(`update trade_operation_proposals set hypothetical_execution=$2 where id=$1`, [id, { mfeR: 9 }]);
+    assert.equal((await snap()).sx, after.sx);
+  } finally {
+    await d.close();
+  }
+});
