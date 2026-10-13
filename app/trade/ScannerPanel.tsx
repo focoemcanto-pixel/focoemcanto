@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useRef, useState, useId } from 'react';
 import { observationGroups, marketReading, entryWindow, serverSkew } from './decision-view';
+import { createPollGate } from './poll';
 import type { Proposal } from '../../trade/bridge/approval';
 import type {
   Hypothesis,
@@ -136,10 +137,12 @@ export default function ScannerPanel({
     }
     last.current = cursor;
     let active = true;
-    let pending = false;
+    // One request in flight, paused while hidden, backoff after failures (see poll.ts).
+    const gate = createPollGate();
     const load = async () => {
-      if (pending) return;
-      pending = true;
+      if (!gate.ready()) return;
+      gate.begin();
+      let ok = false;
       try {
         const r = await fetch(
             `/api/trade/scanner?source=${source}&cursor=${cursor}&run=${run.current}`,
@@ -152,18 +155,22 @@ export default function ScannerPanel({
           setData(d);
           setError('');
         }
+        ok = true;
       } catch (e) {
         if (active)
           setError(e instanceof Error ? e.message : 'Scanner indisponível');
       } finally {
-        pending = false;
+        gate.end(ok);
       }
     };
+    const wake = () => void load();
     void load();
     const timer = setInterval(load, source === 'mt5' ? 3000 : 5000);
+    document.addEventListener('visibilitychange', wake);
     return () => {
       active = false;
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', wake);
     };
   }, [source, cursor, library]);
   useEffect(() => {

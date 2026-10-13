@@ -210,3 +210,68 @@ test('proposal UPDATEs that do not change the lifecycle never rewrite the setup 
     await d.close();
   }
 });
+
+test('scanner save rewrites only watches that changed; decided watches stay protected', async () => {
+  const d = await db();
+  try {
+    const watch = (id: string, state: string, extra: Record<string, unknown> = {}) => ({
+      id, state, detectedAt: 1, validUntil: 2, candidate: { definition: { id: 's', version: '1' } }, ...extra,
+    });
+    const save = async (expected: number, asOf: number, watches: unknown[]) =>
+      d.query(`select trade_scanner_save('o','mt5',$1,$2)`, [expected, { asOf, scan: { candidates: [] }, watches }]);
+    const xmin = async (id: string) => (await d.query<any>(`select xmin::text x, state from trade_setup_watches where id=$1`, [id])).rows[0];
+    await save(0, 10, [watch('a', 'FORMING'), watch('b', 'FORMING')]);
+    const a0 = await xmin('a'), b0 = await xmin('b');
+    // Same payload on the next scan: no row version is written.
+    await save(10, 20, [watch('a', 'FORMING'), watch('b', 'FORMING')]);
+    assert.equal((await xmin('a')).x, a0.x, 'unchanged watch not rewritten');
+    assert.equal((await xmin('b')).x, b0.x);
+    // A real change is still persisted.
+    await save(20, 30, [watch('a', 'WAITING_TRIGGER'), watch('b', 'FORMING', { note: 1 })]);
+    assert.equal((await xmin('a')).state, 'WAITING_TRIGGER');
+    assert.notEqual((await xmin('b')).x, b0.x, 'payload change rewrites the watch');
+    // Decided state is never overwritten by the scanner copy.
+    await d.query(`update trade_setup_watches set state='PROPOSED' where id='a'`);
+    await save(30, 40, [watch('a', 'EXPIRED')]);
+    assert.equal((await xmin('a')).state, 'PROPOSED');
+    const snap = (await d.query<any>(`select as_of, jsonb_array_length(payload->'watches') n from trade_scanner_state`)).rows[0];
+    assert.equal(Number(snap.as_of), 40, 'scanner snapshot still advances every scan');
+    assert.equal(snap.n, 2);
+  } finally {
+    await d.close();
+  }
+});
+
+test('/trade pollers: one request in flight, nothing while hidden, bounded backoff after failures', async () => {
+  const { createPollGate, backoffMs, MAX_BACKOFF_MS } = await import('../../app/trade/poll');
+  let t = 0, hidden = false;
+  const gate = createPollGate(() => t, () => hidden);
+  let release!: () => void, calls = 0;
+  const slow = () => new Promise<void>((r) => { calls++; release = r; });
+  const first = gate.run(slow);
+  assert.equal(await gate.run(slow), undefined, 'second tick skipped while the first is in flight');
+  assert.equal(calls, 1);
+  release();
+  await first;
+  hidden = true;
+  assert.equal(gate.ready(), false, 'hidden tab does not poll');
+  hidden = false;
+  await assert.rejects(gate.run(async () => { throw new Error('503'); }));
+  assert.equal(gate.ready(), false, 'backoff after failure');
+  t += backoffMs(1);
+  assert.equal(gate.ready(), true);
+  for (let i = 0; i < 10; i++) { gate.begin(); gate.end(false); }
+  assert.equal(backoffMs(gate.failures), MAX_BACKOFF_MS, 'backoff is capped');
+  t += MAX_BACKOFF_MS;
+  gate.begin(); gate.end(true);
+  assert.equal(gate.failures, 0);
+  assert.equal(gate.ready(), true, 'success resets the backoff');
+});
+
+test('/trade panels poll through the gate instead of fixed overlapping intervals', () => {
+  for (const f of ['app/trade/TradeApp.tsx', 'app/trade/OperationsPanel.tsx', 'app/trade/ScannerPanel.tsx']) {
+    const src = readFileSync(f, 'utf8');
+    assert.ok(src.includes('createPollGate()'), f);
+    assert.ok(src.includes("addEventListener('visibilitychange'"), f);
+  }
+});

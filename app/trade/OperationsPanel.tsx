@@ -6,6 +6,7 @@ import { remainingPositionRiskBRL } from '../../trade/core/risk-engine';
 import RealSessionPanel from './RealSessionPanel';
 import RiskSettingsPanel from './RiskSettingsPanel';
 import { entryWindow, serverSkew } from './decision-view';
+import { createPollGate } from './poll';
 import OpportunityCard from './OpportunityCard';
 import { blockedNotices, departures, invalidationText, opportunityQueue, type Opportunity } from './opportunity';
 const num = (v: number | null | undefined) =>
@@ -83,9 +84,11 @@ export default function OperationsPanel({
   }
   useEffect(() => {
     let active = true;
+    // One request in flight, paused while hidden, backoff after failures (see poll.ts).
+    const gate = createPollGate();
     const refresh = () => {
       if (active)
-        load().catch((e) => {
+        gate.run(load).catch((e) => {
           if (active) {
             setLoadError(e.message);
             setReadiness(null);
@@ -94,9 +97,11 @@ export default function OperationsPanel({
     };
     refresh();
     const t = setInterval(refresh, 2000);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       active = false;
       clearInterval(t);
+      document.removeEventListener('visibilitychange', refresh);
     };
   }, [source, cursor]);
   async function action(
