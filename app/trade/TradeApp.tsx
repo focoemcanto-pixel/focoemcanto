@@ -11,6 +11,7 @@ import ScannerPanel from './ScannerPanel';
 import LabPanel from './LabPanel';
 import type { ScannerResult } from '../../trade/scanner/types';
 import OperationsPanel from './OperationsPanel';
+import { createPollGate } from './poll';
 import type { runReplay } from '../../trade/core/engine';
 import type { Timeframe, Setup, Analysis } from '../../trade/core/types';
 const Chart = dynamic(() => import('./Chart'), {
@@ -175,10 +176,20 @@ export default function TradeApp() {
   const [source, setSource] = useState<'replay' | 'mt5'>('replay');
   const [pulse, setPulse] = useState(0);
   const [executionMode, setExecutionMode] = useState<'PAPER' | 'REAL'>('PAPER');
+  // Live pulse only while no evaluate is in flight, the tab is visible and no failure backoff is pending:
+  // a new pulse aborts the previous fetch, but never the Postgres work behind it (see poll.ts).
+  const evaluateGate = useRef(createPollGate());
   useEffect(() => {
     if (source !== 'mt5') return;
-    const timer = setInterval(() => setPulse((p) => p + 1), 2000);
-    return () => clearInterval(timer);
+    const tick = () => {
+      if (evaluateGate.current.ready()) setPulse((p) => p + 1);
+    };
+    const timer = setInterval(tick, 2000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
   }, [source]);
   const requestId = useRef(0);
   const latestCursor = useRef(cursor);
@@ -193,6 +204,9 @@ export default function TradeApp() {
     if (!authed) return;
     const id = ++requestId.current;
     const controller = new AbortController();
+    const gate = evaluateGate.current;
+    let ok = false;
+    gate.begin();
     setLoading(true);
     fetch(`/api/trade/evaluate?cursor=${cursor}&source=${source}`, {
       cache: 'no-store',
@@ -209,15 +223,20 @@ export default function TradeApp() {
           setState(d);
           setError('');
         }
+        ok = true;
       })
       .catch((e) => {
         if (e.name !== 'AbortError') {
           setError(e.message);
           setPlaying(false);
-        }
+        } else ok = true;
       })
       .finally(() => {
-        if (id === requestId.current) setLoading(false);
+        // Only the latest request owns the gate; an aborted one (cursor/source change) is not a failure.
+        if (id === requestId.current) {
+          gate.end(ok);
+          setLoading(false);
+        }
       });
     return () => controller.abort();
   }, [cursor, authed, redirect, source, pulse]);
