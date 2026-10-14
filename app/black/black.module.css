@@ -16,3 +16,42 @@
 @media(max-width:760px){.black>.manifesto{padding-top:100px!important;padding-bottom:100px!important}.black>.included{padding-top:85px!important;padding-bottom:85px!important}.black>.offer,.black>.access{padding-top:90px!important;padding-bottom:90px!important}.black>.faq{padding-top:70px!important;padding-bottom:90px!important}.planet,.planet:nth-of-type(even){left:35%;top:15%;transform:translate(calc(var(--distance)*100px),calc(var(--distance)*-15px)) rotate(-5deg) scale(.75)}.planetActive{transform:translateY(-5px) rotate(-4deg) scale(1)}}
 @media(prefers-reduced-motion:reduce){.planet,.planet:nth-of-type(even),.planetActive{inset:auto;transform:none}}
 .heroTitle>span:first-child{animation-delay:.6s}.heroTitle>span:nth-child(2){animation-delay:1s}.visible:not(.portrait){animation:sectionFocus 1s ease both}@keyframes sectionFocus{from{filter:brightness(.75)}to{filter:brightness(1)}}
+/* Branding: três atos na abertura; o slogan mantém leitura estática sem JS. */
+.intro{height:auto;min-height:0}
+.introStage{height:auto;min-height:100svh;position:relative}
+.heroIdentity{position:relative;z-index:2;text-align:center}
+.heroIdentity>.eyebrow{text-align:center}
+.heroTitle>.heroYear{font-size:clamp(18px,2vw,28px);font-weight:400;letter-spacing:.3em;line-height:1.4;margin-top:28px;color:var(--paper);animation-delay:1.3s}
+.heroSlogan{position:relative;z-index:2;text-align:center}
+.heroSlogan p{font-size:clamp(30px,7.7vw,112px);line-height:1.1;letter-spacing:-.055em;margin:65px 0;text-transform:uppercase;color:var(--paper)}
+.heroSlogan strong{display:inline-block;font-weight:700;letter-spacing:-.065em;color:var(--gold)}
+.heroBottom{margin-top:40px}
+.black[data-motion='full'] .intro{height:310svh}
+.black[data-motion='full'] .introStage{height:100svh;position:sticky;min-height:650px}
+.black[data-motion='full'] .heroIdentity{opacity:clamp(0,calc(1 - var(--p)*5),1);transform:translateY(calc(var(--p)*-40px))}
+.black[data-motion='full'] .heroSlogan{position:absolute;inset:100px 8% 110px;pointer-events:none;display:grid;place-items:center}
+.black[data-motion='full'] .heroSlogan p{position:absolute;width:100%;margin:0;will-change:transform,opacity}
+.black[data-motion='full'] .sloganBuilt{opacity:min(clamp(0,calc(var(--p)*8 - 1.5),1),clamp(0,calc(5.5 - var(--p)*8),1));transform:translateY(calc((.4 - var(--p))*50px))}
+.black[data-motion='full'] .sloganOpportunity{opacity:clamp(0,calc(var(--p)*8 - 5.2),1);transform:translateY(clamp(0px,calc((.78 - var(--p))*70px),60px))}
+.black[data-motion='full'] .heroBottom{position:absolute;bottom:50px;left:8%;right:8%;margin:0}
+.black .fusionStage .fusionSlogan{font-size:clamp(32px,5.8vw,90px);line-height:1.05;max-width:90%;letter-spacing:-.05em}
+.black .fusionSlogan>span{display:block;font-size:.52em;color:#bfc0b5;letter-spacing:-.025em}
+.fusionSlogan>strong{display:block;font-weight:700;color:var(--gold);margin:10px 0 30px}
+@media(max-width:760px){
+ .heroTitle>.heroYear{font-size:20px;margin-top:22px;letter-spacing:.25em}
+ .heroSlogan p{font-size:clamp(28px,7.7vw,58px);line-height:1.2;letter-spacing:-.045em}
+ .black[data-motion='full'] .heroSlogan{inset:90px 6% 120px}
+ .black[data-motion='full'] .heroBottom{bottom:38px;left:6%;right:6%;gap:16px}
+ .heroBottom>p{font-size:10px;max-width:58%}
+ .black .fusionStage .fusionSlogan{font-size:8vw;max-width:88%;line-height:1.18}
+ .black .fusionSlogan>span{font-size:.62em}
+ .fusionSlogan>strong{margin:10px 0 30px}
+}
+@media(prefers-reduced-motion:reduce){
+ .black[data-motion] .intro{height:auto;min-height:0}
+ .black[data-motion] .introStage{height:auto;position:relative}
+ .black[data-motion] .heroIdentity{opacity:1;transform:none}
+ .black[data-motion] .heroSlogan{position:relative;inset:auto;display:block}
+ .black[data-motion] .heroSlogan p{position:relative;opacity:1;transform:none;margin:65px 0}
+ .black[data-motion] .heroBottom{position:relative;inset:auto;margin-top:40px}
+}

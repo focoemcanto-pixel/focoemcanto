@@ -1,4 +1,7 @@
-# BLACK FOCUS 2026
+# BLACK FOCO 2026
+
+Marca-mãe: **Foco em Canto**. Slogan oficial: **Tudo o que construímos. Em uma única oportunidade.**
+A abertura revela o nome/ano e depois as duas frases pelo scroll, com peso tipográfico em “construímos”. A fusão retoma o slogan. Sem JavaScript ou com movimento reduzido, as frases permanecem no fluxo de leitura.
 
 Rota estática isolada: `/black/`. Não modifica layout global, integrações, Functions, autenticação ou dados.
 
