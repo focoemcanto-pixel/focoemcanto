@@ -37,7 +37,7 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
 
     function frameUpdate() {
       frame = 0;
-      if (destroyed || configuring || el!.dataset.scroll !== 'enhanced') return;
+      if (destroyed || configuring || el!.dataset.overlayOpen || el!.dataset.scroll !== 'enhanced') return;
       // Leituras somente antes das escritas. Verificação de pin apenas ao entrar
       // na cena, não getBoundingClientRect/layout em todo frame de scroll.
       for (const g of geometry.current) {
@@ -97,7 +97,7 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
     }
 
     function rebuild() {
-      if (destroyed) return;
+      if (destroyed || el!.dataset.overlayOpen) return;
       if (pinFailed || !motion || motion.matches || !probe || typeof CSS === 'undefined' || typeof requestAnimationFrame !== 'function' || !CSS.supports('height', '100svh') || !CSS.supports('position', 'fixed') || (window.visualViewport?.scale || 1) > 1.01) { staticMode(); return; }
       const height = probe.getBoundingClientRect().height;
       const rect = el!.getBoundingClientRect();
