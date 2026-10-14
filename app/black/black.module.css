@@ -55,3 +55,26 @@
  .black[data-motion] .heroSlogan p{position:relative;opacity:1;transform:none;margin:65px 0}
  .black[data-motion] .heroBottom{position:relative;inset:auto;margin-top:40px}
 }
+/* Capas oficiais: efeitos somente no plano externo, sem filtros ou recorte da arte. */
+.planet.planetWithCover{height:clamp(245px,36svh,350px);padding:12px;gap:10px}
+.coverFrame{display:flex;align-items:center;justify-content:center;flex:1;min-height:0;width:100%}
+.black .coverImage,.black .fusionCover,.black .listCover{object-fit:contain;object-position:center;filter:none;mix-blend-mode:normal;opacity:1}
+.black .coverImage{width:100%;height:100%}
+.planet strong.coverCaption{font-size:11px;line-height:1.2;letter-spacing:.02em;max-width:none}
+.fusionField>span.fusionProduct{display:flex;align-items:center;justify-content:center;width:110px;height:145px;margin-left:-55px;margin-top:-72px;padding:4px;background:#10130f;border:1px solid #ffffff20;box-shadow:0 12px 32px #0006}
+.black .fusionCover{width:100%;height:100%}
+.productList article.productWithCover{grid-template-columns:minmax(70px,10%) 1fr auto;align-items:center}
+.black .listCover{width:64px;height:90px}
+@media(max-width:760px){
+ .planet.planetWithCover{width:170px;height:245px;padding:10px;gap:8px}
+ .planet.planetWithCover>span:first-child{font-size:7px}
+ .planet strong.coverCaption{font-size:9px}
+ .fusionField>span.fusionProduct{width:72px;height:95px;max-width:none;margin-left:-36px;margin-top:-47px;padding:3px}
+ .productList article.productWithCover{grid-template-columns:64px 1fr;gap:12px}
+ .productWithCover h3{font-size:22px}
+ .productWithCover p{font-size:11px}
+}
+@media(prefers-reduced-motion:reduce){
+ .planet.planetWithCover{width:100%;height:260px}
+ .fusionField>span.fusionProduct{display:none}
+}

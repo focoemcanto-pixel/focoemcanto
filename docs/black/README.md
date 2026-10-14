@@ -15,7 +15,7 @@ Antes de abrir vendas: confirmar inclusões e duração de cada acesso; revisar 
 
 Next App Router + React; CSS Modules; animações CSS e um listener passivo de scroll com requestAnimationFrame. Sem dependências adicionais, WebGL, fontes remotas ou mudança no scroll nativo. Introdução e universo usam sticky local; fusão usa posições e transformações convergentes. Imagens WebP locais, dimensões explícitas e lazy loading abaixo da dobra. A seção clara muda o ritmo antes da conversão. Reduced motion apresenta os produtos em grade estática e remove deslocamentos/animações. Conteúdo renderizado no HTML continua acessível sem JavaScript.
 
-Fotos e logo fornecidos pelo proprietário. As marcas tipográficas dos produtos são placeholders substituíveis, sem logotipos inventados. Todas as sete imagens foram examinadas; as fotos de palco e a foto PB foram selecionadas para a composição principal. Os demais WebPs ficam disponíveis para revisão editorial sem download inicial.
+Fotos e logo fornecidos pelo proprietário. As cinco capas de produtos são as oficiais da Escola, mapeadas na configuração e documentadas em [assets.md](assets.md). Somente Bônus permanece sem capa oficial localizada. Todas as sete imagens foram examinadas; as fotos de palco e a foto PB foram selecionadas para a composição principal. Os demais WebPs ficam disponíveis para revisão editorial sem download inicial.
 
 ## Limites de verificação
 
