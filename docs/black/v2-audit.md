@@ -1,5 +1,7 @@
 # BLACK FOCO 2026 — auditoria V2
 
+Registro da primeira V2. Inventário ampliado, uso de todas as provas e valores aprovados foram atualizados em [proof-value-refinement.md](proof-value-refinement.md).
+
 Data: 14/10/2026. Escopo: leitura de fontes públicas, código dos repositórios relacionados e consultas SELECT nos projetos existentes. Nenhuma alteração em banco, storage, Escola, Harmomus ou Harmonics. Os prazos abaixo são condições expressamente definidas pelo responsável pela campanha; não inferidos das assinaturas avulsas.
 
 ## Matriz de produto / público / entregáveis / duração

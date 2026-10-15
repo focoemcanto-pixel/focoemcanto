@@ -1,5 +1,7 @@
 'use client';
 import { useCallback, useEffect, useRef, type RefObject } from 'react';
+import { valueFrame } from './value-model';
+import { currency, valueItems } from './black-config';
 import { clamp, coverFrame, introFrame, productScrollTarget, sceneFrame, sceneTravel, universeFrame, type SceneKind } from './scroll-model';
 
 type Geometry = { scene: HTMLElement; stage: HTMLElement; kind: SceneKind; start: number; travel: number; pin: string; verify: boolean; progress: number };
@@ -21,6 +23,10 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
     const probe = el.querySelector<HTMLElement>('[data-viewport-probe]');
     const scenes = Array.from(el.querySelectorAll<HTMLElement>('[data-pin-scene]'));
     const covers = Array.from(el.querySelectorAll<HTMLElement>('[data-universe-cover]'));
+    const valueRows = Array.from(el.querySelectorAll<HTMLElement>('[data-value-item]'));
+    const subtotal = el.querySelector<HTMLElement>('[data-value-subtotal]');
+    const construction = el.querySelector<HTMLElement>('[data-value-construction]');
+    const revelation = el.querySelector<HTMLElement>('[data-value-revelation]');
     const value = el.querySelector<HTMLElement>('[data-scene="value"]');
     let frame = 0, layoutFrame = 0, destroyed = false;
     let pageHeight = 1, stageHeight = 0, stageWidth = 0, valueStart = 0;
@@ -31,6 +37,8 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
       configuring = false;
       el!.dataset.scroll = 'static';
       geometry.current = [];
+      if (subtotal) subtotal.textContent = currency(valueItems.reduce((sum,item) => sum + item.cents,0) / 100);
+      [construction, revelation].forEach(node => { node?.removeAttribute('inert'); node?.removeAttribute('aria-hidden'); });
       for (const scene of scenes) { delete scene.dataset.pin; scene.style.removeProperty('--travel'); scene.style.removeProperty('--stage-height'); }
       if (total !== regularTotal) { total = regularTotal; onTotal(regularTotal); }
     }
@@ -57,6 +65,15 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
         if (g.progress === next.progress) continue;
         g.progress = next.progress;
         g.scene.style.setProperty('--p', String(next.progress));
+        if (g.kind === 'value') {
+          const state = valueFrame(next.progress, valueItems.map(item => item.cents));
+          g.scene.style.setProperty('--value-reveal', String(state.reveal));
+          if (subtotal) subtotal.textContent = currency(state.subtotalCents / 100);
+          valueRows.forEach((row,index) => row.style.setProperty('--item-opacity', String(index <= state.active ? 1 : .32)));
+          const ready = state.reveal >= .9;
+          if (revelation) { revelation.dataset.ready = String(ready); revelation.toggleAttribute('inert', !ready); revelation.setAttribute('aria-hidden', String(!ready)); }
+          if (construction) { construction.toggleAttribute('inert', ready); construction.setAttribute('aria-hidden', String(ready)); }
+        }
         if (g.kind === 'intro') {
           const { weights } = introFrame(next.progress);
           ['--identity-opacity', '--built-opacity', '--opportunity-opacity'].forEach((key, i) => g.scene.style.setProperty(key, String(weights[i])));

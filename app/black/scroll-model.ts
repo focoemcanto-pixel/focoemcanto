@@ -1,10 +1,11 @@
-export type SceneKind = 'intro' | 'universe' | 'fusion';
+export type SceneKind = 'intro' | 'universe' | 'fusion' | 'value';
 export const clamp = (value: number, min = 0, max = 1) => Math.max(min, Math.min(max, value));
 
 // O palco usa a menor viewport estável. O percurso corresponde às transições,
 // nunca a um número arbitrário de telas vazias ou ao innerHeight dinâmico.
 export function sceneTravel(kind: SceneKind, stageHeight: number, count: number) {
   const h = Math.max(1, stageHeight);
+  if (kind === 'value') return h * 1.35; // soma, leitura do total e revelação
   if (kind === 'intro') return h * 0.55 * 2; // duas transições entre três atos
   if (kind === 'universe') return h * 0.38 * Math.max(1, count - 1);
   return h * 0.65; // uma convergência

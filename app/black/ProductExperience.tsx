@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { blackConfig, blackProofs } from './black-config';
-import { ProofSignal } from './BlackProof';
+import ProofStream from './ProofStream';
 import v from './product-experience.module.css';
 
 type Props = { productId: string; onClose: () => void };
@@ -48,7 +48,7 @@ export default function ProductExperience({ productId, onClose }: Props) {
       <div className={v.productOpening}><div className={v.productArt}>{product.image ? <img src={product.image.src} srcSet={product.image.srcSet} sizes="(max-width:760px) 55vw, 360px" width={product.image.width} height={product.image.height} alt={product.image.alt}/> : <span aria-hidden="true">+</span>}</div><div><p className={v.label}>{product.type}</p><h2 id="product-experience-title">{product.name}</h2><p className={v.access}>{product.accessLabel}</p><p className={v.overview}>{product.overview}</p>{product.audience && <div className={v.audience}><span>PARA QUEM É</span><p>{product.audience}</p></div>}</div></div>
       {product.deliverables.length > 0 && <section className={v.deliverables} aria-label="Principais entregáveis"><p className={v.label}>DENTRO DA EXPERIÊNCIA</p><div>{product.deliverables.map(([label, text],i) => <article key={label}><span className={v.moduleNumber}>0{i+1}</span><span>{label}</span><h3>{text}</h3></article>)}</div></section>}
       <div className={v.highlights}>{product.highlights.map(item => <span key={item}>{item}</span>)}</div>
-      {proofs.length > 0 && <section className={v.contextualProof}><p className={v.label}>QUEM JÁ PASSOU POR AQUI</p><h3>A experiência,<br/>na voz de quem viveu.</h3><div>{proofs.map(proof => <ProofSignal key={proof.id} proof={proof}/>)}</div></section>}
+      {proofs.length > 0 && <ProofStream proofs={proofs} title={product.id === 'harmonia' ? 'Vozes que encontraram seu lugar.' : 'Quem já viveu essa experiência.'}/>}
       <footer className={v.experienceEnd}><p>Uma parte do todo.<br/><strong>BLACK FOCO 2026</strong></p><button type="button" className={v.explore} onClick={close}>CONTINUAR EXPLORANDO <span aria-hidden="true">↗</span></button></footer>
     </div>
   </dialog>;
