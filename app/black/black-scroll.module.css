@@ -1,0 +1,83 @@
+/* A rota mantém o scroll do documento. O pin não depende dos ancestrais
+   overflow do site; nenhum listener cancela wheel/touchmove. */
+.engine.engine { overflow: visible; }
+.engine.engine > section[data-pin-scene] { position: relative; overflow: visible; height: auto; min-height: 0; }
+.engine [data-viewport-probe] { position: absolute; top: 0; left: 0; width: 0; height: 100svh; visibility: hidden; pointer-events: none; }
+.engine [data-pin-stage] { min-height: 0; }
+.engine [data-intro-stage] { position: relative; height: auto; min-height: 0; overflow: hidden; }
+.engine [data-hero-title] { opacity: 1; transform: none; }
+.engine [data-universe-stage] { display: none; }
+.engine [data-fusion-stage] { position: relative; height: auto; min-height: 0; padding: 90px 6%; overflow: hidden; }
+.engine [data-fusion-stage] > p:first-child { position: relative; top: auto; margin-bottom: 40px; }
+
+.universeFallback { padding: 70px 7%; background: radial-gradient(ellipse at 60% 50%,#1e211c 0,#0a0c0b 60%); }
+.fallbackGrid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 28px; margin-top: 50px; }
+.fallbackProduct { display: flex; flex-direction: column; gap: 16px; padding: 24px; border: 1px solid #ffffff15; background: #ffffff02; min-width: 0; }
+.fallbackProduct > span { font-size: 10px; color: #ddad67; letter-spacing: .08em; }
+.engine .fallbackProduct h3 { font-size: 28px; line-height: 1.1; white-space: pre-line; }
+.engine .fallbackProduct p { font-size: 14px; color: #a5aa9f; }
+.fallbackCover { width: 100%; height: 280px; object-fit: contain; object-position: center; }
+.fallbackBonus { height: 180px; display: grid; place-items: center; color: #ddad67; font-size: 100px; }
+
+/* Geometria única: altura real do palco + percurso útil medido em px. */
+.engine[data-scroll='enhanced'] > section[data-pin-scene] { height: calc(var(--stage-height) + var(--travel)); }
+.engine[data-scroll='enhanced'] [data-pin-stage] { position: absolute; top: 0; left: 0; width: 100%; height: var(--stage-height); min-height: 0; max-height: none; overflow: hidden; }
+.engine[data-scroll='enhanced'] [data-pin='active'] > [data-pin-stage] { position: fixed; top: 0; left: var(--stage-left); width: var(--stage-width); z-index: 12; }
+.engine[data-scroll='enhanced'] [data-pin='after'] > [data-pin-stage] { position: absolute; top: var(--travel); left: 0; z-index: auto; }
+.engine[data-scroll='enhanced'] [data-universe-fallback] { display: none; }
+
+/* Três atos com crossfade particionado: a soma de visibilidade é sempre 1. */
+.engine[data-scroll='enhanced'] [data-hero-identity] { position: absolute; left: 8%; right: 8%; top: 50%; text-align: center; opacity: var(--identity-opacity,1); transform: translateY(calc(-50% - var(--p,0)*24px)); pointer-events: none; }
+.engine[data-scroll='enhanced'] [data-hero-title] > span { animation: none; }
+.engine[data-scroll='enhanced'] [data-hero-slogan] { position: absolute; inset: 70px 8% 110px; display: grid; place-items: center; pointer-events: none; }
+.engine[data-scroll='enhanced'] [data-hero-slogan] p { position: absolute; width: 100%; margin: 0; }
+.engine[data-scroll='enhanced'] [data-slogan-built] { opacity: var(--built-opacity,0); transform: translateY(calc((.5 - var(--p,0))*20px)); }
+.engine[data-scroll='enhanced'] [data-slogan-opportunity] { opacity: var(--opportunity-opacity,0); transform: translateY(calc((1 - var(--p,0))*20px)); }
+.engine[data-scroll='enhanced'] [data-hero-orbit] { opacity: calc(1 - var(--p,0)*.5); }
+.engine[data-scroll='enhanced'] [data-hero-bottom] { position: absolute; bottom: max(36px,env(safe-area-inset-bottom)); left: 8%; right: 8%; margin: 0; }
+
+/* O palco não move; as seis capas compartilham uma câmera contínua. */
+.engine[data-scroll='enhanced'] [data-universe-stage] { display: grid; grid-template-columns: 65% minmax(0,1fr); grid-template-rows: auto auto minmax(0,1fr) auto; grid-template-areas: 'top top' 'heading heading' 'world info' 'rail rail'; gap: 18px; padding: max(35px,env(safe-area-inset-top)) 7% max(30px,env(safe-area-inset-bottom)); }
+.engine [data-universe-top] { grid-area: top; }
+.engine [data-universe-heading] { grid-area: heading; margin: 0; }
+.engine [data-world] { grid-area: world; position: relative; inset: auto; width: 100%; min-height: 0; perspective: 1000px; }
+.engine [data-product-info] { grid-area: info; position: relative; inset: auto; width: auto; align-self: center; opacity: var(--info-opacity,1); }
+.engine [data-universe-rail] { grid-area: rail; position: relative; inset: auto; width: 100%; gap: 8px; padding-top: 12px; }
+.engine [data-universe-rail] button { appearance: none; background: transparent; color: inherit; border: 0; padding: 8px 4px; font: inherit; letter-spacing: inherit; cursor: pointer; min-width: 0; }
+.engine [data-universe-rail] button[aria-current='step'] { color: #ddad67; }
+.engine [data-universe-rail] button:before { display: none; }
+.engine [data-world] [data-universe-cover] { left: 50%; top: 50%; width: clamp(170px,19vw,280px); height: min(100%,350px); min-height: 0; transition: box-shadow .2s; transform: translate3d(calc(-50% + var(--distance,0)*130px),calc(-50% + var(--distance,0)*-12px),0) rotateY(var(--card-tilt,0deg)) rotate(calc(var(--distance,0)*-1deg)) scale(var(--card-scale,1)); opacity: var(--card-opacity,1); }
+.engine [data-world] [data-universe-cover]:first-child { top: 50%; }
+.engine [data-world] [data-universe-cover] > span:first-child { flex: 0 0 auto; }
+.engine [data-world] [data-universe-cover] > span:nth-child(2) { min-height: 0; }
+.engine[data-scroll='enhanced'] [data-fusion-core] { width: 465px; height: 465px; transform: translate(-50%,-50%) scale(calc(.054 + var(--p,0)*.946)); }
+.engine[data-scroll='enhanced'] [data-fusion-stage] { padding: max(35px,env(safe-area-inset-top)) 6% max(30px,env(safe-area-inset-bottom)); }
+.engine[data-scroll='enhanced'] [data-fusion-stage] > p:first-child { position: absolute; top: max(30px,env(safe-area-inset-top)); margin-bottom: 0; }
+
+@media(max-width:760px) {
+ .fallbackGrid { grid-template-columns: 1fr; gap: 24px; }
+ .fallbackProduct { padding: 24px 18px; }
+ .fallbackCover { height: 320px; }
+ .engine[data-scroll='enhanced'] [data-hero-identity] { left: 6%; right: 6%; }
+ .engine[data-scroll='enhanced'] [data-hero-slogan] { inset: 65px 6% 110px; }
+ .engine[data-scroll='enhanced'] [data-hero-bottom] { left: 6%; right: 6%; }
+ .engine[data-scroll='enhanced'] [data-universe-stage] { grid-template-columns: minmax(0,1fr); grid-template-rows: auto auto minmax(0,1fr) auto auto; grid-template-areas: 'top' 'heading' 'world' 'info' 'rail'; gap: 10px; padding: max(22px,env(safe-area-inset-top)) 6% max(10px,env(safe-area-inset-bottom)); }
+ .engine [data-universe-top] { font-size: 11px; gap: 12px; }
+ .engine [data-universe-top] > span { flex-shrink: 0; }
+ .engine [data-universe-heading] h2 { font-size: clamp(32px,8.8vw,40px); line-height: 1.02; }
+ .engine [data-world] { width: 100%; }
+ .engine [data-world] [data-universe-cover] { width: 170px; height: min(100%,260px); padding: 8px; gap: 6px; transform: translate3d(calc(-50% + var(--distance,0)*112px),calc(-50% + var(--distance,0)*-8px),0) rotateY(var(--card-tilt,0deg)) rotate(calc(var(--distance,0)*-1deg)) scale(var(--card-scale,1)); }
+ .engine [data-world] [data-universe-cover] > span:first-child { display: none; }
+ .engine [data-product-info] { align-self: start; }
+ .engine [data-product-info] > span { font-size: 10px; }
+ .engine [data-product-info] h3 { font-size: clamp(25px,6.7vw,29px); line-height: 1.08; white-space: normal; margin: 8px 0; }
+ .engine [data-product-info] p { font-size: 13px; line-height: 1.45; max-width: none; }
+ .engine [data-universe-rail] { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 0 8px; font-size: 8px; letter-spacing: .015em; padding-top: 4px; }
+ .engine [data-universe-rail] button { min-height: 40px; padding: 4px 2px; line-height: 1.3; }
+}
+@media(prefers-reduced-motion:reduce) {
+ .engine [data-hero-identity],.engine [data-hero-title],.engine [data-hero-slogan] p { opacity: 1; transform: none; }
+ .engine [data-fusion-stage] { position: relative; height: auto; min-height: 0; }
+ .engine [data-fusion-stage] h2 { transform: none; }
+ .engine [data-universe-stage] { display: none; }
+}
