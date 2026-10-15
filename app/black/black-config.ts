@@ -268,7 +268,7 @@ export const checkoutHref = () => {
 };
 
 export type BlackProduct = (typeof blackConfig.products)[number];
-export type BlackProof = { id: string; product: string; type: "image" | "video"; priority: number; context: string; label: string; person?: string; videoTitle?: string; media: string; width?: number; height?: number; source: string; strength: "A" | "B" | "C" };
+export type BlackProof = { id: string; product: string; type: "image" | "video"; priority: number; context: string; label: string; person?: string; videoTitle?: string; poster?: string; media: string; width?: number; height?: number; source: string; strength: "A" | "B" | "C" };
 export const blackProofs: BlackProof[] = ([
   {
     "id": "canto-leia",
@@ -388,6 +388,7 @@ export const blackProofs: BlackProof[] = ([
     "type": "video",
     "label": "Depoimento em vídeo da Mentoria",
     "media": "rDzhJn2SYbI",
+    "poster": "https://i.ytimg.com/vi/rDzhJn2SYbI/hqdefault.jpg",
     "videoTitle": "DEPOIMENTO FOCO EM CANTO - JOILMA",
     "source": "https://focoemcanto.com/",
     "strength": "A",
@@ -400,6 +401,7 @@ export const blackProofs: BlackProof[] = ([
     "type": "video",
     "label": "Depoimento em vídeo da Mentoria",
     "media": "kenwsDb_0XM",
+    "poster": "https://i.ytimg.com/vi/kenwsDb_0XM/hqdefault.jpg",
     "videoTitle": "Depoimento | Juliana Torquato (Foco em Canto)",
     "source": "https://focoemcanto.com/",
     "strength": "A",
@@ -412,6 +414,7 @@ export const blackProofs: BlackProof[] = ([
     "type": "video",
     "label": "Depoimento em vídeo da Mentoria",
     "media": "8LbwCcpvEdw",
+    "poster": "https://i.ytimg.com/vi/8LbwCcpvEdw/hqdefault.jpg",
     "videoTitle": "Evolução Talita | Foco em Canto",
     "source": "https://focoemcanto.com/",
     "strength": "A",
@@ -424,6 +427,7 @@ export const blackProofs: BlackProof[] = ([
     "type": "video",
     "label": "Depoimento em vídeo da Mentoria",
     "media": "vbLXwcRl4NQ",
+    "poster": "https://i.ytimg.com/vi/vbLXwcRl4NQ/hqdefault.jpg",
     "videoTitle": "DEPOIMENTOS  FOCO EM CANTO",
     "source": "https://focoemcanto.com/",
     "strength": "A",
@@ -528,6 +532,7 @@ export const blackProofs: BlackProof[] = ([
     "type": "video",
     "label": "Depoimento em vídeo do Foco em Harmonia",
     "media": "T0rDCxXoCR0",
+    "poster": "https://i.ytimg.com/vi/T0rDCxXoCR0/hqdefault.jpg",
     "videoTitle": "Depoimento Juliana - Foco em Harmonia",
     "source": "https://promo.focoemcanto.com/",
     "strength": "A",
@@ -550,4 +555,5 @@ export const offerTotals = {
   get savingsCents() { return this.regularCents - this.blackCents; },
   get discountPercentage() { return this.savingsCents / this.regularCents * 100; },
 };
-export const globalProofIds = ['canto-print-03','harmonia-print-07'];
+// Main-stage impact; complete screenshot/video inventories remain in each product.
+export const globalVideoProofIds = ['canto-video','canto-video-2','canto-video-3','canto-video-4','harmonia-video'];

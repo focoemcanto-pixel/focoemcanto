@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { blackConfig, blackProofs, checkoutHref, offerTotals, valueItems } from '../../app/black/black-config';
+import { blackConfig, blackProofs, checkoutHref, offerTotals, valueItems, globalVideoProofIds } from '../../app/black/black-config';
 
 test('campaign terms stay explicit without invented commercial numbers', () => {
   assert.equal(blackConfig.campaignName, 'BLACK FOCO');
@@ -39,4 +39,17 @@ test('official offer math is exact in cents, without bonus price or invented ins
   assert.equal(offerTotals.savingsCents,70750);
   assert.equal(Number(offerTotals.discountPercentage.toFixed(1)),41.5);
   for (const item of valueItems) if (item.calculation) assert.equal(item.calculation.monthlyCents*item.calculation.months,item.cents);
+});
+
+test('main proof stage uses all five verified videos and preserves complete contextual inventories', () => {
+  const videos = globalVideoProofIds.map(id => blackProofs.find(proof => proof.id === id));
+  assert.equal(new Set(globalVideoProofIds).size, 5);
+  assert.equal(videos.filter(proof => proof?.product === 'canto').length, 4);
+  assert.equal(videos.filter(proof => proof?.product === 'harmonia').length, 1);
+  for (const proof of videos) {
+    assert.ok(proof && proof.type === 'video' && proof.videoTitle && proof.poster);
+    assert.match(proof.poster, new RegExp(`^https://i\\.ytimg\\.com/vi/${proof.media}/hqdefault\\.jpg$`));
+    assert.ok(blackConfig.products.find(product => product.id === proof.product)?.proofIds.includes(proof.id));
+  }
+  assert.equal(blackProofs.filter(proof => proof.type === 'image').length, 15);
 });
