@@ -5,3 +5,18 @@
 @media(prefers-reduced-motion:reduce){.construction,.revelation,.items li{transform:none!important;opacity:1!important}}
 .value .label{color:#cdb78d;letter-spacing:.16em}.value .slogan{color:#c5c5b5;line-height:1.5}.value .items p{color:#acb49f}.value .anchor p{color:#94a586}.value .action>p{color:#86967a;margin-top:15px}.value .subtotal .next{color:#c3b493;margin-top:40px}.value .action>button,.value .action>a{font-size:11px;letter-spacing:.1em}
 @media(max-width:760px){.value .action>p{margin-top:9px}.value .action>button,.value .action>a{font-size:10px}.value .subtotal .next{margin-top:22px}}
+
+/* Condições confirmadas: parcela e preço à vista são alternativas explícitas. */
+.value .installmentLabel{font-size:16px;letter-spacing:.08em;margin-top:20px;color:#cfbd9e}
+.value .revelation .price{font-size:clamp(64px,10vw,134px);line-height:1.08;white-space:nowrap;letter-spacing:-.055em;margin:4px 0 10px;font-variant-numeric:tabular-nums}
+.value .cash{font-size:20px;color:#d8d8ca;line-height:1.4}.cash strong{font-weight:500;color:#f6f1e5}
+.value .paymentNote{font-size:11px;line-height:1.6;color:#adb4a5;margin:8px 0 14px}
+.value .unlocks{display:grid;grid-template-columns:1.15fr 1fr .85fr;gap:22px;text-align:left;width:100%;margin:24px 0;max-width:900px}
+.value .unlocks>li{display:block;padding-top:12px;border-top:1px solid #ffffff20;min-width:0}.value .unlocks>li>strong{display:block;font-size:14px;margin-top:9px}
+.value .unlocks ul{padding:0;margin:8px 0 0;list-style:none}.value .unlocks ul li{display:block;font-size:12px;line-height:1.5;margin:5px 0;color:#d5d6c9}
+@media(max-width:760px){.value .installmentLabel{font-size:14px;margin-top:18px}.value .revelation .price{font-size:clamp(50px,15vw,76px)}.value .cash{font-size:20px}.value .paymentNote{font-size:10px;max-width:310px;margin-inline:auto}.value .unlocks{grid-template-columns:1fr;max-width:390px;gap:18px;margin:28px auto}.value .unlocks>li>strong{font-size:16px}.value .unlocks ul li{font-size:13px}.value .anchor{gap:20px}.value .anchor p{font-size:8px}}
+/* A oferta completa usa fluxo natural em telas compactas, sem comprimir o contrato. */
+:global([data-scroll=enhanced]) .value[data-static-value=true]{height:auto!important;min-height:0}
+:global([data-scroll=enhanced]) .value[data-static-value=true] .stage{position:relative!important;inset:auto!important;height:auto!important;width:100%!important;padding:65px 6%;overflow:visible;display:block}
+:global([data-scroll=enhanced]) .value[data-static-value=true] .construction{transform:none;opacity:1;pointer-events:auto}
+:global([data-scroll=enhanced]) .value[data-static-value=true] .revelation{position:relative;inset:auto;margin:65px auto 0;padding:0;transform:none;opacity:1;pointer-events:auto;display:block}

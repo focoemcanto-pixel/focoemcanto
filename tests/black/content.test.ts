@@ -1,17 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { blackConfig, blackProofs, checkoutHref, offerTotals, valueItems, globalVideoProofIds } from '../../app/black/black-config';
+import { blackConfig, blackProofs, checkoutHref, offerTotals, valueItems, globalVideoProofIds, paymentTotals } from '../../app/black/black-config';
 
 test('campaign terms stay explicit without invented commercial numbers', () => {
   assert.equal(blackConfig.campaignName, 'BLACK FOCO');
   assert.equal(blackConfig.slogan.join(' '), 'Tudo o que construímos. Em uma única oportunidade.');
-  assert.deepEqual(blackConfig.products.map(p => p.duration), ['12 meses','Vitalício','12 meses','12 meses',null,null]);
+  assert.deepEqual(blackConfig.products.map(p => p.duration), ['Vitalício','Vitalício','12 meses','12 meses',null,null]);
   assert.equal(blackConfig.blackPrice, 997);
-  assert.equal(blackConfig.payment.installments, null);
-  assert.equal(blackConfig.payment.installmentValue, null);
-  assert.equal(blackConfig.payment.paymentLabel, null);
-  assert.equal(checkoutHref(), null);
+  assert.equal(blackConfig.payment.installments, 12);
+  assert.equal(blackConfig.payment.installmentValue, 103.11);
+  assert.equal(blackConfig.payment.paymentLabel, 'Parcelamento com acréscimo.');
+  assert.equal(checkoutHref(), 'https://pay.kiwify.com.br/ZVKGmNk');
+  assert.equal(paymentTotals.totalCents,123732);
+  assert.ok(paymentTotals.totalCents > offerTotals.blackCents);
+  assert.deepEqual(blackConfig.accessGroups[0].items,['Formação/Mentoria Foco em Canto','Foco em Harmonia']);
+  assert.deepEqual(blackConfig.accessGroups[1].items,['Foco Premium','Harmomus Premium','GVIP / Plataforma de Duetos']);
   assert.equal(blackConfig.products.find(p => p.id === 'bonus')?.regularPrice, null);
 });
 test('product proofs resolve to the same product and published source', () => {

@@ -1,13 +1,15 @@
+export const currency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 const blackCashPrice = 997;
+const blackPayment = { cashPrice: blackCashPrice, installments: 12, installmentValue: 103.11, paymentLabel: 'Parcelamento com acréscimo.' };
 export type ProductDetails = { id: string; type: string; accessLabel: string; duration: string | null; accent: string; description: string; overview: string; audience: string; deliverables: string[][]; highlights: string[]; proofIds: string[]; source: string };
 const productDetails: ProductDetails[] = [
   {
-    "type": "MENTORIA PREMIUM",
-    "accessLabel": "12 MESES PREMIUM",
-    "duration": "12 meses",
+    "type": "FORMAÇÃO / MENTORIA",
+    "accessLabel": "VITALÍCIO NO UNIVERSO · PREMIUM POR 1 ANO",
+    "duration": "Vitalício",
     "accent": "#77d7e4",
-    "description": "12 meses de Mentoria Premium: método, aulas ao vivo e acompanhamento para desenvolver sua voz.",
-    "overview": "Um caminho de desenvolvimento vocal que começa com diagnóstico e conecta técnica, treino e acompanhamento.",
+    "description": "Formação/Mentoria Foco em Canto no Universo vitalício, com Foco Premium incluído por 1 ano.",
+    "overview": "A Formação/Mentoria Foco em Canto integra o Universo Foco em Canto com acesso vitalício, junto ao Foco em Harmonia. O acompanhamento e os recursos Foco Premium estão incluídos por 1 ano.",
     "audience": "Para quem está começando, já canta ou quer aperfeiçoar a voz no palco e no louvor.",
     "deliverables": [
       [
@@ -27,29 +29,42 @@ const productDetails: ProductDetails[] = [
         "Extensão e registros vocais"
       ],
       [
-        "AO VIVO",
+        "AO VIVO · PREMIUM POR 1 ANO",
         "Aulas semanais e exercícios práticos"
       ],
       [
-        "PREMIUM",
+        "PREMIUM · 1 ANO",
         "Grupo exclusivo, sala virtual e prioridade nas dúvidas"
       ]
     ],
     "highlights": [
-      "Curso completo na plataforma",
-      "Acompanhamento Premium"
+      "Formação no Universo vitalício",
+      "Foco Premium incluído por 1 ano"
     ],
-    "proofIds": ["canto-leia", "canto-print-02", "canto-print-03", "canto-print-04", "canto-print-05", "canto-print-06", "canto-print-07", "canto-print-08", "canto-video", "canto-video-2", "canto-video-3", "canto-video-4"],
+    "proofIds": [
+      "canto-leia",
+      "canto-print-02",
+      "canto-print-03",
+      "canto-print-04",
+      "canto-print-05",
+      "canto-print-06",
+      "canto-print-07",
+      "canto-print-08",
+      "canto-video",
+      "canto-video-2",
+      "canto-video-3",
+      "canto-video-4"
+    ],
     "source": "https://focoemcanto.com/",
     "id": "canto"
   },
   {
     "type": "CURSO DE DIVISÃO VOCAL",
-    "accessLabel": "ACESSO VITALÍCIO",
+    "accessLabel": "VITALÍCIO NO UNIVERSO",
     "duration": "Vitalício",
     "accent": "#e57874",
     "description": "Afinação, segunda voz e independência vocal em um treinamento prático com acesso vitalício.",
-    "overview": "Um treinamento para ouvir, entender e aplicar a divisão vocal sem depender de teoria musical pesada.",
+    "overview": "Um treinamento para ouvir, entender e aplicar a divisão vocal sem depender de teoria musical pesada. Integra o Universo Foco em Canto vitalício, junto à Formação/Mentoria.",
     "audience": "Para ministros de louvor, backings e coralistas que querem sustentar sua linha vocal ao ouvir outras vozes.",
     "deliverables": [
       [
@@ -73,7 +88,16 @@ const productDetails: ProductDetails[] = [
       "Treinamento progressivo",
       "Prática de independência vocal"
     ],
-    "proofIds": ["harmonia-print", "harmonia-print-02", "harmonia-print-03", "harmonia-print-04", "harmonia-print-05", "harmonia-print-06", "harmonia-print-07", "harmonia-video"],
+    "proofIds": [
+      "harmonia-print",
+      "harmonia-print-02",
+      "harmonia-print-03",
+      "harmonia-print-04",
+      "harmonia-print-05",
+      "harmonia-print-06",
+      "harmonia-print-07",
+      "harmonia-video"
+    ],
     "source": "https://promo.focoemcanto.com/",
     "id": "harmonia"
   },
@@ -120,11 +144,11 @@ const productDetails: ProductDetails[] = [
     "id": "harmomus"
   },
   {
-    "type": "ESCOLA / ACESSO PREMIUM",
-    "accessLabel": "12 MESES PREMIUM",
+    "type": "GVIP / PLATAFORMA DE DUETOS",
+    "accessLabel": "1 ANO INCLUÍDO",
     "duration": "12 meses",
     "accent": "#81c9ac",
-    "description": "12 meses de Escola Premium: aulas, duetos, comunidade e atividades com avaliação do professor.",
+    "description": "GVIP e Plataforma de Duetos incluídos por 1 ano para continuar sua prática vocal.",
     "overview": "O ambiente de estudo e prática do Foco em Canto reúne biblioteca, atividades e comunidade vocal.",
     "audience": "Para quem quer transformar o conteúdo em prática e compartilhar sua evolução com orientação.",
     "deliverables": [
@@ -164,13 +188,12 @@ const productDetails: ProductDetails[] = [
     "accessLabel": "EBOOKS + MATERIAIS INCLUÍDOS",
     "duration": null,
     "accent": "#d4bb82",
-    "description": "Ebooks e guias do ecossistema. A seleção incluída e o prazo de acesso serão anunciados.",
-    "overview": "A biblioteca reúne materiais digitais para complementar o estudo. A composição específica da Black ainda está em definição.",
+    "description": "Ebooks e guias integrantes da BLACK FOCO 2026 para complementar seus estudos.",
+    "overview": "Materiais digitais integrantes da Black para apoiar sua jornada de aprendizado.",
     "audience": "Para quem gosta de consultar materiais de apoio ao longo do aprendizado.",
     "deliverables": [],
     "highlights": [
-      "Seleção final em definição",
-      "Prazo de acesso a confirmar"
+      "Ebooks e guias integrantes da Black"
     ],
     "proofIds": [],
     "source": "https://escola.focoemcanto.com/",
@@ -195,19 +218,24 @@ const productDetails: ProductDetails[] = [
 ];
 export type BlackCover = { src: string; width: number; height: number; alt: string; sourceUrl: string; srcSet: string };
 export type BlackProductBase = { id: string; name: string; theme: string; title: string; description: string; detail: string; regularPrice: number | null; image?: BlackCover | null };
-// Conteúdo editorial provisório. Confirmar inclusões, duração e condições antes da campanha.
+// Oferta e checkout confirmados pelo responsável da campanha em 19/10/2026.
 export const blackConfig = {
   year: 2026,
   brand: 'Foco em Canto',
   campaignName: 'BLACK FOCO',
   slogan: ['Tudo o que construímos.', 'Em uma única oportunidade.'],
-  checkoutUrl: null as string | null,
+  checkoutUrl: 'https://pay.kiwify.com.br/ZVKGmNk' as string | null,
   blackPrice: blackCashPrice as number | null,
-  payment: { cashPrice: blackCashPrice, installments: null as number | null, installmentValue: null as number | null, paymentLabel: null as string | null },
+  payment: blackPayment,
+  accessGroups: [
+    { id: 'universo', label: 'VITALÍCIO', name: 'Universo Foco em Canto', items: ['Formação/Mentoria Foco em Canto', 'Foco em Harmonia'] },
+    { id: 'premium', label: '1 ANO INCLUÍDO', name: null, items: ['Foco Premium', 'Harmomus Premium', 'GVIP / Plataforma de Duetos'] },
+    { id: 'materiais', label: 'INCLUÍDOS', name: null, items: ['eBooks e Guias integrantes da Black'] },
+  ],
   deadline: null as string | null,
-  cta: 'QUERO ENTRAR NA BLACK FOCO',
+  cta: 'QUERO GARANTIR MEU ACESSO',
   pendingCta: 'EXPLORAR A BLACK FOCO',
-  pendingMessage: 'A BLACK FOCO custa R$ 997. O checkout ainda não está disponível; a abertura das inscrições será anunciada aqui.',
+  pendingMessage: 'O checkout está temporariamente indisponível. Tente novamente em instantes.',
   manifesto: ['Você não precisa de mais um curso.', 'Precisa de um ecossistema.'],
   products: ([
     { id: 'canto', name: 'FOCO EM CANTO', theme: 'VOZ', title: 'Sua voz.\nSeu próximo nível.', description: 'Um novo olhar para o seu desenvolvimento vocal.', detail: 'Canto, técnica e expressão em um mesmo caminho de aprendizado.', regularPrice: 697, image: {"src": "/images/black/cover-foco-em-canto.webp", "width": 1024, "height": 1536, "alt": "Capa oficial — Foco em Canto", "sourceUrl": "https://jmhqdvracyjxqubqfgiz.supabase.co/storage/v1/object/public/hub-assets/products/cf8540ec-66f1-49b1-9847-62fa396a3795/cover-1782338859618.png", "srcSet": "/images/black/cover-foco-em-canto-320.webp 320w, /images/black/cover-foco-em-canto-640.webp 640w, /images/black/cover-foco-em-canto.webp 1024w"} },
@@ -218,51 +246,20 @@ export const blackConfig = {
     { id: 'bonus', name: 'BÔNUS', theme: 'POSSIBILIDADES', title: 'E ainda há\nmais por vir.', description: 'Novas possibilidades para ir além.', detail: 'Os bônus serão revelados na apresentação oficial da campanha.', regularPrice: null, image: null },
   ] satisfies BlackProductBase[]).map(p => ({ ...p, ...productDetails.find(d => d.id === p.id)! })),
   faqs: [
-  { question: 'O que exatamente está incluído?', answer: 'A oferta de R$ 997 reúne 12 meses de Mentoria Foco em Canto Premium, Foco em Harmonia vitalício, 12 meses de Harmomus Premium, 12 meses de Escola Premium e ebooks e materiais. A seleção dos materiais e seu prazo de acesso serão detalhados antes da abertura; os bônus seguem em definição.' },
-  { question: 'Harmomus e Escola ficam disponíveis por 12 meses?', answer: 'Sim. Os dois acessos Premium incluídos na Black têm duração de 12 meses. Regras de continuidade e renovação serão informadas antes da compra.' },
-  {
-    "question": "O que é a BLACK FOCO 2026?",
-    "answer": "Uma única oportunidade para reunir formação vocal, divisão de vozes, ferramentas e materiais do ecossistema Foco em Canto. O valor da Black é R$ 997. A abertura e as demais condições finais ainda serão anunciadas."
-  },
-  {
-    "question": "Quanto tempo dura cada acesso?",
-    "answer": "A Black prevê 12 meses de Mentoria Foco em Canto Premium, 12 meses de Harmomus Premium e 12 meses de Escola Premium. Foco em Harmonia terá acesso vitalício. Biblioteca e bônus ainda terão suas condições anunciadas."
-  },
-  {
-    "question": "O Foco em Harmonia é vitalício?",
-    "answer": "Sim. O acesso ao Foco em Harmonia nesta campanha será vitalício."
-  },
-  {
-    "question": "O que acontece depois dos 12 meses?",
-    "answer": "Os acessos com prazo têm duração de 12 meses. Regras de renovação, continuidade e condições para alunos atuais serão informadas antes da abertura das vendas."
-  },
-  {
-    "question": "Já tenho um produto. Vale a pena para mim?",
-    "answer": "Compare os produtos que você já possui com os acessos reunidos nesta edição. Condições específicas para alunos atuais ainda serão divulgadas."
-  },
-  {
-    "question": "Como recebo os acessos? Os produtos ficam no mesmo lugar?",
-    "answer": "O ecossistema possui plataformas próprias, como a Escola e o Harmomus. As instruções de liberação e os ambientes de cada acesso serão detalhados antes da compra. O checkout da campanha ainda não está disponível."
-  },
-  {
-    "question": "Preciso usar tudo ao mesmo tempo?",
-    "answer": "Você poderá organizar seu estudo dentro do prazo de cada acesso. A mentoria trabalha desenvolvimento vocal; o curso de harmonia, divisão de vozes; a Escola, prática; e o Harmomus, repertório."
-  },
-  {
-    "question": "Existe suporte e acompanhamento?",
-    "answer": "A Mentoria Premium inclui grupo exclusivo, sala virtual e prioridade nas dúvidas. Na Escola, assinantes VIP enviam atividades para avaliação do professor. As condições operacionais da campanha serão apresentadas com a oferta."
-  },
-  {
-    "question": "Posso acessar pelo celular?",
-    "answer": "Os ambientes possuem acesso pelo navegador. Para aulas e atividades que utilizam gravação, o dispositivo precisa permitir câmera e microfone."
-  },
-  {
-    "question": "Qual é a garantia da Black?",
-    "answer": "A garantia e as demais condições comerciais da BLACK FOCO 2026 ainda serão definidas. Elas serão apresentadas antes da compra."
-  }
-],
+    {"question": "O que exatamente está incluído?", "answer": "Universo Foco em Canto vitalício, que reúne Formação/Mentoria Foco em Canto e Foco em Harmonia; 1 ano de Foco Premium, Harmomus Premium e GVIP / Plataforma de Duetos; além dos eBooks e Guias integrantes da Black."},
+    {"question": "Quanto tempo dura cada acesso?", "answer": "O Universo Foco em Canto é vitalício e inclui Formação/Mentoria e Foco em Harmonia. Foco Premium, Harmomus Premium e GVIP / Plataforma de Duetos estão incluídos por 1 ano."},
+    {"question": "O Foco em Harmonia é vitalício?", "answer": "Sim, como parte do Universo Foco em Canto vitalício. Universo, Formação/Mentoria e Harmonia não são três compras vitalícias separadas: os dois cursos integram o mesmo Universo."},
+    {"question": "O que acontece depois de 1 ano?", "answer": "O acesso ao Universo Foco em Canto permanece vitalício. O período incluído de Foco Premium, Harmomus Premium e GVIP / Plataforma de Duetos é de 1 ano. Consulte as condições de continuidade desses serviços no checkout oficial."},
+    {"question": "Já tenho um produto. Vale a pena para mim?", "answer": "Compare os acessos que já possui com os incluídos nesta edição. Consulte as condições para alunos atuais antes de concluir a compra."},
+    {"question": "Como recebo os acessos?", "answer": "A compra é realizada no checkout oficial da Kiwify. Após a aprovação, siga as instruções de acesso enviadas para o e-mail informado na compra."},
+    {"question": "Preciso usar tudo ao mesmo tempo?", "answer": "Não. Organize seus estudos respeitando o prazo de cada acesso: Universo vitalício e serviços Premium incluídos por 1 ano."},
+    {"question": "Existe suporte e acompanhamento?", "answer": "O Foco Premium está incluído por 1 ano. Consulte no checkout oficial os canais e as condições de atendimento da oferta."},
+    {"question": "Posso acessar pelo celular?", "answer": "Os ambientes possuem acesso pelo navegador. Para atividades com gravação, permita o uso da câmera e do microfone no dispositivo."},
+    { question: 'Quais são as condições de pagamento?', answer: `${blackPayment.installments}x de ${currency(blackPayment.installmentValue)}, com acréscimo, ou ${currency(blackPayment.cashPrice)} à vista. O total parcelado é ${currency(Math.round(blackPayment.installments * blackPayment.installmentValue * 100) / 100)}. Confira as condições no checkout oficial.` },
+    {"question": "Qual é a garantia da Black?", "answer": "Consulte a garantia e as condições comerciais apresentadas no checkout oficial antes de concluir a compra."}
+  ],
 };
-export const currency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
+
 export const checkoutHref = () => {
   try { const u = new URL(blackConfig.checkoutUrl || ''); return u.protocol === 'https:' ? u.href : null; } catch { return null; }
 };
@@ -543,11 +540,11 @@ export const blackProofs: BlackProof[] = ([
 
 // Inteiros em centavos evitam deriva binária na soma e na economia.
 export const valueItems = [
-  { product: 'canto', label: 'MENTORIA PREMIUM', access: '12 meses Premium', calculation: null },
-  { product: 'harmonia', label: 'FOCO EM HARMONIA', access: 'Acesso vitalício', calculation: null },
+  { product: 'canto', label: 'FORMAÇÃO / MENTORIA', access: 'Formação no Universo vitalício', calculation: null },
+  { product: 'harmonia', label: 'FOCO EM HARMONIA', access: 'Curso no Universo vitalício', calculation: null },
   { product: 'harmomus', label: 'HARMOMUS PREMIUM', access: '12 meses Premium', calculation: { monthlyCents: 3990, months: 12 } },
   { product: 'gvip', label: 'ESCOLA / GVIP PREMIUM', access: '12 meses Premium', calculation: { monthlyCents: 1990, months: 12 } },
-  { product: 'biblioteca', label: 'EBOOKS + MATERIAIS', access: 'Incluídos · prazo a confirmar', calculation: null },
+  { product: 'biblioteca', label: 'EBOOKS + MATERIAIS', access: 'eBooks e Guias incluídos', calculation: null },
 ].map(item => ({ ...item, cents: Math.round((blackConfig.products.find(p => p.id === item.product)?.regularPrice || 0) * 100) }));
 export const offerTotals = {
   regularCents: valueItems.reduce((sum,item) => sum + item.cents, 0),
@@ -557,3 +554,8 @@ export const offerTotals = {
 };
 // Main-stage impact; complete screenshot/video inventories remain in each product.
 export const globalVideoProofIds = ['canto-video','canto-video-2','canto-video-3','canto-video-4','harmonia-video'];
+
+export const paymentTotals = {
+  installmentCents: Math.round(blackPayment.installmentValue * 100),
+  get totalCents() { return this.installmentCents * blackPayment.installments; },
+};
