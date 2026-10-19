@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
-import { blackConfig, blackProofs, checkoutHref, offerTotals, valueItems, globalVideoProofIds, paymentTotals } from '../../app/black/black-config';
+import { blackConfig, blackProofs, checkoutHref, offerTotals, valueItems, globalVideoProofIds } from '../../app/black/black-config';
 
 test('campaign terms stay explicit without invented commercial numbers', () => {
   assert.equal(blackConfig.campaignName, 'BLACK FOCO');
@@ -10,10 +10,8 @@ test('campaign terms stay explicit without invented commercial numbers', () => {
   assert.equal(blackConfig.blackPrice, 997);
   assert.equal(blackConfig.payment.installments, 12);
   assert.equal(blackConfig.payment.installmentValue, 103.11);
-  assert.equal(blackConfig.payment.paymentLabel, 'Parcelamento com acréscimo.');
+  assert.equal(blackConfig.payment.paymentLabel, null);
   assert.equal(checkoutHref(), 'https://pay.kiwify.com.br/ZVKGmNk');
-  assert.equal(paymentTotals.totalCents,123732);
-  assert.ok(paymentTotals.totalCents > offerTotals.blackCents);
   assert.deepEqual(blackConfig.accessGroups[0].items,['Formação/Mentoria Foco em Canto','Foco em Harmonia']);
   assert.deepEqual(blackConfig.accessGroups[1].items,['Foco Premium','Harmomus Premium','GVIP / Plataforma de Duetos']);
   assert.equal(blackConfig.products.find(p => p.id === 'bonus')?.regularPrice, null);
@@ -56,4 +54,10 @@ test('main proof stage uses all five verified videos and preserves complete cont
     assert.ok(blackConfig.products.find(product => product.id === proof.product)?.proofIds.includes(proof.id));
   }
   assert.equal(blackProofs.filter(proof => proof.type === 'image').length, 15);
+});
+
+test('landing payment copy only presents confirmed alternatives, without extra financing claims', () => {
+  const content = JSON.stringify(blackConfig);
+  assert.doesNotMatch(content, /acr[eé]scimo|sem juros|1[.,]237[.,]32|1237\.32|total parcelado/i);
+  assert.match(blackConfig.faqs.find(f => f.question === 'Quais são as condições de pagamento?')!.answer, /12x de R\$.*103,11 ou R\$.*997,00 à vista/);
 });

@@ -1,6 +1,6 @@
 export const currency = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 const blackCashPrice = 997;
-const blackPayment = { cashPrice: blackCashPrice, installments: 12, installmentValue: 103.11, paymentLabel: 'Parcelamento com acréscimo.' };
+const blackPayment = { cashPrice: blackCashPrice, installments: 12, installmentValue: 103.11, paymentLabel: null as string | null };
 export type ProductDetails = { id: string; type: string; accessLabel: string; duration: string | null; accent: string; description: string; overview: string; audience: string; deliverables: string[][]; highlights: string[]; proofIds: string[]; source: string };
 const productDetails: ProductDetails[] = [
   {
@@ -255,7 +255,7 @@ export const blackConfig = {
     {"question": "Preciso usar tudo ao mesmo tempo?", "answer": "Não. Organize seus estudos respeitando o prazo de cada acesso: Universo vitalício e serviços Premium incluídos por 1 ano."},
     {"question": "Existe suporte e acompanhamento?", "answer": "O Foco Premium está incluído por 1 ano. Consulte no checkout oficial os canais e as condições de atendimento da oferta."},
     {"question": "Posso acessar pelo celular?", "answer": "Os ambientes possuem acesso pelo navegador. Para atividades com gravação, permita o uso da câmera e do microfone no dispositivo."},
-    { question: 'Quais são as condições de pagamento?', answer: `${blackPayment.installments}x de ${currency(blackPayment.installmentValue)}, com acréscimo, ou ${currency(blackPayment.cashPrice)} à vista. O total parcelado é ${currency(Math.round(blackPayment.installments * blackPayment.installmentValue * 100) / 100)}. Confira as condições no checkout oficial.` },
+    { question: 'Quais são as condições de pagamento?', answer: `${blackPayment.installments}x de ${currency(blackPayment.installmentValue)} ou ${currency(blackPayment.cashPrice)} à vista.` },
     {"question": "Qual é a garantia da Black?", "answer": "Consulte a garantia e as condições comerciais apresentadas no checkout oficial antes de concluir a compra."}
   ],
 };
@@ -554,8 +554,3 @@ export const offerTotals = {
 };
 // Main-stage impact; complete screenshot/video inventories remain in each product.
 export const globalVideoProofIds = ['canto-video','canto-video-2','canto-video-3','canto-video-4','harmonia-video'];
-
-export const paymentTotals = {
-  installmentCents: Math.round(blackPayment.installmentValue * 100),
-  get totalCents() { return this.installmentCents * blackPayment.installments; },
-};

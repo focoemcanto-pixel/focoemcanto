@@ -102,7 +102,7 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
       if (destroyed || el!.dataset.scroll !== 'enhanced') return;
       const y = window.scrollY;
       // Uma medição por reconstrução de layout, fora do hot path de scroll.
-      geometry.current = scenes.filter(scene => scene.dataset.staticValue !== 'true').map(scene => {
+      geometry.current = scenes.map(scene => {
         const rect = scene.getBoundingClientRect();
         const kind = scene.dataset.pinScene as SceneKind;
         return { scene, stage: scene.querySelector<HTMLElement>('[data-pin-stage]')!, kind, start: rect.top + y, travel: sceneTravel(kind, stageHeight, productCount), pin: '', verify: false, progress: -1 };
@@ -125,14 +125,6 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
       stageHeight = height; stageWidth = rect.width;
       el!.dataset.scroll = 'enhanced';
       for (const scene of scenes) {
-        const staticValue = scene.dataset.pinScene === 'value' && (rect.width <= 760 || height < 850);
-        scene.dataset.staticValue = String(staticValue);
-        if (staticValue) {
-          delete scene.dataset.pin;
-          [construction, revelation].forEach(node => { node?.removeAttribute('inert'); node?.removeAttribute('aria-hidden'); });
-          if (subtotal) subtotal.textContent = currency(valueItems.reduce((sum,item) => sum+item.cents,0)/100);
-          continue;
-        }
         scene.dataset.pin = 'before';
         scene.style.setProperty('--stage-height', `${height}px`);
         scene.style.setProperty('--stage-left', `${rect.left}px`);

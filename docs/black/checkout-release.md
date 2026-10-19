@@ -1,3 +1,5 @@
+> Registro histórico superado pela correção seletiva descrita em `motion-restoration.md`. A landing atual não exibe aviso de acréscimo nem total parcelado e mantém o pin original da cena de valor.
+
 # Fechamento comercial da BLACK FOCO 2026 — 19/10/2026
 
 Escopo: apresentação comercial e links da `/black/`. Não alterar Comunicação, Kiwify, webhooks, grants, Ficha 360, banco, automações ou produtos nas plataformas.

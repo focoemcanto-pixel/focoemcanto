@@ -1,4 +1,4 @@
-import { blackConfig as config, currency, offerTotals, valueItems, paymentTotals } from './black-config';
+import { blackConfig as config, currency, offerTotals, valueItems } from './black-config';
 import { type ReactNode } from 'react';
 import c from './value-experience.module.css';
 const money = (cents: number) => currency(cents / 100);
@@ -18,7 +18,6 @@ export default function ValueExperience({ cta }: { cta: ReactNode }) {
         <p className={c.installmentLabel}>{config.payment.installments}x de</p>
         <h2 className={c.price}>{currency(config.payment.installmentValue)}</h2>
         <p className={c.cash}>ou <strong>{currency(config.payment.cashPrice)} à vista</strong></p>
-        <p className={c.paymentNote}>{config.payment.paymentLabel} Total parcelado: {money(paymentTotals.totalCents)}.</p>
         <p className={c.slogan}>{config.slogan[0]}<br/>{config.slogan[1]}</p>
         <ul className={c.unlocks}>{config.accessGroups.map(group => <li key={group.id}><span>{group.label}</span>{group.name && <strong>{group.name}</strong>}<ul>{group.items.map(item => <li key={item}>{item}</li>)}</ul></li>)}</ul>
         <div className={c.anchor}><p>VALOR SEPARADO <s>{money(offerTotals.regularCents)}</s></p><p>ECONOMIA À VISTA <strong>{money(offerTotals.savingsCents)}</strong><span>{offerTotals.discountPercentage.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}%</span></p></div>
