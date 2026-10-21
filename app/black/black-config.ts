@@ -233,6 +233,17 @@ export const blackConfig = {
     { id: 'materiais', label: 'INCLUÍDOS', name: null, items: ['eBooks e Guias integrantes da Black'] },
   ],
   deadline: null as string | null,
+  // PRE-LAUNCH / OPEN. O estado vigente é administrado no HUB (/comunicacao/black) e lido em tempo
+  // de execução; `defaultPhase` só vale quando o HUB não responde. Nada vira sozinho em 08/11.
+  launch: {
+    campaign: 'black_foco_2026',
+    hubOrigin: 'https://escola.focoemcanto.com',
+    defaultPhase: 'pre_launch' as 'pre_launch' | 'open',
+    opensAtLabel: '08/11',
+    opensAtLong: '08 de novembro',
+    listCta: 'ENTRAR NA LISTA PRIORITÁRIA',
+    groupCta: 'ENTRAR NO GRUPO DO WHATSAPP',
+  },
   cta: 'QUERO GARANTIR MEU ACESSO',
   pendingCta: 'EXPLORAR A BLACK FOCO',
   pendingMessage: 'O checkout está temporariamente indisponível. Tente novamente em instantes.',

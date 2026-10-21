@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import dynamic from 'next/dynamic';
 import BlackProof from './BlackProof';
 import ValueExperience from './ValueExperience';
@@ -9,6 +9,12 @@ import { blackConfig as config, checkoutHref, type BlackCover } from './black-co
 import s from './black.module.css';
 import scroll from './black-scroll.module.css';
 import { useBlackScroll } from './use-black-scroll';
+import PrelaunchSection from './PrelaunchSection';
+import StickyListCta from './StickyListCta';
+import { useCampaignState } from './campaign-client';
+import { PRELAUNCH_FAQ_EXTRA, PRELAUNCH_FAQ_KEEP, resolvePhase } from './prelaunch-model';
+import pl from './prelaunch.module.css';
+const PriorityList = dynamic(() => import('./PriorityList'), { ssr: false });
 
 const ignoreTotal = () => {};
 
@@ -26,14 +32,25 @@ export default function BlackExperience() {
   const [active, setActive] = useState(0);
 
   const checkout = checkoutHref();
+  // PRE-LAUNCH (lista prioritária) ou OPEN (oferta/checkout): uma única experiência, estado vindo do HUB.
+  const { state: campaign } = useCampaignState();
+  const prelaunch = resolvePhase(campaign, config.launch.defaultPhase) === 'pre_launch';
+  const captureClosed = campaign?.capture_open === false;
+  const [listOpen, setListOpen] = useState(false);
+  const openList = useCallback(() => setListOpen(true), []);
+  const closeList = useCallback(() => setListOpen(false), []);
+  useEffect(() => { if (prelaunch && /^#(entrar|lista-prioritaria)$/.test(window.location.hash)) setListOpen(true); }, [prelaunch]);
+  const listCta = () => <button type="button" data-list-cta data-list-inline className={pl.listCta} onClick={openList} disabled={captureClosed}>{captureClosed ? 'INSCRIÇÕES ENCERRADAS' : config.launch.listCta}<span aria-hidden="true">→</span></button>;
+  const faqs = prelaunch ? [...PRELAUNCH_FAQ_EXTRA, ...config.faqs.filter(f => PRELAUNCH_FAQ_KEEP.has(f.question))] : config.faqs;
+  const steps = prelaunch ? [['Entre na lista','Informe nome, e-mail e WhatsApp para entrar na Lista Prioritária.'],['Responda a ficha','5 perguntas rápidas, uma por vez.'],['Entre no grupo oficial','Os principais avisos da abertura chegam pelo grupo e pelo WhatsApp.']] : [['Conheça a oferta','Confira os produtos, os prazos e as condições da BLACK FOCO 2026.'],['Compre com segurança','Conclua sua compra pelo checkout oficial da Kiwify.'],['Entre no universo','Após a aprovação da compra, siga as instruções enviadas para o e-mail informado no checkout.']];
 
   const navigateUniverse = useBlackScroll(root, { productCount: config.products.length, regularTotal: 0, onActive: setActive, onTotal: ignoreTotal });
-  const cta = () => checkout ? <a data-purchase-cta className={s.cta} href={checkout}>{config.cta}<span aria-hidden="true">↗</span></a> : <p role="status">{config.pendingMessage}</p>;
+  const cta = () => prelaunch ? listCta() : checkout ? <a data-purchase-cta className={s.cta} href={checkout}>{config.cta}<span aria-hidden="true">↗</span></a> : <p role="status">{config.pendingMessage}</p>;
   return <main ref={root} className={`${s.black} ${scroll.engine}`}>
     <div data-viewport-probe aria-hidden="true"/>
     <a className={s.skip} href="#universo">Pular abertura</a>
     <div className={s.progress} aria-hidden="true" />
-    <header className={s.header}><a href="#inicio" aria-label="BLACK FOCO 2026 — início">BLACK<span>FOCO</span><sup>26</sup></a><nav aria-label="Navegação da campanha"><a href="#universo">O universo</a><a href="#oferta">A oferta</a><a href="#faq">FAQ</a></nav>{checkout && <a data-purchase-cta className={s.headerCta} href={checkout}>GARANTIR ACESSO <span>↗</span></a>}</header>
+    <header className={s.header}><a href="#inicio" aria-label="BLACK FOCO 2026 — início">BLACK<span>FOCO</span><sup>26</sup></a><nav aria-label="Navegação da campanha"><a href="#universo">O universo</a>{prelaunch ? <a href="#lista">A abertura</a> : <a href="#oferta">A oferta</a>}<a href="#faq">FAQ</a></nav>{prelaunch ? <button type="button" className={pl.headerList} onClick={openList} disabled={captureClosed} aria-label="Entrar na Lista Prioritária"><span className={pl.headerFull}>LISTA PRIORITÁRIA</span><span className={pl.headerShort}>LISTA</span><span aria-hidden="true">→</span></button> : checkout && <a data-purchase-cta className={s.headerCta} href={checkout}>GARANTIR ACESSO <span>↗</span></a>}</header>
     <section id="inicio" className={s.intro} data-scene="intro" data-pin-scene="intro">
       <div className={s.introStage} data-pin-stage data-intro-stage>
         <div className={s.orbit} data-hero-orbit aria-hidden="true"><i/><i/><i/><b/></div>
@@ -79,11 +96,13 @@ export default function BlackExperience() {
     <section className={s.fusion} data-scene="fusion" data-pin-scene="fusion"><div className={s.fusionStage} data-pin-stage data-fusion-stage><p className={s.eyebrow}>03 / TUDO SE ENCONTRA</p><div className={s.fusionField} aria-hidden="true">{config.products.map((p,i)=><span key={p.id} className={p.image?s.fusionProduct:undefined} style={{'--i':i} as React.CSSProperties}>{p.image ? <CourseCover cover={p.image} className={s.fusionCover} sizes="(max-width: 760px) 72px, 110px"/> : p.name}</span>)}<div className={s.fusionCore} data-fusion-core/></div><h2 className={s.fusionSlogan} aria-label={config.slogan.join(' ')}><span>{config.slogan[0].slice(0, config.slogan[0].lastIndexOf(' '))}</span><strong>{config.slogan[0].slice(config.slogan[0].lastIndexOf(' ') + 1)}</strong><span>{config.slogan[1].slice(0, config.slogan[1].lastIndexOf(' '))}</span><strong>{config.slogan[1].slice(config.slogan[1].lastIndexOf(' ') + 1)}</strong></h2><p className={s.fusionBrand}>BLACK FOCO <span>2026</span></p></div></section>
     <BlackProof/>
     <section id="inclui" className={s.included}><div className={s.includedHeading} data-reveal><p className={s.eyebrow}>05 / PARTE DE UM MESMO TODO</p><h2>Um encontro de<br/><em>possibilidades.</em></h2><p>Formação, ferramentas e prática se complementam.<br/>Explore os acessos reunidos nesta edição.</p></div><div className={s.productList}>{config.products.map((p,i)=><article key={p.id} data-reveal className={p.image?s.productWithCover:undefined}>{p.image ? <CourseCover cover={p.image} className={s.listCover} sizes="64px"/> : <span>0{i+1}</span>}<div><h3>{p.name}</h3><p>{p.description}</p><strong className={v.accessSmall}>{p.accessLabel}</strong>{productCta(p.id)}</div><span className={s.listTheme}>{p.theme}</span></article>)}</div></section>
-    <ValueExperience cta={cta()}/>
-    <section className={s.access}><p className={s.eyebrow}>07 / DO PRIMEIRO CLIQUE AO PRÓXIMO PASSO</p><h2>Simples para entrar.<br/><em>Imenso para explorar.</em></h2><div>{[['Conheça a oferta','Confira os produtos, os prazos e as condições da BLACK FOCO 2026.'],['Compre com segurança','Conclua sua compra pelo checkout oficial da Kiwify.'],['Entre no universo','Após a aprovação da compra, siga as instruções enviadas para o e-mail informado no checkout.']].map(([title,text],i)=><article key={title}><span>0{i+1}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
-    <section id="faq" className={s.faq}><div><p className={s.eyebrow}>08 / ANTES DO PRÓXIMO PASSO</p><h2>Vamos<br/><em>esclarecer.</em></h2></div><div>{config.faqs.map(f=><details key={f.question}><summary>{f.question}<span aria-hidden="true">+</span></summary><p>{f.answer}</p></details>)}</div></section>
+    {prelaunch ? <PrelaunchSection cta={listCta()} closed={captureClosed}/> : <ValueExperience cta={cta()}/>}
+    <section className={s.access}><p className={s.eyebrow}>07 / DO PRIMEIRO CLIQUE AO PRÓXIMO PASSO</p><h2>Simples para entrar.<br/><em>Imenso para explorar.</em></h2><div>{steps.map(([title,text],i)=><article key={title}><span>0{i+1}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
+    <section id="faq" className={s.faq}><div><p className={s.eyebrow}>08 / ANTES DO PRÓXIMO PASSO</p><h2>Vamos<br/><em>esclarecer.</em></h2></div><div>{faqs.map(f=><details key={f.question}><summary>{f.question}<span aria-hidden="true">+</span></summary><p>{f.answer}</p></details>)}</div></section>
     <section className={s.finale}><img src="/images/black/marcos-voz.webp" width="1440" height="960" alt="Marcos Cruz em apresentação musical" loading="lazy"/><div><p className={s.eyebrow}>VÁRIOS PRODUTOS. UM ECOSSISTEMA.</p><h2>O SEU<br/>PRÓXIMO<br/><em>FOCO.</em></h2>{cta()}<p>BLACK FOCO / {config.year}</p></div></section>
     {openedProduct && <ProductExperience productId={openedProduct} onClose={closeProduct}/>}
+    {prelaunch && !captureClosed && <StickyListCta label={config.launch.listCta} onOpen={openList} hidden={listOpen || Boolean(openedProduct)}/>}
+    {prelaunch && <PriorityList open={listOpen} onClose={closeList} state={campaign}/>}
     <footer className={s.footer}><a href="/" aria-label="Foco em Canto página inicial"><img src="/images/black/foco-logo.webp" width="110" height="110" alt="Foco em Canto"/></a><p>© {config.year} Foco em Canto.<br/>Uma nova possibilidade para a sua música.</p><nav aria-label="Links legais"><a href="/privacy/">Privacidade</a><a href="/terms/">Termos de uso</a></nav><a href="#inicio">VOLTAR AO INÍCIO ↑</a></footer>
   </main>;
 }
