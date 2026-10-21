@@ -37,11 +37,27 @@ export default function PriorityList({ open, onClose, state }: { open: boolean; 
   useEffect(() => { if (open) requestAnimationFrame(() => heading.current?.focus({ preventScroll: true })); }, [open, step]);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !inflight.current) onClose(); };
+    const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !inflight.current) onClose();
+      if (e.key !== 'Tab' || !dialog.current) return;
+      const controls = Array.from(dialog.current.querySelectorAll<HTMLElement>('a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]'))
+        .filter(element => element.tabIndex >= 0 && element.getClientRects().length > 0);
+      const first = controls[0], last = controls[controls.length - 1];
+      if (!first) { e.preventDefault(); heading.current?.focus({ preventScroll: true }); return; }
+      if (e.shiftKey && (document.activeElement === first || !controls.includes(document.activeElement as HTMLElement))) {
+        e.preventDefault(); last.focus();
+      } else if (!e.shiftKey && (document.activeElement === last || !controls.includes(document.activeElement as HTMLElement))) {
+        e.preventDefault(); first.focus();
+      }
+    };
     const html = document.documentElement, previous = html.style.overflow;
     html.style.overflow = 'hidden';
     window.addEventListener('keydown', onKey);
-    return () => { window.removeEventListener('keydown', onKey); html.style.overflow = previous; };
+    return () => {
+      window.removeEventListener('keydown', onKey); html.style.overflow = previous;
+      if (trigger?.isConnected) trigger.focus({ preventScroll: true });
+    };
   }, [open, onClose]);
 
   function persist(next: StoredFlow) { setFlow(next); saveFlow(next); }
