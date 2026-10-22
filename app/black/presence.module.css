@@ -180,10 +180,10 @@
 
 /* Desktop editorial: espaço próprio para o evento; mobile aprovado permanece intacto. */
 @media(min-width:761px){
- :global(main[data-scroll='enhanced']) .eventScene.eventScene .eventInfo{left:6%;bottom:20%;width:29%;max-width:420px;gap:12px}
+ :global(main[data-scroll='enhanced']) .eventScene.eventScene .eventInfo{left:5%;bottom:20%;width:29%;max-width:420px;gap:12px}
  .eventInfo .eventLabel{font-size:11px;letter-spacing:.15em}
  .eventInfo time{gap:16px}
- .eventInfo time>strong{font-size:clamp(38px,3.8vw,62px);line-height:1.02;max-width:8.5ch;letter-spacing:-.045em}
+ .eventInfo time>strong{font-size:clamp(38px,3.4vw,62px);line-height:1.02;max-width:8.5ch;letter-spacing:-.045em}
  .eventInfo time>span{font-size:13px;letter-spacing:.12em}
  .eventInfo time b{font-size:24px}
  .eventInfo .eventPromise{max-width:350px;font-size:13px;line-height:1.65;margin:7px 0 8px}
