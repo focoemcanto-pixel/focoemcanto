@@ -105,3 +105,6 @@
  .foregroundArc{transform:rotate(-12deg)}
  .scene.scene [data-hero-title]>span{animation:none}
 }
+
+/* Rótulos de acesso no fundo claro da síntese: contraste independente do tema escuro dos produtos. */
+.dimension :global(article strong){color:#4b583c!important}
