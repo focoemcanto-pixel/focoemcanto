@@ -34,12 +34,14 @@ const productDetails: ProductDetails[] = [
       ],
       [
         "PREMIUM · 1 ANO",
-        "Grupo exclusivo, sala virtual e prioridade nas dúvidas"
+        "Sala Premium, avaliações e feedback em acompanhamento coletivo"
       ]
     ],
     "highlights": [
       "Formação no Universo vitalício",
-      "Foco Premium incluído por 1 ano"
+      "Foco Premium: acompanhamento coletivo por 12 meses",
+      "Encontros ao vivo semanais e comunidade exclusiva no WhatsApp",
+      "Atividades, avaliações/feedback e prioridade nas dúvidas"
     ],
     "proofIds": [
       "canto-leia",
@@ -565,3 +567,27 @@ export const offerTotals = {
 };
 // Main-stage impact; complete screenshot/video inventories remain in each product.
 export const globalVideoProofIds = ['canto-video','canto-video-2','canto-video-3','canto-video-4','harmonia-video'];
+
+// Narrativa aprovada por Marcos: acompanhamento coletivo, sem promessa de atendimento 1:1.
+export const blackNarrative = {
+  expert: { name: 'MARCOS CRUZ', role: 'Professor de canto e criador do Foco em Canto' },
+  hero: 'Formação vocal, ferramentas para praticar e 1 ano de acompanhamento Foco Premium.',
+  bridge: ['Aprender é o começo.', 'Praticar dá continuidade.', 'Ter orientação faz parte do caminho.'],
+  dimensions: [
+    { id: 'aprender', label: 'APRENDER', title: 'Conhecimento para a sua voz.', description: 'Formação Foco em Canto e Divisão de Voz no Universo Foco em Canto, com acesso vitalício. Biblioteca Digital para complementar os estudos.', access: 'UNIVERSO VITALÍCIO', productIds: ['canto', 'harmonia', 'biblioteca'] },
+    { id: 'praticar', label: 'PRATICAR', title: 'Levar o estudo para a prática.', description: 'Harmomus Premium e GVIP / Plataforma de Duetos: ambientes para estudar repertório e exercitar sua voz.', access: '1 ANO INCLUÍDO', productIds: ['harmomus', 'gvip'] },
+    { id: 'acompanhar', label: 'SER ACOMPANHADO', title: 'Orientação durante a jornada.', description: 'Foco Premium por 12 meses, com acompanhamento coletivo, encontros ao vivo semanais, atividades e feedback.', access: '12 MESES DE ACOMPANHAMENTO', productIds: [] },
+  ],
+  accompaniment: {
+    eyebrow: 'FOCO PREMIUM · 12 MESES',
+    title: ['Uma voz.', 'Um caminho.', 'Com orientação.'],
+    description: 'Acompanhamento coletivo durante os 12 meses para estudar, praticar e compartilhar suas dúvidas.',
+    benefits: [
+      ['ENCONTROS', 'Aulas ao vivo semanais'],
+      ['SALA PREMIUM', 'Atividades e exercícios'],
+      ['ORIENTAÇÃO', 'Avaliações e feedback'],
+      ['PROXIMIDADE', 'Prioridade nas dúvidas'],
+      ['COMUNIDADE', 'Grupo exclusivo no WhatsApp'],
+    ],
+  },
+};

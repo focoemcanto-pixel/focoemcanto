@@ -1,0 +1,104 @@
+/* Presença entre planos: fotografia real, sem movimento interno do retratado.
+   Os planos usam o progresso da abertura existente; nenhum percurso novo. */
+.scene.scene{isolation:isolate;padding-bottom:40px}
+.expertPlane{position:absolute;z-index:2;top:90px;left:50%;width:min(48vw,650px);height:650px;transform:translateX(-50%);pointer-events:none;mask-image:linear-gradient(#000 80%,transparent);-webkit-mask-image:linear-gradient(#000 80%,transparent)}
+.expertPlane img{display:block;width:100%;height:100%;object-fit:contain;object-position:center top}
+.scene.scene [data-hero-identity]{z-index:1}
+.scene.scene [data-hero-title]{font-size:clamp(110px,19vw,300px)!important;margin:90px 0 330px!important;line-height:.86!important}
+.scene.scene [data-hero-slogan]{z-index:4}
+.expertSignature{position:relative;z-index:5;text-align:center;display:flex;flex-direction:column;gap:6px;padding:18px 0 28px}
+.expertSignature strong{font-size:11px;letter-spacing:.21em;font-weight:400;color:#edece6}
+.expertSignature span{font-size:12px;color:#bfc1b7}
+.foregroundArc{position:absolute;z-index:3;left:15%;right:15%;top:54%;height:27%;border-bottom:1px solid #ddad6745;border-radius:50%;transform:rotate(-12deg);pointer-events:none}
+.scene.scene .heroPromise{max-width:360px;font-size:13px;line-height:1.6;color:#d0d2c7}
+/* More specific than the existing engine only for this intro. */
+:global(main[data-scroll='enhanced']) .scene.scene [data-hero-identity]{left:7%;right:7%;top:40%;transform:translateY(calc(-50% - var(--p,0)*24px))}
+:global(main[data-scroll='enhanced']) .scene.scene [data-hero-title]{margin:24px 0!important;font-size:min(19.3vw,310px)!important}
+:global(main[data-scroll='enhanced']) .scene.scene .expertPlane{top:17%;height:72%;width:min(45vw,590px);opacity:var(--expert-opacity,1);transform:translate3d(-50%,calc(var(--p,0)*-26px),0) scale(calc(1 + var(--p,0)*.07));transform-origin:50% 35%;animation:presenceIn 1.4s cubic-bezier(.16,.65,.2,1) both}
+:global(main[data-scroll='enhanced']) .scene.scene .expertSignature{position:absolute;left:15%;right:15%;bottom:17%;padding:0;opacity:var(--identity-opacity,1);transform:translateY(calc(var(--p,0)*-16px))}
+:global(main[data-scroll='enhanced']) .scene.scene .foregroundArc{opacity:var(--identity-opacity,1);transform:rotate(calc(-12deg + var(--p,0)*8deg))}
+:global(main[data-scroll='enhanced']) .scene.scene [data-hero-bottom]{gap:24px;z-index:5;align-items:end}
+.scene.scene [data-hero-orbit]{z-index:0}
+.scene.scene [data-hero-slogan] p{line-height:1.12;text-shadow:0 4px 30px #080909}
+.bridge.bridge{font-size:clamp(38px,4.5vw,72px);margin-bottom:48px}
+.journey{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:32px}
+.journey article{padding:25px 0;border-top:1px solid #ddad6740;min-width:0}
+.journey article>span,.dimensionIntro>span{font-size:10px;letter-spacing:.13em;color:#ddad67}
+.journey h3{font-size:25px;line-height:1.15;margin:17px 0!important;letter-spacing:-.035em!important}
+.journey p{font-size:13px;line-height:1.7;color:#aeb3a6!important}
+.journeyNote{margin-top:20px!important;font-size:12px;color:#8f968a!important}
+.accompaniment.accompaniment{height:auto;min-height:900px;max-height:none}
+.accompaniment.accompaniment :global(h2){font-size:clamp(58px,7.1vw,108px);margin:30px 0;line-height:1.02}
+.accompaniment.accompaniment>div{padding-top:95px;padding-bottom:90px;max-width:100%}
+.accompaniment.accompaniment>div>p:not(:first-child){max-width:430px;font-size:14px}
+.benefits{display:grid;grid-template-columns:1fr 1fr;gap:18px 24px;max-width:490px;margin:32px 0 0}
+.benefits>div{padding-top:12px;border-top:1px solid #ffffff25}
+.benefits dt{font-size:9px;letter-spacing:.1em;color:#ddad67}
+.benefits dd{margin:6px 0 0;font-size:13px;color:#e0e2d7;line-height:1.45}
+.dimensions{margin-top:60px}
+.dimension{display:grid;grid-template-columns:minmax(0,.8fr) minmax(0,1.2fr);gap:7%;padding:44px 0;border-top:1px solid #171b1630}
+.dimensionIntro>span{color:#596448}
+.dimensionIntro h3{font-size:clamp(27px,3vw,43px);line-height:1.1;margin:20px 0!important}
+.dimensionIntro p{font-size:13px;line-height:1.7;color:#555e4e!important;max-width:330px}
+.dimensionIntro>strong{display:block;margin-top:22px;font-size:10px;letter-spacing:.07em;color:#3c4732}
+.dimension>div:nth-child(2){margin-top:0}
+.dimension :global(article){grid-template-columns:64px minmax(0,1fr)!important;padding:24px 0;border-color:#171b1618}
+.dimension :global(article):first-child{border-top:0;padding-top:0}
+.dimension :global(article h3){font-size:22px}
+.includedPremium h3{font-size:28px}
+.includedPremium .benefits{margin:20px 0 25px}
+.includedPremium .benefits>div{border-color:#171b1625}
+.includedPremium .benefits dt{color:#596448}
+.includedPremium .benefits dd{color:#24301e}
+.includedPremium>p,.bonusNote>p{font-size:13px;color:#555e4e!important}
+.bonusNote{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;border-top:1px solid #171b1625;padding-top:24px}
+.bonusNote>span{font-size:10px;letter-spacing:.08em}
+@keyframes presenceIn{from{opacity:0;translate:0 18px}to{opacity:1;translate:0 0}}
+@media(max-width:760px){
+ .scene.scene{padding-top:100px}
+ .scene.scene [data-hero-title]{font-size:25vw!important;margin:20px 0 300px!important}
+ .expertPlane{top:130px;width:88%;height:440px}
+ .expertSignature{padding:0 0 22px}
+ .expertSignature span{font-size:11px;max-width:260px;align-self:center;line-height:1.5}
+ .scene.scene .heroPromise{max-width:235px;font-size:12px;line-height:1.5}
+ :global(main[data-scroll='enhanced']) .scene.scene [data-hero-identity]{top:25%;left:5%;right:5%}
+ :global(main[data-scroll='enhanced']) .scene.scene [data-hero-title]{font-size:24vw!important;line-height:.9!important;margin:0!important}
+ :global(main[data-scroll='enhanced']) .scene.scene [data-hero-title]>span:last-child{font-size:14px;margin-top:14px}
+ :global(main[data-scroll='enhanced']) .scene.scene [data-hero-identity]>p{font-size:7px!important;letter-spacing:.12em!important;margin-bottom:18px}
+ :global(main[data-scroll='enhanced']) .scene.scene .expertPlane{top:35%;height:43%;width:72%;max-width:330px;left:54%;transform:translate3d(-50%,calc(var(--p,0)*-14px),0) scale(calc(1 + var(--p,0)*.04))}
+ :global(main[data-scroll='enhanced']) .scene.scene .expertSignature{bottom:18%;left:8%;right:8%}
+ :global(main[data-scroll='enhanced']) .scene.scene [data-hero-bottom]{bottom:max(24px,env(safe-area-inset-bottom));left:7%;right:7%;gap:12px}
+ .scene.scene [data-hero-slogan] p{font-size:clamp(29px,8.4vw,58px)}
+ .foregroundArc{left:1%;right:1%;top:55%;height:18%}
+ .journey{grid-template-columns:1fr;gap:0}
+ .journey article{display:grid;grid-template-columns:1fr;gap:10px;padding:22px 0}
+ .journey h3{font-size:26px;margin:0!important}
+ .journey p{font-size:13px;max-width:440px}
+ .bridge.bridge{font-size:clamp(31px,8.7vw,52px);line-height:1.15;margin-bottom:34px}
+ .accompaniment.accompaniment{min-height:850px}
+ .accompaniment.accompaniment>div{padding:78px 7% 65px}
+ .accompaniment.accompaniment>img{object-position:63% 40%;opacity:.55}
+ .accompaniment.accompaniment h2{font-size:clamp(46px,12vw,75px)}
+ .benefits{gap:16px;max-width:440px}
+ .benefits dd{font-size:12px}
+ .dimension{grid-template-columns:1fr;gap:28px;padding:34px 0}
+ .dimensionIntro h3{font-size:31px;margin:12px 0!important}
+ .dimensionIntro p{max-width:none}
+ .dimensionIntro>strong{margin-top:14px}
+ .dimension :global(article h3){font-size:20px;line-height:1.2}
+ .bonusNote{align-items:start;flex-direction:column}
+}
+@media(max-width:350px){
+ :global(main[data-scroll='enhanced']) .scene.scene .expertPlane{top:36%;height:40%;width:76%}
+ :global(main[data-scroll='enhanced']) .scene.scene .expertSignature{bottom:19%}
+ .expertSignature strong{font-size:10px}
+ .expertSignature span{font-size:10px;max-width:235px}
+ .scene.scene .heroPromise{max-width:180px;font-size:11px}
+ .scene.scene [data-hero-bottom]>a{font-size:7px;max-width:65px}
+ .dimension :global(article){grid-template-columns:50px minmax(0,1fr)!important;gap:12px}
+}
+@media(prefers-reduced-motion:reduce){
+ .scene.scene .expertPlane{animation:none;transform:translateX(-50%)}
+ .foregroundArc{transform:rotate(-12deg)}
+ .scene.scene [data-hero-title]>span{animation:none}
+}

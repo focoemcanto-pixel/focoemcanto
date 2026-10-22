@@ -61,3 +61,13 @@ test('landing payment copy only presents confirmed alternatives, without extra f
   assert.doesNotMatch(content, /acr[eé]scimo|sem juros|1[.,]237[.,]32|1237\.32|total parcelado/i);
   assert.match(blackConfig.faqs.find(f => f.question === 'Quais são as condições de pagamento?')!.answer, /12x de R\$.*103,11 ou R\$.*997,00 à vista/);
 });
+
+test('a jornada explica os acessos sem criar produtos ou prometer atendimento individual', async () => {
+  const { blackNarrative } = await import('../../app/black/black-config');
+  const ids = blackNarrative.dimensions.flatMap(d => d.productIds);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.deepEqual([...ids].sort(), blackConfig.products.filter(p => p.id !== 'bonus').map(p => p.id).sort());
+  assert.match(blackNarrative.accompaniment.description, /coletivo.*12 meses/);
+  assert.doesNotMatch(JSON.stringify(blackNarrative), /ilimitad|1:1|individual permanente|resultado garantido/i);
+  assert.equal(blackNarrative.dimensions[2].access, '12 MESES DE ACOMPANHAMENTO');
+});

@@ -76,6 +76,8 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
         }
         if (g.kind === 'intro') {
           const { weights } = introFrame(next.progress);
+          // A pessoa sai antes do slogan assumir o plano frontal; ida e volta usam o mesmo progress.
+          g.scene.style.setProperty('--expert-opacity', String(clamp(1 - next.progress * 2.6)));
           ['--identity-opacity', '--built-opacity', '--opportunity-opacity'].forEach((key, i) => g.scene.style.setProperty(key, String(weights[i])));
         }
         if (g.kind === 'universe') {
