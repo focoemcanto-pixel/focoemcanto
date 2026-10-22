@@ -6,6 +6,7 @@
 .scene.scene [data-hero-identity]{z-index:1}
 .scene.scene [data-hero-title]{font-size:clamp(110px,19vw,300px)!important;margin:90px 0 330px!important;line-height:.86!important}
 .scene.scene [data-hero-slogan]{z-index:4}
+.scene.scene [data-hero-title]>span:last-child{position:absolute;right:0;bottom:-32px;font-size:18px;margin:0;letter-spacing:.3em}
 .expertSignature{position:relative;z-index:5;text-align:center;display:flex;flex-direction:column;gap:6px;padding:18px 0 28px}
 .expertSignature strong{font-size:11px;letter-spacing:.21em;font-weight:400;color:#edece6}
 .expertSignature span{font-size:12px;color:#bfc1b7}
@@ -14,7 +15,8 @@
 /* More specific than the existing engine only for this intro. */
 :global(main[data-scroll='enhanced']) .scene.scene [data-hero-identity]{left:7%;right:7%;top:40%;transform:translateY(calc(-50% - var(--p,0)*24px))}
 :global(main[data-scroll='enhanced']) .scene.scene [data-hero-title]{margin:24px 0!important;font-size:min(19.3vw,310px)!important}
-:global(main[data-scroll='enhanced']) .scene.scene .expertPlane{top:17%;height:72%;width:min(45vw,590px);opacity:var(--expert-opacity,1);transform:translate3d(-50%,calc(var(--p,0)*-26px),0) scale(calc(1 + var(--p,0)*.07));transform-origin:50% 35%;animation:presenceIn 1.4s cubic-bezier(.16,.65,.2,1) both}
+:global(main[data-scroll='enhanced']) .scene.scene .expertPlane{top:17%;height:72%;width:min(45vw,590px);opacity:var(--expert-opacity,1);transform:translate3d(-50%,calc(var(--p,0)*-26px),0) scale(calc(1 + var(--p,0)*.07));transform-origin:50% 35%}
+:global(main[data-scroll='enhanced']) .scene.scene .expertPlane img{animation:presenceIn 1.4s cubic-bezier(.16,.65,.2,1) both}
 :global(main[data-scroll='enhanced']) .scene.scene .expertSignature{position:absolute;left:15%;right:15%;bottom:17%;padding:0;opacity:var(--identity-opacity,1);transform:translateY(calc(var(--p,0)*-16px))}
 :global(main[data-scroll='enhanced']) .scene.scene .foregroundArc{opacity:var(--identity-opacity,1);transform:rotate(calc(-12deg + var(--p,0)*8deg))}
 :global(main[data-scroll='enhanced']) .scene.scene [data-hero-bottom]{gap:24px;z-index:5;align-items:end}
@@ -63,7 +65,7 @@
  .scene.scene .heroPromise{max-width:235px;font-size:12px;line-height:1.5}
  :global(main[data-scroll='enhanced']) .scene.scene [data-hero-identity]{top:25%;left:5%;right:5%}
  :global(main[data-scroll='enhanced']) .scene.scene [data-hero-title]{font-size:24vw!important;line-height:.9!important;margin:0!important}
- :global(main[data-scroll='enhanced']) .scene.scene [data-hero-title]>span:last-child{font-size:14px;margin-top:14px}
+ :global(main[data-scroll='enhanced']) .scene.scene [data-hero-title]>span:last-child{font-size:14px;margin:0;bottom:-24px}
  :global(main[data-scroll='enhanced']) .scene.scene [data-hero-identity]>p{font-size:7px!important;letter-spacing:.12em!important;margin-bottom:18px}
  :global(main[data-scroll='enhanced']) .scene.scene .expertPlane{top:35%;height:43%;width:72%;max-width:330px;left:54%;transform:translate3d(-50%,calc(var(--p,0)*-14px),0) scale(calc(1 + var(--p,0)*.04))}
  :global(main[data-scroll='enhanced']) .scene.scene .expertSignature{bottom:18%;left:8%;right:8%}
@@ -99,6 +101,7 @@
 }
 @media(prefers-reduced-motion:reduce){
  .scene.scene .expertPlane{animation:none;transform:translateX(-50%)}
+ .scene.scene .expertPlane img{animation:none!important}
  .foregroundArc{transform:rotate(-12deg)}
  .scene.scene [data-hero-title]>span{animation:none}
 }
