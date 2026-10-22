@@ -55,3 +55,15 @@ test('grupo: sempre o link rastreado do HUB, nunca URL fixa no front', () => {
   assert.equal(groupHref('https://escola.focoemcanto.com', null), null);
   for (const file of ['PriorityList.tsx', 'PrelaunchSection.tsx', 'black-config.ts', 'campaign-client.ts']) assert.doesNotMatch(readFileSync(`app/black/${file}`, 'utf8'), /chat\.whatsapp\.com/);
 });
+
+test('evento aprovado usa 12/11 às 20h de Brasília sem fechar a oferta automaticamente', () => {
+  const starts = new Date(blackConfig.launch.eventStartsAt);
+  assert.equal(starts.toISOString(), '2026-11-12T23:00:00.000Z');
+  assert.equal(new Intl.DateTimeFormat('pt-BR', { weekday: 'long', timeZone: 'America/Sao_Paulo' }).format(starts), 'quinta-feira');
+  assert.equal(blackConfig.launch.opensAtLabel, '12/11');
+  assert.equal(blackConfig.launch.timeLabel, '20h');
+  assert.equal(blackConfig.deadline, null);
+  assert.equal(resolvePhase({phase:'pre_launch'}, 'open'), 'pre_launch');
+  assert.equal(resolvePhase({phase:'open'}, 'pre_launch'), 'open');
+  assert.doesNotMatch(JSON.stringify(PRELAUNCH_FAQ_EXTRA), /08 de novembro|08\/11|27\/11|última chance/);
+});

@@ -8,9 +8,10 @@ export default function PrelaunchSection({ cta, closed }: { cta: ReactNode; clos
   return <section id="lista" className={p.launch} aria-labelledby="launch-title">
     <div className={p.launchGlow} aria-hidden="true" />
     <p className={p.label}>06 / A ABERTURA</p>
-    <div className={p.date} aria-hidden="true"><span>08</span><i>.</i><span>11</span></div>
-    <h2 id="launch-title" className={p.launchTitle}>A BLACK FOCO {config.year} abre em <em>{config.launch.opensAtLong}.</em></h2>
-    <p className={p.launchLead}>Uma grande oportunidade que reúne tudo o que construímos na Foco em Canto. Quem está na Lista Prioritária recebe primeiro os avisos da abertura.</p>
+    <div className={p.date} aria-hidden="true"><span>{config.launch.opensAtDay}</span><i>.</i><span>{config.launch.opensAtMonth}</span></div>
+    <h2 id="launch-title" className={p.launchTitle}>Aula especial + abertura<br/>da BLACK FOCO {config.year}.<br/><em>{config.launch.opensAtLong}.</em></h2>
+    <p className={p.eventTime}><time dateTime={config.launch.eventStartsAt}>{config.launch.weekday} · {config.launch.timeLabel.toUpperCase()}</time><span>{config.launch.timeZoneLabel}</span></p>
+    <p className={p.launchLead}>A oferta será apresentada e liberada durante a transmissão. Uma grande oportunidade que reúne tudo o que construímos na Foco em Canto. Quem está na Lista Prioritária recebe primeiro os avisos da abertura.</p>
     <ol className={p.steps}>
       {[['Entre na lista', 'Nome, e-mail e WhatsApp.'], ['Responda 5 perguntas', 'Rápidas, uma por vez.'], ['Entre no grupo oficial', 'Os avisos da abertura chegam por lá.']].map(([title, text], i) =>
         <li key={title}><span>0{i + 1}</span><b>{title}</b><small>{text}</small></li>)}

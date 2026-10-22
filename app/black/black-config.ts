@@ -236,13 +236,20 @@ export const blackConfig = {
   ],
   deadline: null as string | null,
   // PRE-LAUNCH / OPEN. O estado vigente é administrado no HUB (/comunicacao/black) e lido em tempo
-  // de execução; `defaultPhase` só vale quando o HUB não responde. Nada vira sozinho em 08/11.
+  // de execução; `defaultPhase` só vale quando o HUB não responde. A abertura depende da troca explícita de estado, não do relógio.
   launch: {
     campaign: 'black_foco_2026',
     hubOrigin: 'https://escola.focoemcanto.com',
     defaultPhase: 'pre_launch' as 'pre_launch' | 'open',
-    opensAtLabel: '08/11',
-    opensAtLong: '08 de novembro',
+    opensAtLabel: '12/11',
+    opensAtDay: '12',
+    opensAtMonth: '11',
+    weekday: 'QUINTA-FEIRA',
+    timeLabel: '20h',
+    timeZoneLabel: 'horário de Brasília',
+    eventLabel: 'AULA ESPECIAL + ABERTURA',
+    eventStartsAt: '2026-11-12T20:00:00-03:00',
+    opensAtLong: '12 de novembro',
     listCta: 'ENTRAR NA LISTA PRIORITÁRIA',
     groupCta: 'ENTRAR NO GRUPO DO WHATSAPP',
   },
@@ -578,6 +585,19 @@ export const blackNarrative = {
     { id: 'praticar', label: 'PRATICAR', title: 'Levar o estudo para a prática.', description: 'Harmomus Premium e GVIP / Plataforma de Duetos: ambientes para estudar repertório e exercitar sua voz.', access: '1 ANO INCLUÍDO', productIds: ['harmomus', 'gvip'] },
     { id: 'acompanhar', label: 'SER ACOMPANHADO', title: 'Orientação durante a jornada.', description: 'Foco Premium por 12 meses, com acompanhamento coletivo, encontros ao vivo semanais, atividades e feedback.', access: '12 MESES DE ACOMPANHAMENTO', productIds: [] },
   ],
+  priority: {
+    title: 'Por que entrar na Lista Prioritária?',
+    reasons: [
+      ['ENTENDER', 'Conheça o que a Black reúne e como funciona cada acesso.'],
+      ['PARTICIPAR', 'Receba o convite e os avisos da aula especial de abertura.'],
+      ['EXPLORAR', 'Descubra como formação, prática e acompanhamento se conectam.'],
+    ],
+  },
+  documentary: {
+    label: 'UM REGISTRO DA TRAJETÓRIA',
+    caption: 'Marcos Cruz ao lado de Raul Gil, no palco.',
+    alt: 'Fotografia documental de Marcos Cruz ao lado de Raul Gil, ambos com microfone, no palco',
+  },
   accompaniment: {
     eyebrow: 'FOCO PREMIUM · 12 MESES',
     title: ['Uma voz.', 'Um caminho.', 'Com orientação.'],

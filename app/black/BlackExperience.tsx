@@ -53,7 +53,7 @@ export default function BlackExperience() {
     <div className={s.progress} aria-hidden="true" />
     <header className={s.header}><a href="#inicio" aria-label="BLACK FOCO 2026 — início">BLACK<span>FOCO</span><sup>26</sup></a><nav aria-label="Navegação da campanha"><a href="#universo">O universo</a>{prelaunch ? <a href="#lista">A abertura</a> : <a href="#oferta">A oferta</a>}<a href="#faq">FAQ</a></nav>{prelaunch ? <button type="button" className={pl.headerList} onClick={openList} disabled={captureClosed} aria-label="Entrar na Lista Prioritária"><span className={pl.headerFull}>LISTA PRIORITÁRIA</span><span className={pl.headerShort}>LISTA</span><span aria-hidden="true">→</span></button> : checkout && <a data-purchase-cta className={s.headerCta} href={checkout}>GARANTIR ACESSO <span>↗</span></a>}</header>
     <section id="inicio" className={s.intro} data-scene="intro" data-pin-scene="intro">
-      <div className={`${s.introStage} ${presence.scene}`} data-pin-stage data-intro-stage>
+      <div className={`${s.introStage} ${presence.scene} ${prelaunch ? presence.eventScene : ''}`} data-pin-stage data-intro-stage>
         <div className={s.orbit} data-hero-orbit aria-hidden="true"><i/><i/><i/><b/></div>
         <picture className={presence.expertPlane} data-expert-plane>
           <source media="(max-width: 760px)" srcSet="/images/black/marcos-presenca-mobile.webp" width="560" height="725" />
@@ -66,6 +66,13 @@ export default function BlackExperience() {
         </div>
         <div className={s.heroSlogan} data-hero-slogan aria-label={config.slogan.join(' ')}><p className={s.sloganBuilt} data-slogan-built>{config.slogan[0].slice(0, config.slogan[0].lastIndexOf(' '))}<br/><strong>{config.slogan[0].slice(config.slogan[0].lastIndexOf(' ') + 1)}</strong></p><p className={s.sloganOpportunity} data-slogan-opportunity>{config.slogan[1].slice(0, config.slogan[1].lastIndexOf(' '))}<br/><strong>{config.slogan[1].slice(config.slogan[1].lastIndexOf(' ') + 1)}</strong></p></div>
         <div className={presence.expertSignature} data-expert-signature><strong>{narrative.expert.name}</strong><span>{narrative.expert.role}</span></div>
+        {prelaunch ? <div className={presence.eventInfo} data-event-info>
+          <p className={presence.eventLabel}>{config.launch.eventLabel}</p>
+          <time dateTime={config.launch.eventStartsAt}><strong>{config.launch.opensAtLong}</strong><span>{config.launch.weekday} · <b>{config.launch.timeLabel.toUpperCase()}</b></span></time>
+          <small>{config.launch.timeZoneLabel}</small>
+          <p className={presence.eventPromise}>{narrative.hero}</p>
+          {listCta()}
+        </div> : <p className={presence.openFlag}>BLACK ABERTA</p>}
         <div className={s.heroBottom} data-hero-bottom><p className={presence.heroPromise}>{narrative.hero}</p><a href="#manifesto" className={s.scrollCue}>ROLE PARA ENTRAR <span>↓</span></a><p className={s.edition}>VÁRIOS PRODUTOS.<br/>UM NOVO UNIVERSO.</p></div>
         <span className={s.vertical}>VOZ · HARMONIA · CONHECIMENTO</span>
       </div>
@@ -73,6 +80,9 @@ export default function BlackExperience() {
     <section id="manifesto" className={s.manifesto} data-reveal>
       <p className={s.eyebrow}>01 / UMA NOVA PERSPECTIVA</p>
       <h2 className={presence.bridge}><span>{narrative.bridge[0]}</span><br/>{narrative.bridge[1]}<br/><em>{narrative.bridge[2]}</em></h2>
+      {prelaunch && <div className={presence.priorityReasons}>
+        <h3>{narrative.priority.title}</h3><div>{narrative.priority.reasons.map(([label,text]) => <p key={label}><span>{label}</span>{text}</p>)}</div>
+      </div>}
       <div className={presence.journey} aria-label="Três dimensões complementares da sua jornada">
         {narrative.dimensions.map((dimension,i) => <article key={dimension.id}>
           <span>0{i+1} / {dimension.label}</span><h3>{dimension.title}</h3><p>{dimension.description}</p>
@@ -104,7 +114,13 @@ export default function BlackExperience() {
         </article>)}</div>
       </div>
     </section>
+    <div className={presence.mentorChapter}>
+      <figure className={presence.documentary} data-documentary>
+        <picture><source media="(max-width: 760px)" srcSet="/images/black/marcos-trajetoria-raul-mobile.webp" width="900" height="600"/><img src="/images/black/marcos-trajetoria-raul.webp" width="1600" height="1066" loading="lazy" decoding="async" alt={narrative.documentary.alt}/></picture>
+        <figcaption><span>{narrative.documentary.label}</span><p>{narrative.documentary.caption}</p></figcaption>
+      </figure>
     <section className={`${s.portrait} ${presence.accompaniment}`} data-reveal><img src="/images/black/marcos-mono.webp" width="1024" height="1536" alt="Marcos Cruz cantando ao vivo, em fotografia preto e branco" loading="lazy"/><div className={s.portraitCopy}><p className={s.eyebrow}>{narrative.accompaniment.eyebrow}</p><h2>{narrative.accompaniment.title[0]}<br/>{narrative.accompaniment.title[1]}<br/><em>{narrative.accompaniment.title[2]}</em></h2><p>{narrative.accompaniment.description}</p><dl className={presence.benefits}>{narrative.accompaniment.benefits.map(([label,text]) => <div key={label}><dt>{label}</dt><dd>{text}</dd></div>)}</dl><span>MARCOS CRUZ / FOCO EM CANTO</span></div></section>
+    </div>
     <section className={s.fusion} data-scene="fusion" data-pin-scene="fusion"><div className={s.fusionStage} data-pin-stage data-fusion-stage><p className={s.eyebrow}>03 / TUDO SE ENCONTRA</p><div className={s.fusionField} aria-hidden="true">{config.products.map((p,i)=><span key={p.id} className={p.image?s.fusionProduct:undefined} style={{'--i':i} as React.CSSProperties}>{p.image ? <CourseCover cover={p.image} className={s.fusionCover} sizes="(max-width: 760px) 72px, 110px"/> : p.name}</span>)}<div className={s.fusionCore} data-fusion-core/></div><h2 className={s.fusionSlogan} aria-label={config.slogan.join(' ')}><span>{config.slogan[0].slice(0, config.slogan[0].lastIndexOf(' '))}</span><strong>{config.slogan[0].slice(config.slogan[0].lastIndexOf(' ') + 1)}</strong><span>{config.slogan[1].slice(0, config.slogan[1].lastIndexOf(' '))}</span><strong>{config.slogan[1].slice(config.slogan[1].lastIndexOf(' ') + 1)}</strong></h2><p className={s.fusionBrand}>BLACK FOCO <span>2026</span></p></div></section>
     <BlackProof/>
     <section id="inclui" className={s.included}><div className={s.includedHeading} data-reveal><p className={s.eyebrow}>05 / PARTE DE UM MESMO TODO</p><h2>Um encontro de<br/><em>possibilidades.</em></h2><p>Conhecimento, prática e acompanhamento.<br/>Entenda como cada parte participa da sua jornada.</p></div>

@@ -1,3 +1,4 @@
+import { blackConfig } from './black-config';
 // Pure rules for the PRE-LAUNCH flow (testable without a browser).
 export type Phase = 'pre_launch' | 'open';
 export type Question = { n: number; type: 'choice' | 'money'; prompt: string; options?: { key: string; label: string }[] };
@@ -57,7 +58,7 @@ export const groupHref = (hubOrigin: string, entryId: string | null) => entryId 
 // FAQ shown before the opening: no price, payment, guarantee or checkout answers.
 export const PRELAUNCH_FAQ_KEEP = new Set(['O que exatamente está incluído?', 'Quanto tempo dura cada acesso?', 'O Foco em Harmonia é vitalício?', 'Preciso usar tudo ao mesmo tempo?', 'Posso acessar pelo celular?']);
 export const PRELAUNCH_FAQ_EXTRA = [
-  { question: 'Quando a BLACK FOCO 2026 abre?', answer: 'A abertura está marcada para 08 de novembro. Quem está na Lista Prioritária recebe os avisos da abertura pelo grupo oficial e pelo WhatsApp.' },
+  { question: 'Quando a BLACK FOCO 2026 abre?', answer: `A aula especial e abertura da BLACK FOCO 2026 acontecem em ${blackConfig.launch.opensAtLong}, quinta-feira, às ${blackConfig.launch.timeLabel}, ${blackConfig.launch.timeZoneLabel}. A oferta será apresentada e liberada durante a transmissão. Quem está na Lista Prioritária recebe os avisos pelo grupo oficial e pelo WhatsApp.` },
   { question: 'O que é a Lista Prioritária?', answer: 'É a lista de quem quer acompanhar a BLACK FOCO 2026 de perto. Você informa nome, e-mail e WhatsApp, responde 5 perguntas rápidas e entra no grupo oficial da BLACK.' },
   { question: 'Vou receber mensagens de outros assuntos?', answer: 'Não. Ao entrar na lista, você concorda em receber pelo WhatsApp somente informações relacionadas à BLACK FOCO 2026. Para não receber mais, basta responder SAIR.' },
 ];

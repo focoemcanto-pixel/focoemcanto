@@ -28,6 +28,9 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
     const construction = el.querySelector<HTMLElement>('[data-value-construction]');
     const revelation = el.querySelector<HTMLElement>('[data-value-revelation]');
     const value = el.querySelector<HTMLElement>('[data-scene="value"]');
+    const documentary = el.querySelector<HTMLElement>('[data-documentary]');
+    const eventInfo = el.querySelector<HTMLElement>('[data-event-info]');
+    let documentaryStart = 0, documentaryHeight = 1;
     let frame = 0, layoutFrame = 0, destroyed = false;
     let pageHeight = 1, stageHeight = 0, stageWidth = 0, valueStart = 0;
     let active = -1, total = -1, configuring = false, pinFailed = false;
@@ -36,6 +39,8 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
       if (failed) pinFailed = true;
       configuring = false;
       el!.dataset.scroll = 'static';
+      eventInfo?.removeAttribute('inert'); eventInfo?.removeAttribute('aria-hidden');
+      documentary?.style.removeProperty('--documentary-shift');
       geometry.current = [];
       if (subtotal) subtotal.textContent = currency(valueItems.reduce((sum,item) => sum + item.cents,0) / 100);
       [construction, revelation].forEach(node => { node?.removeAttribute('inert'); node?.removeAttribute('aria-hidden'); });
@@ -76,6 +81,8 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
         }
         if (g.kind === 'intro') {
           const { weights } = introFrame(next.progress);
+          eventInfo?.toggleAttribute('inert', weights[0] < .1);
+          eventInfo?.setAttribute('aria-hidden', String(weights[0] < .1));
           // A pessoa sai antes do slogan assumir o plano frontal; ida e volta usam o mesmo progress.
           g.scene.style.setProperty('--expert-opacity', String(clamp(1 - next.progress * 2.6)));
           ['--identity-opacity', '--built-opacity', '--opportunity-opacity'].forEach((key, i) => g.scene.style.setProperty(key, String(weights[i])));
@@ -92,6 +99,10 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
             cover.style.setProperty('--card-tilt', `${coverState.tilt}deg`);
           });
         }
+      }
+      if (documentary) {
+        const progress = clamp((y + stageHeight - documentaryStart) / (stageHeight + documentaryHeight));
+        documentary.style.setProperty('--documentary-shift', `${(progress - .5) * 24}px`);
       }
       const nextTotal = Math.round(regularTotal * clamp((y - valueStart + stageHeight * 0.7) / Math.max(1, stageHeight * 0.5)));
       if (total !== nextTotal) { total = nextTotal; onTotal(total); }
@@ -110,6 +121,7 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
         return { scene, stage: scene.querySelector<HTMLElement>('[data-pin-stage]')!, kind, start: rect.top + y, travel: sceneTravel(kind, stageHeight, productCount), pin: '', verify: false, progress: -1 };
       });
       valueStart = (value?.getBoundingClientRect().top || 0) + y;
+      if (documentary) { const rect = documentary.getBoundingClientRect(); documentaryStart = rect.top + y; documentaryHeight = rect.height; }
       pageHeight = Math.max(1, document.documentElement.scrollHeight - stageHeight);
       configuring = false;
       schedule();

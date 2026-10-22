@@ -105,7 +105,7 @@ export default function PriorityList({ open, onClose, state }: { open: boolean; 
       {step >= 1 && step <= 5 ? <div className={p.progress} aria-hidden="true"><i style={{ width: `${(step / 5) * 100}%` }} /></div> : null}
 
       {step === 0 ? <form className={p.body} onSubmit={submitData} noValidate>
-        <p className={p.kicker}>LISTA PRIORITÁRIA · ABERTURA {config.launch.opensAtLabel}</p>
+        <p className={p.kicker}>LISTA PRIORITÁRIA · ABERTURA {config.launch.opensAtLabel} · {config.launch.timeLabel}</p>
         <h2 id="lista-titulo" ref={heading} tabIndex={-1}>Entre primeiro na <em>BLACK FOCO 2026.</em></h2>
         {!capture ? <p className={p.note} role="status">As inscrições da Lista Prioritária estão encerradas.</p> : <>
           <label className={p.field} htmlFor="lista-nome"><span>Nome</span><input id="lista-nome" name="name" autoComplete="name" required minLength={2} maxLength={120} value={draft.name} onChange={e => { const d = { ...draft, name: e.target.value }; setDraft(d); saveDraft(d); }} /></label>
@@ -141,7 +141,7 @@ export default function PriorityList({ open, onClose, state }: { open: boolean; 
         <p className={p.lead}>Agora entre no grupo oficial da BLACK. É por lá que você receberá os principais avisos e informações da abertura.</p>
         {flow?.groupAvailable && group ? <a className={p.primary} href={group} target="_blank" rel="noopener">{config.launch.groupCta}<span aria-hidden="true">↗</span></a>
           : <p className={p.note} role="status">O link do grupo oficial vai chegar no seu WhatsApp.</p>}
-        <p className={p.fine}>Abertura em {config.launch.opensAtLong}.</p>
+        <p className={p.fine}>Aula especial + abertura em {config.launch.opensAtLong}, às {config.launch.timeLabel} ({config.launch.timeZoneLabel}).</p>
       </div> : null}
     </div>
   </div>;

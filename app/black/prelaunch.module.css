@@ -80,3 +80,6 @@
 @media (max-width:360px){.body{padding:18px 16px max(24px,env(safe-area-inset-bottom))}.option{padding:14px 13px}.stickyButton{padding:16px 18px;gap:10px;font-size:10px}}
 @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
 @media (prefers-reduced-motion:reduce){.sheet,.body,.backdrop,.seal i,.seal b,.launchGlow,.stickyDot{animation:none!important}.sticky{transition:opacity .2s}.progress i{transition:none}}
+.eventTime{position:relative;margin:24px auto 0!important;display:flex;flex-direction:column;gap:6px;color:#e2d4b9!important;font-size:clamp(21px,3vw,34px);letter-spacing:.04em}
+.eventTime span{font-size:11px;color:#a7ab9f;letter-spacing:.04em}
+@media(max-width:760px){.eventTime{font-size:22px}.eventTime span{font-size:10px}}
