@@ -1,8 +1,8 @@
 'use client';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { blackConfig as config } from './black-config';
-import { answer, firstTouchUtm, hubOrigin, loadDraft, loadFlow, saveDraft, saveFlow, signup, type ApiResult } from './campaign-client';
-import { formatReais, groupHref, newToken, parseReais, type CampaignState, type StoredFlow } from './prelaunch-model';
+import { answer, firstTouchUtm, hubOrigin, loadDraft, loadFlow, resume, saveDraft, saveFlow, signup, type ApiResult } from './campaign-client';
+import { confirmedFlow, formatReais, groupHref, newToken, parseReais, type CampaignState, type StoredFlow } from './prelaunch-model';
 import p from './prelaunch.module.css';
 
 // Priority list: data (1 screen) → 5 questions (1 per screen) → confirmation + official group.
@@ -22,19 +22,46 @@ export default function PriorityList({ open, onClose, state }: { open: boolean; 
   const [money, setMoney] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [verification, setVerification] = useState<'checking' | 'ready' | 'error'>('checking');
+  const [retry, setRetry] = useState(0);
   const inflight = useRef(false);
   const dialog = useRef<HTMLDivElement>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const questions = state?.questions || [];
   const question = questions.find(q => q.n === step);
 
-  useEffect(() => { // restore
+  useEffect(() => { // Restore only after the HUB confirms that this campaign entry still exists.
+    if (!open) { setVerification('checking'); return; }
+    let alive = true;
+    let verifying = false;
+    const verify = async () => {
+    if (inflight.current || verifying) return;
     const stored = loadFlow();
     const d = loadDraft();
     setDraft({ name: d.name || '', email: d.email || '', phone: d.phone || '' });
-    if (stored) { setFlow(stored); setStep(stored.completed ? 6 : Math.max(1, stored.step)); if (typeof stored.answers['5'] === 'number') setMoney(formatReais(String(Number(stored.answers['5']) / 100))); }
-  }, []);
-  useEffect(() => { if (open) requestAnimationFrame(() => heading.current?.focus({ preventScroll: true })); }, [open, step]);
+    if (!stored) { setFlow(null); setStep(0); setVerification('ready'); return; }
+    setVerification('checking'); setError('');
+    verifying = true;
+    const r = await resume(stored.token);
+    verifying = false;
+    if (!alive) return;
+    if (!r.ok || !r.entry_id) {
+      if (r.error === 'invalid_token') {
+        saveFlow(null); setFlow(null); setStep(0); setMoney(''); setVerification('ready');
+      } else { setError(message(r)); setVerification('error'); }
+      return;
+    }
+    const next = confirmedFlow(stored, { ...r, entry_id: r.entry_id });
+    saveFlow(next); setFlow(next); setStep(next.completed ? 6 : next.step);
+    if (typeof next.answers['5'] === 'number') setMoney(formatReais(String(Number(next.answers['5']) / 100)));
+    setVerification('ready');
+    };
+    void verify();
+    window.addEventListener('focus', verify);
+    window.addEventListener('pageshow', verify);
+    return () => { alive = false; window.removeEventListener('focus', verify); window.removeEventListener('pageshow', verify); };
+  }, [open, retry]);
+  useEffect(() => { if (open) requestAnimationFrame(() => heading.current?.focus({ preventScroll: true })); }, [open, step, verification]);
   useEffect(() => {
     if (!open) return;
     const trigger = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -104,6 +131,11 @@ export default function PriorityList({ open, onClose, state }: { open: boolean; 
       </header>
       {step >= 1 && step <= 5 ? <div className={p.progress} aria-hidden="true"><i style={{ width: `${(step / 5) * 100}%` }} /></div> : null}
 
+      {verification !== 'ready' ? <div className={p.body} role="status">
+        <h2 id="lista-titulo" ref={heading} tabIndex={-1}>{verification === 'checking' ? 'Verificando sua inscrição…' : 'Vamos tentar novamente.'}</h2>
+        {error ? <p className={p.error}>{error}</p> : null}
+        {verification === 'error' ? <button type="button" className={p.primary} onClick={() => setRetry(n => n + 1)}>TENTAR NOVAMENTE</button> : null}
+      </div> : <>
       {step === 0 ? <form className={p.body} onSubmit={submitData} noValidate>
         <p className={p.kicker}>LISTA PRIORITÁRIA · ABERTURA {config.launch.opensAtLabel} · {config.launch.timeLabel}</p>
         <h2 id="lista-titulo" ref={heading} tabIndex={-1}>Entre primeiro na <em>BLACK FOCO 2026.</em></h2>
@@ -143,6 +175,7 @@ export default function PriorityList({ open, onClose, state }: { open: boolean; 
           : <p className={p.note} role="status">O link do grupo oficial vai chegar no seu WhatsApp.</p>}
         <p className={p.fine}>Aula especial + abertura em {config.launch.opensAtLong}, às {config.launch.timeLabel} ({config.launch.timeZoneLabel}).</p>
       </div> : null}
+      </>}
     </div>
   </div>;
 }
