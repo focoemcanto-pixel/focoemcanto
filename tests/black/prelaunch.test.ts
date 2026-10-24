@@ -2,7 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { blackConfig, checkoutHref } from '../../app/black/black-config';
-import { PRELAUNCH_FAQ_EXTRA, PRELAUNCH_FAQ_KEEP, extractUtm, formatReais, groupHref, mergeFirstTouch, newToken, parseReais, resolvePhase, sanitizeStored } from '../../app/black/prelaunch-model';
+import { PRELAUNCH_FAQ_EXTRA, PRELAUNCH_FAQ_KEEP, confirmedFlow, extractUtm, formatReais, groupHref, mergeFirstTouch, newToken, parseReais, resolvePhase, sanitizeStored } from '../../app/black/prelaunch-model';
+
+test('restauração usa conclusão, etapa e grupo atuais do HUB, preservando rascunho e token', () => {
+  const stored = sanitizeStored({v:1,token:'T'.repeat(43),step:6,completed:true,entryId:'old',groupAvailable:false,answers:{1:'cantor'}})!;
+  const current = confirmedFlow(stored,{entry_id:'current',completed:false,next_step:2,group_available:true});
+  assert.equal(current.completed,false);
+  assert.equal(current.step,2);
+  assert.equal(current.entryId,'current');
+  assert.equal(current.groupAvailable,true);
+  assert.equal(current.token,stored.token);
+  assert.deepEqual(current.answers,stored.answers);
+  const noGroup = confirmedFlow(current,{entry_id:'current',completed:true,next_step:6,group_available:false});
+  assert.equal(noGroup.groupAvailable,false);
+  assert.equal(noGroup.completed,true);
+});
 
 test('PRE-LAUNCH é o padrão; OPEN só quando o HUB diz explicitamente', () => {
   assert.equal(blackConfig.launch.defaultPhase, 'pre_launch');

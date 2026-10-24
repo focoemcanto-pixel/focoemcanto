@@ -5,6 +5,12 @@ export type Question = { n: number; type: 'choice' | 'money'; prompt: string; op
 export type CampaignState = { phase: 'pre_launch' | 'open' | 'ended'; capture_open: boolean; consent_text: string; consent_version: string; questions: Question[]; opens_at?: string | null };
 export type StoredFlow = { v: 1; token: string; step: number; answers: Record<string, string | number>; completed: boolean; entryId: string | null; groupAvailable: boolean };
 
+// Local completion and group flags are hints only; a read-only HUB receipt governs restoration.
+export function confirmedFlow(stored: StoredFlow, receipt: { entry_id: string; next_step?: number; completed?: boolean; group_available?: boolean }): StoredFlow {
+  return { ...stored, entryId: receipt.entry_id, completed: Boolean(receipt.completed),
+    step: receipt.next_step || 1, groupAvailable: Boolean(receipt.group_available) };
+}
+
 // OPEN only when the HUB explicitly says so; an ended campaign shows the closed state of the
 // pre-launch layout (no checkout), and any failure falls back to the build-time default.
 export function resolvePhase(remote: Pick<CampaignState, 'phase'> | null | undefined, fallback: Phase): Phase {

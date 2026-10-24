@@ -36,10 +36,12 @@ export default function BlackExperience() {
   // PRE-LAUNCH (lista prioritária) ou OPEN (oferta/checkout): uma única experiência, estado vindo do HUB.
   const { state: campaign } = useCampaignState();
   const prelaunch = resolvePhase(campaign, config.launch.defaultPhase) === 'pre_launch';
-  const captureClosed = campaign?.capture_open === false;
+  const ended = campaign?.phase === 'ended';
+  const captureClosed = ended || campaign?.capture_open === false;
   const [listOpen, setListOpen] = useState(false);
   const openList = useCallback(() => setListOpen(true), []);
   const closeList = useCallback(() => setListOpen(false), []);
+  useEffect(() => { if (!prelaunch || ended) setListOpen(false); }, [prelaunch, ended]);
   useEffect(() => { if (prelaunch && /^#(entrar|lista-prioritaria)$/.test(window.location.hash)) setListOpen(true); }, [prelaunch]);
   const listCta = () => <button type="button" data-list-cta data-list-inline className={pl.listCta} onClick={openList} disabled={captureClosed}>{captureClosed ? 'INSCRIÇÕES ENCERRADAS' : config.launch.listCta}<span aria-hidden="true">→</span></button>;
   const faqs = prelaunch ? [...PRELAUNCH_FAQ_EXTRA, ...config.faqs.filter(f => PRELAUNCH_FAQ_KEEP.has(f.question))] : config.faqs;
@@ -66,13 +68,13 @@ export default function BlackExperience() {
         </div>
         <div className={s.heroSlogan} data-hero-slogan aria-label={config.slogan.join(' ')}><p className={s.sloganBuilt} data-slogan-built>{config.slogan[0].slice(0, config.slogan[0].lastIndexOf(' '))}<br/><strong>{config.slogan[0].slice(config.slogan[0].lastIndexOf(' ') + 1)}</strong></p><p className={s.sloganOpportunity} data-slogan-opportunity>{config.slogan[1].slice(0, config.slogan[1].lastIndexOf(' '))}<br/><strong>{config.slogan[1].slice(config.slogan[1].lastIndexOf(' ') + 1)}</strong></p></div>
         <div className={presence.expertSignature} data-expert-signature><strong>{narrative.expert.name}</strong><span>{narrative.expert.role}</span></div>
-        {prelaunch ? <div className={presence.eventInfo} data-event-info>
+        {prelaunch && !ended ? <div className={presence.eventInfo} data-event-info>
           <p className={presence.eventLabel}>{config.launch.eventLabel}</p>
           <time dateTime={config.launch.eventStartsAt}><strong>{config.launch.opensAtLong}</strong><span>{config.launch.weekday} · <b>{config.launch.timeLabel.toUpperCase()}</b></span></time>
           <small>{config.launch.timeZoneLabel}</small>
           <p className={presence.eventPromise}>{narrative.hero}</p>
           {listCta()}
-        </div> : <p className={presence.openFlag}>BLACK ABERTA</p>}
+        </div> : <p className={presence.openFlag}>{ended ? 'BLACK ENCERRADA' : 'BLACK ABERTA'}</p>}
         <div className={s.heroBottom} data-hero-bottom><p className={presence.heroPromise}>{narrative.hero}</p><a href="#manifesto" className={s.scrollCue}>ROLE PARA ENTRAR <span>↓</span></a><p className={s.edition}>VÁRIOS PRODUTOS.<br/>UM NOVO UNIVERSO.</p></div>
         <span className={s.vertical}>VOZ · HARMONIA · CONHECIMENTO</span>
       </div>
@@ -131,13 +133,13 @@ export default function BlackExperience() {
       </section>)}</div>
       <div className={presence.bonusNote}><span>BÔNUS · EM DEFINIÇÃO</span><p>A seleção será anunciada com as condições da campanha.</p>{productCta('bonus')}</div>
     </section>
-    {prelaunch ? <PrelaunchSection cta={listCta()} closed={captureClosed}/> : <ValueExperience cta={cta()}/>}
+    {prelaunch ? <PrelaunchSection cta={listCta()} closed={captureClosed} ended={ended}/> : <ValueExperience cta={cta()}/>}
     <section className={s.access}><p className={s.eyebrow}>07 / DO PRIMEIRO CLIQUE AO PRÓXIMO PASSO</p><h2>Simples para entrar.<br/><em>Imenso para explorar.</em></h2><div>{steps.map(([title,text],i)=><article key={title}><span>0{i+1}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
     <section id="faq" className={s.faq}><div><p className={s.eyebrow}>08 / ANTES DO PRÓXIMO PASSO</p><h2>Vamos<br/><em>esclarecer.</em></h2></div><div>{faqs.map(f=><details key={f.question}><summary>{f.question}<span aria-hidden="true">+</span></summary><p>{f.answer}</p></details>)}</div></section>
     <section className={s.finale}><img src="/images/black/marcos-voz.webp" width="1440" height="960" alt="Marcos Cruz em apresentação musical" loading="lazy"/><div><p className={s.eyebrow}>VÁRIOS PRODUTOS. UM ECOSSISTEMA.</p><h2>O SEU<br/>PRÓXIMO<br/><em>FOCO.</em></h2>{cta()}<p>BLACK FOCO / {config.year}</p></div></section>
     {openedProduct && <ProductExperience productId={openedProduct} onClose={closeProduct}/>}
     {prelaunch && !captureClosed && <StickyListCta label={config.launch.listCta} onOpen={openList} hidden={listOpen || Boolean(openedProduct)}/>}
-    {prelaunch && <PriorityList open={listOpen} onClose={closeList} state={campaign}/>}
+    {prelaunch && !ended && <PriorityList open={listOpen} onClose={closeList} state={campaign}/>}
     <footer className={s.footer}><a href="/" aria-label="Foco em Canto página inicial"><img src="/images/black/foco-logo.webp" width="110" height="110" alt="Foco em Canto"/></a><p>© {config.year} Foco em Canto.<br/>Uma nova possibilidade para a sua música.</p><nav aria-label="Links legais"><a href="/privacy/">Privacidade</a><a href="/terms/">Termos de uso</a></nav><a href="#inicio">VOLTAR AO INÍCIO ↑</a></footer>
   </main>;
 }

@@ -29,12 +29,16 @@ export function firstTouchUtm() {
 
 export type ApiResult = { ok: boolean; error?: string; entry_id?: string; next_step?: number; completed?: boolean; group_available?: boolean };
 async function post(path: string, body: unknown): Promise<ApiResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(api(path), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), credentials: 'omit' });
+    const res = await fetch(api(path), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), credentials: 'omit', signal: controller.signal, cache: 'no-store' });
     return await res.json().catch(() => ({ ok: false, error: 'unavailable' }));
   } catch { return { ok: false, error: 'network' }; }
+  finally { clearTimeout(timer); }
 }
 export const signup = (body: Record<string, unknown>) => post('inscricao', body);
+export const resume = (token: string) => post('estado', { token });
 export const answer = (token: string, question: number, value: string | number) => post('resposta', { token, question, value });
 
 // Campaign state from the HUB (phase, consent text/version, questions). null while loading or on failure.
@@ -43,14 +47,23 @@ export function useCampaignState() {
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let alive = true;
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
-    fetch(api('estado'), { signal: controller.signal, credentials: 'omit' })
+    let controller: AbortController | null = null;
+    const refresh = () => {
+    if (document.visibilityState === 'hidden' || controller) return;
+    controller = new AbortController();
+    const timer = setTimeout(() => controller?.abort(), 8000);
+    fetch(api('estado'), { signal: controller.signal, credentials: 'omit', cache: 'no-store' })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
-      .then(d => { if (alive && d?.ok) setState(d as CampaignState); else if (alive) setFailed(true); })
+      .then(d => { if (alive && d?.ok) { setState(d as CampaignState); setFailed(false); } else if (alive) setFailed(true); })
       .catch(() => { if (alive) setFailed(true); })
-      .finally(() => clearTimeout(timer));
-    return () => { alive = false; controller.abort(); clearTimeout(timer); };
+      .finally(() => { clearTimeout(timer); controller = null; });
+    };
+    refresh();
+    const interval = setInterval(refresh, 15000);
+    window.addEventListener('focus', refresh);
+    window.addEventListener('pageshow', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { alive = false; controller?.abort(); clearInterval(interval); window.removeEventListener('focus', refresh); window.removeEventListener('pageshow', refresh); document.removeEventListener('visibilitychange', refresh); };
   }, []);
   return { state, failed };
 }
