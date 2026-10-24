@@ -251,7 +251,7 @@ export const blackConfig = {
     eventStartsAt: '2026-11-12T20:00:00-03:00',
     opensAtLong: '12 de novembro',
     listCta: 'ENTRAR NA LISTA PRIORITÁRIA',
-    groupCta: 'ENTRAR NO GRUPO DO WHATSAPP',
+    groupCta: 'ENTRAR NO GRUPO OFICIAL',
   },
   cta: 'QUERO GARANTIR MEU ACESSO',
   pendingCta: 'EXPLORAR A BLACK FOCO',
