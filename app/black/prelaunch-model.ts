@@ -2,7 +2,7 @@ import { blackConfig } from './black-config';
 // Pure rules for the PRE-LAUNCH flow (testable without a browser).
 export type Phase = 'pre_launch' | 'open';
 export type Question = { n: number; type: 'choice' | 'money'; prompt: string; options?: { key: string; label: string }[] };
-export type CampaignState = { phase: 'pre_launch' | 'open' | 'ended'; capture_open: boolean; consent_text: string; consent_version: string; questions: Question[]; opens_at?: string | null };
+export type CampaignState = { phase: 'pre_launch' | 'open' | 'ended'; capture_open: boolean; consent_text: string; consent_version: string; questions: Question[]; opens_at?: string | null; inside?: {status:string;available:boolean;starts_at:string;ends_at:string;acquisition_ends_at:string}|null };
 export type StoredFlow = { v: 1; token: string; step: number; answers: Record<string, string | number>; completed: boolean; entryId: string | null; groupAvailable: boolean };
 
 // Local completion and group flags are hints only; a read-only HUB receipt governs restoration.

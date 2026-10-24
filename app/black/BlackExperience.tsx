@@ -12,6 +12,7 @@ import { useBlackScroll } from './use-black-scroll';
 import PrelaunchSection from './PrelaunchSection';
 import StickyListCta from './StickyListCta';
 import { useCampaignState } from './campaign-client';
+import BlackInside from './BlackInside';
 import { PRELAUNCH_FAQ_EXTRA, PRELAUNCH_FAQ_KEEP, resolvePhase } from './prelaunch-model';
 import pl from './prelaunch.module.css';
 import presence from './presence.module.css';
@@ -133,6 +134,7 @@ export default function BlackExperience() {
       </section>)}</div>
       <div className={presence.bonusNote}><span>BÔNUS · EM DEFINIÇÃO</span><p>A seleção será anunciada com as condições da campanha.</p>{productCta('bonus')}</div>
     </section>
+    <BlackInside campaign={campaign}/>
     {prelaunch ? <PrelaunchSection cta={listCta()} closed={captureClosed} ended={ended}/> : <ValueExperience cta={cta()}/>}
     <section className={s.access}><p className={s.eyebrow}>07 / DO PRIMEIRO CLIQUE AO PRÓXIMO PASSO</p><h2>Simples para entrar.<br/><em>Imenso para explorar.</em></h2><div>{steps.map(([title,text],i)=><article key={title}><span>0{i+1}</span><h3>{title}</h3><p>{text}</p></article>)}</div></section>
     <section id="faq" className={s.faq}><div><p className={s.eyebrow}>08 / ANTES DO PRÓXIMO PASSO</p><h2>Vamos<br/><em>esclarecer.</em></h2></div><div>{faqs.map(f=><details key={f.question}><summary>{f.question}<span aria-hidden="true">+</span></summary><p>{f.answer}</p></details>)}</div></section>
