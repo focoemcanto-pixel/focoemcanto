@@ -1,3 +1,5 @@
+import {aulasService} from '../../../lib/domain/source-aulas.mjs';
+const serviceRequest=request=>['cf-access-jwt-assertion','cf-access-client-id','cf-access-client-secret','x-foco-delegation-context'].some(h=>request.headers.has(h));
 const HUB_URL = 'https://jmhqdvracyjxqubqfgiz.supabase.co'
 const HUB_PUBLISHABLE_KEY = 'sb_publishable_OvfVlykWZ3UfPpn3JARcEQ_0STjcgVF'
 const allowedOrigins = new Set(['https://foco-assistente.pages.dev','https://assistente.focoemcanto.com'])
@@ -9,6 +11,7 @@ async function authenticatedAdmin(request){const authorization=request.headers.g
 async function readPrefix(kv,prefix){const output=[];let cursor;do{const page=await kv.list({prefix,cursor,limit:1000});const values=await Promise.all(page.keys.map(key=>kv.get(key.name,'json')));output.push(...values.filter(Boolean));cursor=page.list_complete?undefined:page.cursor}while(cursor);return output}
 export async function onRequestOptions({request}){return new Response(null,{status:204,headers:cors(request)})}
 export async function onRequestGet({request,env}){
+ if(serviceRequest(request))return aulasService(request,env);
  if(!(await authenticatedAdmin(request)))return json(request,{error:'Não autorizado.'},401)
  if(!env?.FOCO_LINKS)return json(request,{error:'Agenda indisponível.'},500)
  const students=(await readPrefix(env.FOCO_LINKS,'aulas:student:')).filter(student=>student?.status!=='inactive'&&student?.day&&student?.time).flatMap(student=>{const durationMinutes=Number(student.durationMinutes||60);const base={id:clean(student.id,80),name:clean(student.name,120)||'Aula',modality:clean(student.modality,30),neighborhood:clean(student.neighborhood,120),whatsapp:clean(student.whatsapp,30).replace(/\D/g,''),durationMinutes};const rows=[{...base,occurrence:1,day:clean(student.day,20),time:clean(student.time,10),endTime:clean(student.endTime,10)||addMinutes(student.time,durationMinutes)}];if(Number(student.weeklyFrequency)===2&&student.secondDay&&student.secondTime)rows.push({...base,occurrence:2,day:clean(student.secondDay,20),time:clean(student.secondTime,10),endTime:addMinutes(student.secondTime,durationMinutes)});return rows})
@@ -18,6 +21,7 @@ export async function onRequestGet({request,env}){
  return json(request,{classes:students,leads:safeLeads,slots:safeSlots,syncedAt:new Date().toISOString()})
 }
 export async function onRequestPost({request,env}){
+ if(serviceRequest(request))return json(request,{error:'NOT_AUTHORIZED'},403);
  if(!(await authenticatedAdmin(request)))return json(request,{error:'Não autorizado.'},401)
  if(!env?.FOCO_LINKS)return json(request,{error:'Agenda indisponível.'},500)
  let body;try{body=await request.json()}catch{return json(request,{error:'Dados inválidos.'},400)}
