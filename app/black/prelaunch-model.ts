@@ -68,3 +68,15 @@ export const PRELAUNCH_FAQ_EXTRA = [
   { question: 'O que é a Lista Prioritária?', answer: 'É a lista de quem quer acompanhar a BLACK FOCO 2026 de perto. Você informa nome, e-mail e WhatsApp, responde 5 perguntas rápidas e entra no grupo oficial da BLACK.' },
   { question: 'Vou receber mensagens de outros assuntos?', answer: 'Não. Ao entrar na lista, você concorda em receber pelo WhatsApp somente informações relacionadas à BLACK FOCO 2026. Para não receber mais, basta responder SAIR.' },
 ];
+
+// Refuse malformed/partial successful responses before rendering the editable questionnaire.
+export function isCampaignState(value: unknown): value is CampaignState {
+  const d = value as CampaignState & { ok?: boolean } | null;
+  return Boolean(d && d.ok === true && ['pre_launch', 'open', 'ended'].includes(d.phase)
+    && typeof d.capture_open === 'boolean' && typeof d.consent_text === 'string' && d.consent_text.trim()
+    && typeof d.consent_version === 'string' && d.consent_version.trim()
+    && Array.isArray(d.questions) && d.questions.length === 5
+    && [1, 2, 3, 4, 5].every(n => d.questions.some(q => q.n === n && typeof q.prompt === 'string' && q.prompt.trim()
+      && (n === 5 ? q.type === 'money' : q.type === 'choice' && Array.isArray(q.options) && q.options.length > 0
+        && q.options.every(o => typeof o.key === 'string' && o.key && typeof o.label === 'string' && o.label)))));
+}

@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { blackConfig } from './black-config';
-import { extractUtm, mergeFirstTouch, sanitizeStored, type CampaignState, type StoredFlow } from './prelaunch-model';
+import { extractUtm, isCampaignState, mergeFirstTouch, sanitizeStored, type CampaignState, type StoredFlow } from './prelaunch-model';
 
 // Browser side of the priority list: HUB calls and local persistence. Every storage access is
 // guarded (private mode, blocked storage); the HUB remains the source of truth.
@@ -45,6 +45,7 @@ export const answer = (token: string, question: number, value: string | number) 
 export function useCampaignState() {
   const [state, setState] = useState<CampaignState | null>(null);
   const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let alive = true;
     let controller: AbortController | null = null;
@@ -54,7 +55,7 @@ export function useCampaignState() {
     const timer = setTimeout(() => controller?.abort(), 8000);
     fetch(api('estado'), { signal: controller.signal, credentials: 'omit', cache: 'no-store' })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
-      .then(d => { if (alive && d?.ok) { setState(d as CampaignState); setFailed(false); } else if (alive) setFailed(true); })
+      .then(d => { if (alive && isCampaignState(d)) { setState(d as CampaignState); setFailed(false); } else if (alive) setFailed(true); })
       .catch(() => { if (alive) setFailed(true); })
       .finally(() => { clearTimeout(timer); controller = null; });
     };
@@ -64,6 +65,7 @@ export function useCampaignState() {
     window.addEventListener('pageshow', refresh);
     document.addEventListener('visibilitychange', refresh);
     return () => { alive = false; controller?.abort(); clearInterval(interval); window.removeEventListener('focus', refresh); window.removeEventListener('pageshow', refresh); document.removeEventListener('visibilitychange', refresh); };
-  }, []);
-  return { state, failed };
+  }, [attempt]);
+  const retry = () => { setFailed(false); setAttempt(n => n + 1); };
+  return { state, failed, retry };
 }

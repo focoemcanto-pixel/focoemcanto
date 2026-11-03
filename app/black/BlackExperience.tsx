@@ -34,7 +34,7 @@ export default function BlackExperience() {
 
   const checkout = checkoutHref();
   // PRE-LAUNCH (lista prioritária) ou OPEN (oferta/checkout): uma única experiência, estado vindo do HUB.
-  const { state: campaign } = useCampaignState();
+  const { state: campaign, failed: campaignFailed, retry: retryCampaign } = useCampaignState();
   const prelaunch = resolvePhase(campaign, config.launch.defaultPhase) === 'pre_launch';
   const ended = campaign?.phase === 'ended';
   const captureClosed = ended || campaign?.capture_open === false;
@@ -139,7 +139,7 @@ export default function BlackExperience() {
     <section className={s.finale}><img src="/images/black/marcos-voz.webp" width="1440" height="960" alt="Marcos Cruz em apresentação musical" loading="lazy"/><div><p className={s.eyebrow}>VÁRIOS PRODUTOS. UM ECOSSISTEMA.</p><h2>O SEU<br/>PRÓXIMO<br/><em>FOCO.</em></h2>{cta()}<p>BLACK FOCO / {config.year}</p></div></section>
     {openedProduct && <ProductExperience productId={openedProduct} onClose={closeProduct}/>}
     {prelaunch && !captureClosed && <StickyListCta label={config.launch.listCta} onOpen={openList} hidden={listOpen || Boolean(openedProduct)}/>}
-    {prelaunch && !ended && <PriorityList open={listOpen} onClose={closeList} state={campaign}/>}
+    {prelaunch && !ended && <PriorityList open={listOpen} onClose={closeList} state={campaign} stateFailed={campaignFailed} onRetryState={retryCampaign}/>}
     <footer className={s.footer}><a href="/" aria-label="Foco em Canto página inicial"><img src="/images/black/foco-logo.webp" width="110" height="110" alt="Foco em Canto"/></a><p>© {config.year} Foco em Canto.<br/>Uma nova possibilidade para a sua música.</p><nav aria-label="Links legais"><a href="/privacy/">Privacidade</a><a href="/terms/">Termos de uso</a></nav><a href="#inicio">VOLTAR AO INÍCIO ↑</a></footer>
   </main>;
 }
