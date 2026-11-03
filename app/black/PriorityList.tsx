@@ -16,7 +16,7 @@ const ERRORS: Record<string, string> = {
 };
 const message = (r: ApiResult) => ERRORS[r.error || ''] || ERRORS.unavailable;
 
-export default function PriorityList({ open, onClose, state }: { open: boolean; onClose: () => void; state: CampaignState | null }) {
+export default function PriorityList({ open, onClose, state, stateFailed, onRetryState }: { open: boolean; onClose: () => void; state: CampaignState | null; stateFailed: boolean; onRetryState: () => void }) {
   const [flow, setFlow] = useState<StoredFlow | null>(null);
   const [step, setStep] = useState(0); // 0 = dados, 1..5 = perguntas, 6 = concluído
   const [draft, setDraft] = useState({ name: '', email: '', phone: '' });
@@ -133,7 +133,10 @@ export default function PriorityList({ open, onClose, state }: { open: boolean; 
       </header>
       {step >= 1 && step <= 5 ? <div className={p.progress} aria-hidden="true"><i style={{ width: `${(step / 5) * 100}%` }} /></div> : null}
 
-      {verification !== 'ready' ? <div className={p.body} role="status">
+      {!state ? <div className={p.body} role="status" aria-live="polite">
+        <h2 id="lista-titulo" ref={heading} tabIndex={-1}>{stateFailed ? 'Não foi possível carregar a inscrição.' : 'Carregando a inscrição…'}</h2>
+        {stateFailed ? <><p className={p.error}>Confira sua conexão e tente novamente. Seus dados preenchidos estão preservados.</p><button type="button" className={p.primary} onClick={onRetryState}>TENTAR NOVAMENTE</button></> : <p className={p.note}>Aguarde um instante para continuar.</p>}
+      </div> : verification !== 'ready' ? <div className={p.body} role="status">
         <h2 id="lista-titulo" ref={heading} tabIndex={-1}>{verification === 'checking' ? 'Verificando sua inscrição…' : 'Vamos tentar novamente.'}</h2>
         {error ? <p className={p.error}>{error}</p> : null}
         {verification === 'error' ? <button type="button" className={p.primary} onClick={() => setRetry(n => n + 1)}>TENTAR NOVAMENTE</button> : null}
