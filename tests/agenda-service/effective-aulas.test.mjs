@@ -33,6 +33,16 @@ test('4 a make-up class: moved into the period, or an own Assistente event of th
  assert.deepEqual(brief(v),['2026-11-03 14:00 Aula · Ana','2026-11-04 10:00 Aula · Bia','2026-11-05 09:00 Aula · Ana (de 2026-11-10 14:00)','2026-11-05 18:00 Reposição · Ana']);
  assert.equal(v.events.at(-1).source,'assistente');  // the Manager decides whether an own event is a class
 });
+test('3b a lesson from a past date rescheduled into the period is shown (the composer alone would miss it)', ()=>{
+ const v=view({overrides:[{event_key:'aulas:A-1:2026-10-13',status:'active',new_date:'2026-11-05',new_start:'11:00:00',new_end:'12:00:00'}]});
+ assert.ok(brief(v).includes('2026-11-05 11:00 Aula · Ana (de 2026-10-13 14:00)'));
+ assert.deepEqual(v.cancelled,[]);assert.deepEqual(v.moved_out,[]);  // generating from 13/10 adds no past noise
+});
+test('lessons already over by the real clock are not shown', ()=>{
+ const late=effectiveView(classes,{...none,overrides:[{event_key:'aulas:A-1:2026-10-13',status:'active',new_date:'2026-11-05',new_start:'11:00:00',new_end:'12:00:00'}]},
+   {...input,start:'2026-11-03T00:00:00-03:00'},new Date('2026-11-03T15:30:00-03:00'));
+ assert.ok(!brief(late).some(e=>e.startsWith('2026-11-03 14:00')));  // Ana's Tuesday lesson ended at 15:00
+});
 test('5 a recurring change moves the lesson for good; a date override still wins over it', ()=>{
  const routines=[{source:'aulas',external_id:'A-1',weekday:4,start_time:'18:00:00',end_time:'19:00:00',active:true}];
  assert.deepEqual(brief(view({routines})),['2026-11-04 10:00 Aula · Bia','2026-11-05 18:00 Aula · Ana']);
