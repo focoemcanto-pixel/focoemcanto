@@ -4,6 +4,7 @@ import { blackConfig as config } from './black-config';
 import { answer, firstTouchUtm, hubOrigin, loadDraft, loadFlow, resume, saveDraft, saveFlow, signup, type ApiResult } from './campaign-client';
 import { confirmedFlow, formatReais, groupHref, newToken, parseReais, type CampaignState, type StoredFlow } from './prelaunch-model';
 import p from './prelaunch.module.css';
+import { trackBlackCompletion } from './lead-tracking';
 
 // Priority list: data (1 screen) → 5 questions (1 per screen) → confirmation + official group.
 // Answers live in the HUB; the browser keeps a copy so refresh/back never lose progress.
@@ -113,6 +114,7 @@ export default function PriorityList({ open, onClose, state }: { open: boolean; 
     const target = r.completed ? 6 : Math.min(5, question.n + 1);
     const next = { ...flow, answers, step: target, completed: Boolean(r.completed), entryId: r.entry_id || flow.entryId, groupAvailable: Boolean(r.group_available) };
     persist(next);
+    trackBlackCompletion(r, flow.completed);
     if (next.completed) saveDraft(null); // dados só ficam na sessão até a ficha terminar
     if (typeof value === 'string') await new Promise(resolve => setTimeout(resolve, 260)); // let the selection register visually
     setStep(target);
