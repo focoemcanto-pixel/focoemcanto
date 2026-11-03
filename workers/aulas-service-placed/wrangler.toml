@@ -1,0 +1,23 @@
+name = "foco-aulas-service-placed"
+main = "index.js"
+compatibility_date = "2026-05-09"          # same as the focoemcanto Pages project
+compatibility_flags = ["nodejs_compat"]
+workers_dev = false                         # reachable only through the service router's binding
+preview_urls = false
+
+[placement]
+region = "aws:us-west-2"                    # the Hub database (Supabase hubfocoemcanto, Oregon pooler)
+
+[[kv_namespaces]]
+binding = "FOCO_LINKS"
+id = "2941f5ae9f0649a1aec8a5d2076aaf95"
+
+[[hyperdrive]]
+binding = "DOMAIN_MACHINE_DB"
+id = "d88bc14b95f64c6f8133063581f8d5b8"
+
+[vars]
+DOMAIN_ACCESS_ISSUER = "https://focoemcanto.cloudflareaccess.com"
+DOMAIN_ACCESS_AUDIENCE = "24fcb476428a4e3cc3f13759c6520af688bc153707e9d1032e8a4554e9ff994b"
+DOMAIN_ACCESS_CLIENT_ID = "aa1338e769b6daff0d0ab073fac5aab4.access"
+# FOCO_ASSISTANT_USER_ID is a secret, as in the Pages project.
