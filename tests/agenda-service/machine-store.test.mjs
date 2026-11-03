@@ -6,10 +6,11 @@ const delegation={binding_id:'b',machine_kind:'SERVICE',binding_active:true,tena
  purpose:'executive_context',status:'active',expires_at:new Date(Date.now()+60000).toISOString(),capability_scopes:['schedule.read'],resource_scopes:['assistente','aulas','harmonics'],revision:1};
 function store({role={name:'foco_domain_runtime',rolsuper:false,rolbypassrls:false},row=delegation,subject={id:'owner'}}={}){
  const seen={transactions:0,statements:[]};
+ const query=value=>Object.assign(Promise.resolve(value),{execute(){return this;}});  // postgres.js queries are lazy and expose execute()
  const tx=(strings)=>{const text=strings.join('?');seen.statements.push(text);
-  if(text.includes('pg_roles'))return Promise.resolve(role?[role]:[]);
-  if(text.includes('domain_delegations'))return Promise.resolve(row?[row]:[]);
-  if(text.includes('domain_machine_subject'))return Promise.resolve([{subject}]);throw Error('unexpected');};
+  if(text.includes('pg_roles'))return query(role?[role]:[]);
+  if(text.includes('domain_delegations'))return query(row?[row]:[]);
+  if(text.includes('domain_machine_subject'))return query([{subject}]);throw Error('unexpected');};
  return {seen,async context(service,inp,cb){seen.transactions++;const [r]=await tx(['select current_user ... pg_roles']);
   if(r?.name!=='foco_domain_runtime'||r.rolsuper||r.rolbypassrls)throw Error('denied');return cb(tx);}};
 }
