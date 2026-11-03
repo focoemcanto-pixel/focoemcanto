@@ -43,6 +43,12 @@ test('lessons already over by the real clock are not shown', ()=>{
    {...input,start:'2026-11-03T00:00:00-03:00'},new Date('2026-11-03T15:30:00-03:00'));
  assert.ok(!brief(late).some(e=>e.startsWith('2026-11-03 14:00')));  // Ana's Tuesday lesson ended at 15:00
 });
+test('5b a recurring change that moves a lesson forward in the week is shown even with no past reschedule', ()=>{
+ const helena=[{id:'H',name:'Helena',occurrence:1,day:'Segunda',time:'10:00',endTime:'11:00',durationMinutes:60,status:'active'}];
+ const v=effectiveView(helena,{...none,routines:[{source:'aulas',external_id:'H-1',weekday:3,start_time:'14:00:00',end_time:'16:00:00',active:true}]},
+   {...input,start:'2026-11-04T00:00:00-03:00',end:'2026-11-05T00:00:00-03:00'},new Date('2026-11-03T07:00:00-03:00'));  // asked on Tuesday
+ assert.deepEqual(v.events.map(e=>`${e.date} ${e.start}`),['2026-11-04 14:00']);
+});
 test('5 a recurring change moves the lesson for good; a date override still wins over it', ()=>{
  const routines=[{source:'aulas',external_id:'A-1',weekday:4,start_time:'18:00:00',end_time:'19:00:00',active:true}];
  assert.deepEqual(brief(view({routines})),['2026-11-04 10:00 Aula · Bia','2026-11-05 18:00 Aula · Ana']);
