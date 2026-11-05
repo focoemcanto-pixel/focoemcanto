@@ -30,7 +30,7 @@ export function firstTouchUtm() {
 export type ApiResult = { ok: boolean; error?: string; entry_id?: string; next_step?: number; completed?: boolean; group_available?: boolean };
 async function post(path: string, body: unknown): Promise<ApiResult> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), 15000);
   try {
     const res = await fetch(api(path), { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), credentials: 'omit', signal: controller.signal, cache: 'no-store' });
     return await res.json().catch(() => ({ ok: false, error: 'unavailable' }));
@@ -52,7 +52,7 @@ export function useCampaignState() {
     const refresh = () => {
     if (document.visibilityState === 'hidden' || controller) return;
     controller = new AbortController();
-    const timer = setTimeout(() => controller?.abort(), 8000);
+    const timer = setTimeout(() => controller?.abort(), 15000);
     fetch(api('estado'), { signal: controller.signal, credentials: 'omit', cache: 'no-store' })
       .then(r => r.ok ? r.json() : Promise.reject(new Error(String(r.status))))
       .then(d => { if (alive && isCampaignState(d)) { setState(d as CampaignState); setFailed(false); } else if (alive) setFailed(true); })
@@ -60,7 +60,7 @@ export function useCampaignState() {
       .finally(() => { clearTimeout(timer); controller = null; });
     };
     refresh();
-    const interval = setInterval(refresh, 15000);
+    const interval = setInterval(refresh, 5000);
     window.addEventListener('focus', refresh);
     window.addEventListener('pageshow', refresh);
     document.addEventListener('visibilitychange', refresh);
