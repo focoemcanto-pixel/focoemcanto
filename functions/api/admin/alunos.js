@@ -42,7 +42,13 @@ export async function onRequestPost({request,env}) {
     const id=clean(input.id||`${Date.now()}-${crypto.randomUUID().slice(0,8)}`,80)
     const previous=await env.FOCO_LINKS.get(`aulas:student:${id}`,'json')
     const student=normalizeStudent({...input,id,createdAt:previous?.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()})
-    if (student.cpf && !/^\d{11}$/.test(student.cpf)) return json({error:'Informe um CPF com 11 dígitos.'},422)
+    if (student.cpf) {
+      if (!/^[0-9]{11}$/.test(student.cpf) || /^([0-9])\1{10}$/.test(student.cpf)) return json({error:'CPF inválido.'},422)
+      for (const size of [9,10]) {
+        const sum=student.cpf.slice(0,size).split('').reduce((total,digit,index)=>total+Number(digit)*(size+1-index),0)
+        if ((sum*10%11)%10!==Number(student.cpf[size])) return json({error:'CPF inválido.'},422)
+      }
+    }
     if (!clean(input.name,120)||!student.day||!student.time||!student.endTime) return json({error:'Nome, dia, início e término são obrigatórios.'},422)
     if (toMin(student.endTime)<=toMin(student.time)) return json({error:'O término precisa ser depois do início.'},422)
 
