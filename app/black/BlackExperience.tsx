@@ -17,6 +17,9 @@ import pl from './prelaunch.module.css';
 import presence from './presence.module.css';
 const PriorityList = dynamic(() => import('./PriorityList'), { ssr: false });
 
+// Temporary direct-to-group emergency mode. Keep questionnaire code intact for later reactivation.
+const BLACK_DIRECT_GROUP_MODE = true;
+const BLACK_GROUP_INVITE = 'https://chat.whatsapp.com/IwKfn8xRWeLFIAipjFE93z?s=cl&p=i&mlu=4&ilr=4&iam=2';
 const ignoreTotal = () => {};
 
 function CourseCover({ cover, className, sizes = "(max-width: 760px) 170px, 280px" }: { cover: BlackCover; className?: string; sizes?: string }) {
@@ -39,13 +42,13 @@ export default function BlackExperience() {
   const ended = campaign?.phase === 'ended';
   const captureClosed = ended || campaign?.capture_open === false;
   const [listOpen, setListOpen] = useState(false);
-  const openList = useCallback(() => setListOpen(true), []);
+  const openList = useCallback(() => { if (BLACK_DIRECT_GROUP_MODE) { window.open(BLACK_GROUP_INVITE, '_blank', 'noopener,noreferrer'); return; } setListOpen(true); }, []);
   const closeList = useCallback(() => setListOpen(false), []);
   useEffect(() => { if (!prelaunch || ended) setListOpen(false); }, [prelaunch, ended]);
-  useEffect(() => { if (prelaunch && /^#(entrar|lista-prioritaria)$/.test(window.location.hash)) setListOpen(true); }, [prelaunch]);
-  const listCta = () => <button type="button" data-list-cta data-list-inline className={pl.listCta} onClick={openList} disabled={captureClosed}>{captureClosed ? 'INSCRIÇÕES ENCERRADAS' : config.launch.listCta}<span aria-hidden="true">→</span></button>;
+  useEffect(() => { if (prelaunch && !BLACK_DIRECT_GROUP_MODE && /^#(entrar|lista-prioritaria)$/.test(window.location.hash)) setListOpen(true); }, [prelaunch]);
+  const listCta = () => BLACK_DIRECT_GROUP_MODE ? <a data-list-cta data-list-inline className={pl.listCta} href={BLACK_GROUP_INVITE} target="_blank" rel="noopener noreferrer">{config.launch.groupCta}<span aria-hidden="true">↗</span></a> : <button type="button" data-list-cta data-list-inline className={pl.listCta} onClick={openList} disabled={captureClosed}>{captureClosed ? 'INSCRIÇÕES ENCERRADAS' : config.launch.listCta}<span aria-hidden="true">→</span></button>;
   const faqs = prelaunch ? [...PRELAUNCH_FAQ_EXTRA, ...config.faqs.filter(f => PRELAUNCH_FAQ_KEEP.has(f.question))] : config.faqs;
-  const steps = prelaunch ? [['Entre na lista','Informe nome, e-mail e WhatsApp para entrar na Lista Prioritária.'],['Responda a ficha','5 perguntas rápidas, uma por vez.'],['Entre no grupo oficial','Os principais avisos da abertura chegam pelo grupo e pelo WhatsApp.']] : [['Conheça a oferta','Confira os produtos, os prazos e as condições da BLACK FOCO 2026.'],['Compre com segurança','Conclua sua compra pelo checkout oficial da Kiwify.'],['Entre no universo','Após a aprovação da compra, siga as instruções enviadas para o e-mail informado no checkout.']];
+  const steps = prelaunch ? (BLACK_DIRECT_GROUP_MODE ? [['Entre no grupo oficial','Clique no botão para acessar o grupo da BLACK no WhatsApp.'],['Acompanhe os avisos','Receba as informações da aula especial e da abertura.'],['Participe da aula','A aula especial acontece em 12/11 às 20h, horário de Brasília.']] : [['Entre na lista','Informe nome, e-mail e WhatsApp para entrar na Lista Prioritária.'],['Responda a ficha','5 perguntas rápidas, uma por vez.'],['Entre no grupo oficial','Os principais avisos da abertura chegam pelo grupo e pelo WhatsApp.']]) : [['Conheça a oferta','Confira os produtos, os prazos e as condições da BLACK FOCO 2026.'],['Compre com segurança','Conclua sua compra pelo checkout oficial da Kiwify.'],['Entre no universo','Após a aprovação da compra, siga as instruções enviadas para o e-mail informado no checkout.']];
 
   const navigateUniverse = useBlackScroll(root, { productCount: config.products.length, regularTotal: 0, onActive: setActive, onTotal: ignoreTotal });
   const cta = () => prelaunch ? listCta() : checkout ? <a data-purchase-cta className={s.cta} href={checkout}>{config.cta}<span aria-hidden="true">↗</span></a> : <p role="status">{config.pendingMessage}</p>;
@@ -53,7 +56,7 @@ export default function BlackExperience() {
     <div data-viewport-probe aria-hidden="true"/>
     <a className={s.skip} href="#universo">Pular abertura</a>
     <div className={s.progress} aria-hidden="true" />
-    <header className={s.header}><a href="#inicio" aria-label="BLACK FOCO 2026 — início">BLACK<span>FOCO</span><sup>26</sup></a><nav aria-label="Navegação da campanha"><a href="#universo">O universo</a>{prelaunch ? <a href="#lista">A abertura</a> : <a href="#oferta">A oferta</a>}<a href="#faq">FAQ</a></nav>{prelaunch ? <button type="button" className={pl.headerList} onClick={openList} disabled={captureClosed} aria-label="Entrar na Lista Prioritária"><span className={pl.headerFull}>LISTA PRIORITÁRIA</span><span className={pl.headerShort}>LISTA</span><span aria-hidden="true">→</span></button> : checkout && <a data-purchase-cta className={s.headerCta} href={checkout}>GARANTIR ACESSO <span>↗</span></a>}</header>
+    <header className={s.header}><a href="#inicio" aria-label="BLACK FOCO 2026 — início">BLACK<span>FOCO</span><sup>26</sup></a><nav aria-label="Navegação da campanha"><a href="#universo">O universo</a>{prelaunch ? <a href="#lista">A abertura</a> : <a href="#oferta">A oferta</a>}<a href="#faq">FAQ</a></nav>{prelaunch ? (BLACK_DIRECT_GROUP_MODE ? <a className={pl.headerList} href={BLACK_GROUP_INVITE} target="_blank" rel="noopener noreferrer" aria-label="Entrar no grupo oficial da BLACK"><span className={pl.headerFull}>GRUPO OFICIAL</span><span className={pl.headerShort}>GRUPO</span><span aria-hidden="true">↗</span></a> : <button type="button" className={pl.headerList} onClick={openList} disabled={captureClosed} aria-label="Entrar na Lista Prioritária"><span className={pl.headerFull}>LISTA PRIORITÁRIA</span><span className={pl.headerShort}>LISTA</span><span aria-hidden="true">→</span></button>) : checkout && <a data-purchase-cta className={s.headerCta} href={checkout}>GARANTIR ACESSO <span>↗</span></a>}</header>
     <section id="inicio" className={s.intro} data-scene="intro" data-pin-scene="intro">
       <div className={`${s.introStage} ${presence.scene} ${prelaunch ? presence.eventScene : ''}`} data-pin-stage data-intro-stage>
         <div className={s.orbit} data-hero-orbit aria-hidden="true"><i/><i/><i/><b/></div>
@@ -138,8 +141,8 @@ export default function BlackExperience() {
     <section id="faq" className={s.faq}><div><p className={s.eyebrow}>08 / ANTES DO PRÓXIMO PASSO</p><h2>Vamos<br/><em>esclarecer.</em></h2></div><div>{faqs.map(f=><details key={f.question}><summary>{f.question}<span aria-hidden="true">+</span></summary><p>{f.answer}</p></details>)}</div></section>
     <section className={s.finale}><img src="/images/black/marcos-voz.webp" width="1440" height="960" alt="Marcos Cruz em apresentação musical" loading="lazy"/><div><p className={s.eyebrow}>VÁRIOS PRODUTOS. UM ECOSSISTEMA.</p><h2>O SEU<br/>PRÓXIMO<br/><em>FOCO.</em></h2>{cta()}<p>BLACK FOCO / {config.year}</p></div></section>
     {openedProduct && <ProductExperience productId={openedProduct} onClose={closeProduct}/>}
-    {prelaunch && !captureClosed && <StickyListCta label={config.launch.listCta} onOpen={openList} hidden={listOpen || Boolean(openedProduct)}/>}
-    {prelaunch && !ended && <PriorityList open={listOpen} onClose={closeList} state={campaign} stateFailed={campaignFailed} onRetryState={retryCampaign}/>}
+    {prelaunch && (BLACK_DIRECT_GROUP_MODE || !captureClosed) && <StickyListCta label={BLACK_DIRECT_GROUP_MODE ? config.launch.groupCta : config.launch.listCta} onOpen={openList} hidden={listOpen || Boolean(openedProduct)}/>}
+    {prelaunch && !ended && !BLACK_DIRECT_GROUP_MODE && <PriorityList open={listOpen} onClose={closeList} state={campaign} stateFailed={campaignFailed} onRetryState={retryCampaign}/>}
     <footer className={s.footer}><a href="/" aria-label="Foco em Canto página inicial"><img src="/images/black/foco-logo.webp" width="110" height="110" alt="Foco em Canto"/></a><p>© {config.year} Foco em Canto.<br/>Uma nova possibilidade para a sua música.</p><nav aria-label="Links legais"><a href="/privacy/">Privacidade</a><a href="/terms/">Termos de uso</a></nav><a href="#inicio">VOLTAR AO INÍCIO ↑</a></footer>
   </main>;
 }
