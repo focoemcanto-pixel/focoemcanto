@@ -78,3 +78,13 @@
  .planet.planetWithCover{width:100%;height:260px}
  .fusionField>span.fusionProduct{display:none}
 }
+
+/* Neutral bootstrap: the HUB phase must be known before rendering either sales or signup. */
+.campaignGate{min-height:100svh;display:grid;place-items:center;text-align:center;padding:40px 24px;background:radial-gradient(ellipse at 50% 45%,#212018,#080909 65%)}
+.campaignGate>div{max-width:420px;display:grid;justify-items:center;gap:22px}
+.campaignGate>div>p:first-child{font-size:clamp(30px,6vw,58px);letter-spacing:-.06em;line-height:1.1}
+.campaignGate>div>p:first-child strong{font-weight:700;color:#ddad67}
+.campaignGate>div>p:first-child span{font-size:.35em;letter-spacing:.08em;vertical-align:top}
+.campaignGate>div>p:not(:first-child){font-size:13px;letter-spacing:.07em;color:#b4b4a9}
+.campaignGate button{border:1px solid #ddad67;background:transparent;color:#ddad67;padding:15px 22px;font-size:12px;letter-spacing:.08em}
+.campaignGate button:hover{background:#ddad6720}
