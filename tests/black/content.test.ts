@@ -34,12 +34,13 @@ test('all verified proofs are assigned once to the correct product experience', 
   }
 });
 test('official offer math is exact in cents, without bonus price or invented installments', () => {
-  assert.deepEqual(valueItems.map(p => p.cents),[69700,8990,47880,23880,20000]);
-  assert.deepEqual(valueItems.map((_,i) => valueItems.slice(0,i+1).reduce((sum,p) => sum+p.cents,0)),[69700,78690,126570,150450,170450]);
-  assert.equal(offerTotals.regularCents,170450);
+  assert.deepEqual(valueItems.map(p => p.cents),[69700,8990,47880,23880,0]);
+  assert.deepEqual(valueItems.map((_,i) => valueItems.slice(0,i+1).reduce((sum,p) => sum+p.cents,0)),[69700,78690,126570,150450,150450]);
+  assert.equal(offerTotals.regularCents,150450);
   assert.equal(offerTotals.blackCents,99700);
-  assert.equal(offerTotals.savingsCents,70750);
-  assert.equal(Number(offerTotals.discountPercentage.toFixed(1)),41.5);
+  assert.equal(offerTotals.savingsCents,50750);
+  assert.equal(Number(offerTotals.discountPercentage.toFixed(1)),33.7);
+  assert.equal(blackConfig.products.find(p => p.id === 'biblioteca')?.regularPrice, null);
   for (const item of valueItems) if (item.calculation) assert.equal(item.calculation.monthlyCents*item.calculation.months,item.cents);
 });
 

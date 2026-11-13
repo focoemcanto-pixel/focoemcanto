@@ -27,6 +27,7 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
     const subtotal = el.querySelector<HTMLElement>('[data-value-subtotal]');
     const construction = el.querySelector<HTMLElement>('[data-value-construction]');
     const revelation = el.querySelector<HTMLElement>('[data-value-revelation]');
+    const bridge = el.querySelector<HTMLElement>('[data-value-bridge]');
     const value = el.querySelector<HTMLElement>('[data-scene="value"]');
     const documentary = el.querySelector<HTMLElement>('[data-documentary]');
     const eventInfo = el.querySelector<HTMLElement>('[data-event-info]');
@@ -42,8 +43,8 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
       eventInfo?.removeAttribute('inert'); eventInfo?.removeAttribute('aria-hidden');
       documentary?.style.removeProperty('--documentary-shift');
       geometry.current = [];
-      if (subtotal) subtotal.textContent = currency(valueItems.reduce((sum,item) => sum + item.cents,0) / 100);
-      [construction, revelation].forEach(node => { node?.removeAttribute('inert'); node?.removeAttribute('aria-hidden'); });
+      if (subtotal) { subtotal.textContent = currency(valueItems.reduce((sum,item) => sum + item.cents,0) / 100); subtotal.dataset.complete = 'true'; }
+      [construction, bridge, revelation].forEach(node => { node?.removeAttribute('inert'); node?.removeAttribute('aria-hidden'); });
       for (const scene of scenes) { delete scene.dataset.pin; scene.style.removeProperty('--travel'); scene.style.removeProperty('--stage-height'); }
       if (total !== regularTotal) { total = regularTotal; onTotal(regularTotal); }
     }
@@ -73,11 +74,14 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
         if (g.kind === 'value') {
           const state = valueFrame(next.progress, valueItems.map(item => item.cents));
           g.scene.style.setProperty('--value-reveal', String(state.reveal));
-          if (subtotal) subtotal.textContent = currency(state.subtotalCents / 100);
+          g.scene.style.setProperty('--value-build-exit', String(state.buildExit));
+          g.scene.style.setProperty('--value-bridge', String(state.bridge));
+          if (subtotal) { subtotal.textContent = currency(state.subtotalCents / 100); subtotal.dataset.complete = String(state.referenceComplete); }
           valueRows.forEach((row,index) => row.style.setProperty('--item-opacity', String(index <= state.active ? 1 : .32)));
           const ready = state.reveal >= .9;
           if (revelation) { revelation.dataset.ready = String(ready); revelation.toggleAttribute('inert', !ready); revelation.setAttribute('aria-hidden', String(!ready)); }
-          if (construction) { construction.toggleAttribute('inert', ready); construction.setAttribute('aria-hidden', String(ready)); }
+          if (construction) { construction.toggleAttribute('inert', state.buildExit >= .95); construction.setAttribute('aria-hidden', String(state.buildExit >= .95)); }
+          if (bridge) { bridge.setAttribute('aria-hidden', String(state.bridge < .4)); }
         }
         if (g.kind === 'intro') {
           const { weights } = introFrame(next.progress);
