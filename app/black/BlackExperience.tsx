@@ -12,7 +12,7 @@ import { useBlackScroll } from './use-black-scroll';
 import PrelaunchSection from './PrelaunchSection';
 import StickyListCta from './StickyListCta';
 import { useCampaignState } from './campaign-client';
-import { PRELAUNCH_FAQ_EXTRA, PRELAUNCH_FAQ_KEEP, resolvePhase } from './prelaunch-model';
+import { PRELAUNCH_FAQ_EXTRA, PRELAUNCH_FAQ_KEEP, resolvePhase, type CampaignState } from './prelaunch-model';
 import pl from './prelaunch.module.css';
 import presence from './presence.module.css';
 import PriorityList from './PriorityList';
@@ -23,7 +23,27 @@ function CourseCover({ cover, className, sizes = "(max-width: 760px) 170px, 280p
   return <img className={className} src={cover.src} srcSet={cover.srcSet} sizes={sizes} width={cover.width} height={cover.height} alt={cover.alt} loading="lazy" decoding="async" />;
 }
 
+// Only render the campaign-specific experience after the HUB has reported its phase.
+ // Rendering PRE-LAUNCH as a default causes stale signup content to flash on OPEN.
 export default function BlackExperience() {
+  const { state: campaign, failed: campaignFailed, retry: retryCampaign } = useCampaignState();
+  if (!campaign) {
+    return <main className={s.black}>
+      <div className={s.campaignGate} role="status" aria-live="polite">
+        <div>
+          <p>BLACK <strong>FOCO</strong> <span>2026</span></p>
+          {campaignFailed
+            ? <><p>Não foi possível carregar a campanha agora.</p><button type="button" onClick={retryCampaign}>TENTAR NOVAMENTE ↗</button></>
+            : <p>Preparando sua experiência…</p>}
+        </div>
+      </div>
+    </main>;
+  }
+  return <BlackExperienceContent campaign={campaign} campaignFailed={campaignFailed} retryCampaign={retryCampaign}/>;
+}
+function BlackExperienceContent({ campaign, campaignFailed, retryCampaign }: {
+  campaign: CampaignState; campaignFailed: boolean; retryCampaign: () => void;
+}) {
   const root = useRef<HTMLElement>(null);
   const [openedProduct, setOpenedProduct] = useState<string | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -33,8 +53,7 @@ export default function BlackExperience() {
   const [active, setActive] = useState(0);
 
   const checkout = checkoutHref();
-  // PRE-LAUNCH (lista prioritária) ou OPEN (oferta/checkout): uma única experiência, estado vindo do HUB.
-  const { state: campaign, failed: campaignFailed, retry: retryCampaign } = useCampaignState();
+  // The HUB has confirmed the phase before mounting this version of the page.
   const prelaunch = resolvePhase(campaign, config.launch.defaultPhase) === 'pre_launch';
   const ended = campaign?.phase === 'ended';
   const captureClosed = ended || campaign?.capture_open === false;
