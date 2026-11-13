@@ -5,11 +5,11 @@ import { currency, valueItems } from './black-config';
 import { clamp, coverFrame, introFrame, productScrollTarget, sceneFrame, sceneTravel, universeFrame, type SceneKind } from './scroll-model';
 
 type Geometry = { scene: HTMLElement; stage: HTMLElement; kind: SceneKind; start: number; travel: number; pin: string; verify: boolean; progress: number };
-type Options = { productCount: number; regularTotal: number; onActive: (index: number) => void; onTotal: (value: number) => void };
+type Options = { productCount: number; regularTotal: number; onActive: (index: number) => void; onTotal: (value: number) => void; layoutVariant: 'pre_launch' | 'open' };
 
 export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
   const geometry = useRef<Geometry[]>([]);
-  const { productCount, regularTotal, onActive, onTotal } = options;
+  const { productCount, regularTotal, onActive, onTotal, layoutVariant } = options;
   const navigate = useCallback((index: number) => {
     const scene = geometry.current.find(g => g.kind === 'universe');
     if (!scene || root.current?.dataset.scroll !== 'enhanced') return;
@@ -169,7 +169,9 @@ export function useBlackScroll(root: RefObject<HTMLElement>, options: Options) {
       el.removeEventListener('pointermove', pointer);
       delete el.dataset.scroll;
     };
-  }, [root, productCount, regularTotal, onActive, onTotal]);
+  // O HUB pode trocar PRE-LAUNCH por OPEN depois da primeira montagem. Recriar as
+  // cenas para incluir/remover o palco de preços e recalcular a geometria do pin.
+  }, [root, productCount, regularTotal, onActive, onTotal, layoutVariant]);
 
   return navigate;
 }
