@@ -21,7 +21,7 @@
 /* CTA contextual */
 .sticky{position:fixed;left:0;right:0;bottom:0;z-index:45;display:flex;justify-content:center;padding:0 16px max(14px,env(safe-area-inset-bottom));pointer-events:none;transform:translateY(130%);opacity:0;transition:transform .55s cubic-bezier(.2,.7,.1,1),opacity .35s ease}
 .stickyOn{transform:translateY(0);opacity:1}.stickyOn .stickyButton{pointer-events:auto}
-.stickyButton{display:flex;align-items:center;gap:14px;border:1px solid #dbc59985;border-radius:999px;background:linear-gradient(115deg,#d9b67ef2,#b3874af2);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#12150f!important;font:600 11px/1 Arial,Helvetica,sans-serif!important;letter-spacing:.09em;padding:17px 22px;box-shadow:0 12px 40px #00000080,0 0 0 6px #08090955;cursor:pointer;min-height:52px;max-width:100%;white-space:nowrap}
+.stickyButton{display:flex;align-items:center;gap:14px;border:1px solid #dbc59985;border-radius:999px;background:linear-gradient(115deg,#d9b67ef2,#b3874af2);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);color:#12150f!important;font:600 11px/1 Arial,Helvetica,sans-serif!important;letter-spacing:.09em;padding:17px 22px;box-shadow:0 12px 40px #00000080,0 0 0 6px #08090955;cursor:pointer;text-decoration:none;min-height:52px;max-width:100%;white-space:nowrap}
 .stickyButton>span:last-child{font-size:17px;font-weight:400}
 .stickyDot{width:7px;height:7px;border-radius:50%;background:#12150f;box-shadow:0 0 0 0 #12150f55;animation:ping 2.4s infinite}
 

@@ -91,3 +91,16 @@ test('a página não mostra CTA/inscrição antiga antes de receber fase válida
   assert.doesNotMatch(gate, /<PrelaunchSection|<PriorityList|<ValueExperience|data-purchase-cta|LISTA PRIORITÁRIA/);
   assert.match(source, /campaign: CampaignState/);
 });
+
+// The contextual footer CTA is reused in OPEN without changing PRE-LAUNCH signup.
+test('CTA flutuante de vendas reutiliza o scroll e abre o checkout oficial', () => {
+  const experience = readFileSync('app/black/BlackExperience.tsx', 'utf8');
+  const sticky = readFileSync('app/black/StickyListCta.tsx', 'utf8');
+  assert.match(experience, /<StickyListCta label="ENTRAR AGORA" href=\{checkout\} hidden=\{Boolean\(openedProduct\)\}/);
+  assert.match(experience, /!prelaunch && !ended && checkout && <StickyListCta/);
+  assert.match(experience, /prelaunch && !captureClosed && <StickyListCta label=\{config\.launch\.listCta\} onOpen=\{openList\}/);
+  assert.match(experience, /data-purchase-cta data-purchase-inline/);
+  assert.match(sticky, /<a data-purchase-cta href=\{href\}/);
+  assert.match(sticky, /\[data-list-inline\], \[data-purchase-inline\], footer/);
+  assert.equal(checkoutHref(), 'https://pay.kiwify.com.br/ZVKGmNk');
+});

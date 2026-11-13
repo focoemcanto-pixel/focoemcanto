@@ -67,7 +67,7 @@ function BlackExperienceContent({ campaign, campaignFailed, retryCampaign }: {
   const steps = prelaunch ? [['Entre na lista','Informe nome, e-mail e WhatsApp para entrar na Lista Prioritária.'],['Responda a ficha','5 perguntas rápidas, uma por vez.'],['Entre no grupo oficial','Os principais avisos da abertura chegam pelo grupo e pelo WhatsApp.']] : [['Conheça a oferta','Confira os produtos, os prazos e as condições da BLACK FOCO 2026.'],['Compre com segurança','Conclua sua compra pelo checkout oficial da Kiwify.'],['Entre no universo','Após a aprovação da compra, siga as instruções enviadas para o e-mail informado no checkout.']];
 
   const navigateUniverse = useBlackScroll(root, { productCount: config.products.length, regularTotal: 0, onActive: setActive, onTotal: ignoreTotal, layoutVariant: prelaunch ? 'pre_launch' : 'open' });
-  const cta = () => prelaunch ? listCta() : checkout ? <a data-purchase-cta className={s.cta} href={checkout}>{config.cta}<span aria-hidden="true">↗</span></a> : <p role="status">{config.pendingMessage}</p>;
+  const cta = () => prelaunch ? listCta() : checkout ? <a data-purchase-cta data-purchase-inline className={s.cta} href={checkout}>{config.cta}<span aria-hidden="true">↗</span></a> : <p role="status">{config.pendingMessage}</p>;
   return <main ref={root} className={`${s.black} ${scroll.engine}`}>
     <div data-viewport-probe aria-hidden="true"/>
     <a className={s.skip} href="#universo">Pular abertura</a>
@@ -158,6 +158,7 @@ function BlackExperienceContent({ campaign, campaignFailed, retryCampaign }: {
     <section className={s.finale}><img src="/images/black/marcos-voz.webp" width="1440" height="960" alt="Marcos Cruz em apresentação musical" loading="lazy"/><div><p className={s.eyebrow}>VÁRIOS PRODUTOS. UM ECOSSISTEMA.</p><h2>O SEU<br/>PRÓXIMO<br/><em>FOCO.</em></h2>{cta()}<p>BLACK FOCO / {config.year}</p></div></section>
     {openedProduct && <ProductExperience productId={openedProduct} onClose={closeProduct}/>}
     {prelaunch && !captureClosed && <StickyListCta label={config.launch.listCta} onOpen={openList} hidden={listOpen || Boolean(openedProduct)}/>}
+    {!prelaunch && !ended && checkout && <StickyListCta label="ENTRAR AGORA" href={checkout} hidden={Boolean(openedProduct)}/>}
     {prelaunch && !ended && <PriorityList open={listOpen} onClose={closeList} state={campaign} stateFailed={campaignFailed} onRetryState={retryCampaign}/>}
     <footer className={s.footer}><a href="/" aria-label="Foco em Canto página inicial"><img src="/images/black/foco-logo.webp" width="110" height="110" alt="Foco em Canto"/></a><p>© {config.year} Foco em Canto.<br/>Uma nova possibilidade para a sua música.</p><nav aria-label="Links legais"><a href="/privacy/">Privacidade</a><a href="/terms/">Termos de uso</a></nav><a href="#inicio">VOLTAR AO INÍCIO ↑</a></footer>
   </main>;
