@@ -20,8 +20,10 @@
 .fallbackBonus { height: 180px; display: grid; place-items: center; color: #ddad67; font-size: 100px; }
 
 /* Geometria única: altura real do palco + percurso útil medido em px. */
-.engine[data-scroll='enhanced'] > section[data-pin-scene] { height: calc(var(--stage-height) + var(--travel)); }
-.engine[data-scroll='enhanced'] [data-pin-stage] { position: absolute; top: 0; left: 0; width: 100%; height: var(--stage-height); min-height: 0; max-height: none; overflow: hidden; }
+/* Fallback de geometria: cenas montadas após a resposta do HUB nunca colapsam
+   enquanto o hook recalcula o palco na transição PRE-LAUNCH -> OPEN. */
+.engine[data-scroll='enhanced'] > section[data-pin-scene] { height: calc(var(--stage-height, 100svh) + var(--travel, 0px)); }
+.engine[data-scroll='enhanced'] [data-pin-stage] { position: absolute; top: 0; left: 0; width: 100%; height: var(--stage-height, 100svh); min-height: 0; max-height: none; overflow: hidden; }
 .engine[data-scroll='enhanced'] [data-pin='active'] > [data-pin-stage] { position: fixed; top: 0; left: var(--stage-left); width: var(--stage-width); z-index: 12; }
 .engine[data-scroll='enhanced'] [data-pin='after'] > [data-pin-stage] { position: absolute; top: var(--travel); left: 0; z-index: auto; }
 .engine[data-scroll='enhanced'] [data-universe-fallback] { display: none; }
