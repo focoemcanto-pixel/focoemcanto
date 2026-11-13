@@ -47,7 +47,7 @@ export default function BlackExperience() {
   const faqs = prelaunch ? [...PRELAUNCH_FAQ_EXTRA, ...config.faqs.filter(f => PRELAUNCH_FAQ_KEEP.has(f.question))] : config.faqs;
   const steps = prelaunch ? [['Entre na lista','Informe nome, e-mail e WhatsApp para entrar na Lista Prioritária.'],['Responda a ficha','5 perguntas rápidas, uma por vez.'],['Entre no grupo oficial','Os principais avisos da abertura chegam pelo grupo e pelo WhatsApp.']] : [['Conheça a oferta','Confira os produtos, os prazos e as condições da BLACK FOCO 2026.'],['Compre com segurança','Conclua sua compra pelo checkout oficial da Kiwify.'],['Entre no universo','Após a aprovação da compra, siga as instruções enviadas para o e-mail informado no checkout.']];
 
-  const navigateUniverse = useBlackScroll(root, { productCount: config.products.length, regularTotal: 0, onActive: setActive, onTotal: ignoreTotal });
+  const navigateUniverse = useBlackScroll(root, { productCount: config.products.length, regularTotal: 0, onActive: setActive, onTotal: ignoreTotal, layoutVariant: prelaunch ? 'pre_launch' : 'open' });
   const cta = () => prelaunch ? listCta() : checkout ? <a data-purchase-cta className={s.cta} href={checkout}>{config.cta}<span aria-hidden="true">↗</span></a> : <p role="status">{config.pendingMessage}</p>;
   return <main ref={root} className={`${s.black} ${scroll.engine}`}>
     <div data-viewport-probe aria-hidden="true"/>
