@@ -81,3 +81,13 @@ test('evento aprovado usa 12/11 às 20h de Brasília sem fechar a oferta automat
   assert.equal(resolvePhase({phase:'open'}, 'pre_launch'), 'open');
   assert.doesNotMatch(JSON.stringify(PRELAUNCH_FAQ_EXTRA), /08 de novembro|08\/11|27\/11|última chance/);
 });
+
+test('a página não mostra CTA/inscrição antiga antes de receber fase válida do HUB', () => {
+  const source = readFileSync('app/black/BlackExperience.tsx', 'utf8');
+  const gate = source.slice(source.indexOf('export default function BlackExperience()'), source.indexOf('function BlackExperienceContent('));
+  assert.match(gate, /if \(!campaign\)/);
+  assert.match(gate, /return <BlackExperienceContent campaign=\{campaign\}/);
+  assert.match(gate, /TENTAR NOVAMENTE/);
+  assert.doesNotMatch(gate, /<PrelaunchSection|<PriorityList|<ValueExperience|data-purchase-cta|LISTA PRIORITÁRIA/);
+  assert.match(source, /campaign: CampaignState/);
+});
